@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "scheme": "blinktostock",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "web": {
+      "output": "static"
+    },
+    "name": "Blink-to-Stock",
+    "slug": "blink-to-stock",
+    "android": {
+      "package": "com.blinktostock.app"
+    },
+    "plugins": [
+      [
+        "expo-dev-client",
+        {
+          "showMenuAtLaunch": false,
+          "skipOnboarding": true
+        }
+      ],
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser"
+    ]
+  }
+}

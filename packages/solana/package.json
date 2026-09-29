@@ -1,0 +1,9 @@
+{ "name": "@blink/solana", "version": "0.0.0", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@blink/config": "*",
+    "@solana/kit": "8.4.0",
+    "@solana/sysvars": "8.4.0",
+    "@solana-program/system": "0.15.0",
+    "@solana-program/token-2022": "0.19.0"
+  } }

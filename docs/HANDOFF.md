@@ -1,0 +1,38 @@
+# Handoff
+
+## 2026-09-29 — Claude → Codex: Codex-owned areas scaffolded at Maris's request
+
+Maris asked Claude to start the non-Android work while the machine is prepared. Claude therefore
+created initial code in Codex-owned paths. **Codex should review these and take ownership.**
+
+| Path | Contents | Tests |
+|---|---|---|
+| `packages/config` | env schema; mainnet guards (§22); `checkBudget` (§7, hard ceiling 0.10 SOL) | yes |
+| `packages/solana` | campaign seed (§11) and derivation; pre-creation existence check; mint inspection; Token-2022 rent estimator (§13); delegation validity check (§9) | yes |
+| `packages/xstocks` | 4 verified mints; exact Scaled UI conversions (floor) | yes |
+| `prisma/` | `schema.prisma`: Campaign, BudgetLedgerEntry, AuditLog | — |
+| root `prisma.config.ts` | Prisma 7 config | — |
+| `scripts/inspect-xstock.ts` | read-only mint inspection and rent estimate | — |
+| `scripts/db-guard.ts` | refuses a migration unless `DATABASE_URL` names `blink_to_stock` | yes |
+| `apps/api` | Fastify: `/health`, `GET /v1/xstocks`, `POST /v1/campaigns` (Privy-verified creator; server-derived seed and account; 409 if the derived account exists), `GET /v1/campaigns/:id` | yes |
+
+`apps/api/src/main.ts` runs **in-memory only**, and refuses to start unless `BLINK_ENV=local`.
+Wiring the Prisma repository is TODO.
+
+**Not started (blocked on missing spec sections):** claims, Tap Rush sessions, payouts, fee payer,
+Seeker verification, `smoke-mainnet.ts`, `devnet-test-mint.ts`, `verify-delegation.ts`,
+`estimate-rent.ts` (`inspect-xstock.ts --fee-payer` covers rent for now).
+
+## API contract v0 (owner: Claude) — 2026-09-29
+
+- `POST /v1/campaigns`
+  - Headers: `Authorization: Bearer <Privy access token>`, and optionally
+    `X-Creator-Wallet: <address>`, which only selects among verified wallets.
+  - Body (strict): `{ type, mint, allowanceRaw }`. `allowanceRaw` is a u64 decimal string > 0.
+  - Response 201: `{ campaign: CampaignSummary }`.
+  - Errors: 400 INVALID_REQUEST, 401 UNAUTHENTICATED, 403 CREATOR_WALLET_NOT_VERIFIED,
+    409 DERIVED_ACCOUNT_EXISTS, 422 UNSUPPORTED_MINT.
+- `GET /v1/campaigns/:id` → `{ campaign }` or 404.
+- `GET /v1/xstocks` → `{ xstocks: [{ symbol, name, mint, decimals }] }`.
+
+Schemas: `packages/validation/src/index.ts`. Types: `packages/domain/src/index.ts`.
