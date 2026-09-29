@@ -56,3 +56,30 @@ limitation in SECURITY.md. Maris to decide.
 6. Add a `solana_token_program_instruction` condition (`TransferChecked.amount lte X`) and check
    whether Privy evaluates it for a Token-2022 instruction. Record VERIFIED or BLOCKED.
 7. Test a transaction using a program outside the allowlist: expect a Privy denial.
+
+### SPIKE-1 live result — 2026-09-29 (devnet) — **PASSED for items 1 and 3**
+
+- **Command:** `npx tsx scripts/devnet-delegate-spike.ts` (on the VPS).
+- **Test mint:** `5wqid37Gv3m3vX5ZViQsSgtFsYGLXJ8YKT6cqksiadwj`, created by
+  `scripts/devnet-test-mint.ts`. It mirrors the xStock extensions PermanentDelegate,
+  DefaultAccountState(Initialized), ScaledUiAmount, Pausable and TransferHook (unset). Campaign
+  account 175 bytes / 1,539,240 lamports, identical to mainnet NVDAx.
+
+| Check | Result | Devnet signature |
+|---|---|---|
+| Privy `wallets().create({ chain_type: 'solana' })` as per-campaign delegate | VERIFIED (`FH6HajiDSfnnd2KjPxSCYVEPQbBb25ApyT5u7e1c3uxQ`) | — |
+| Production `buildFundingTransaction`: CreateAccountWithSeed + InitializeAccount3 + TransferChecked + ApproveChecked, one creator signature | VERIFIED | `65UuFSEgDvgbZ8Q6JNVYDz7Ttv2Pu5UsA4DV6m5MiCTMorLGTSic2Y7hTeABzGS4zBCEnaFpnvMUysKFAb2jGSgP` |
+| `checkCampaignDelegation`: exact allowance onchain | VERIFIED (1,000,000 / 1,000,000) | — |
+| **Privy `wallets().solana().signTransaction` signs a Token-2022 TransferChecked as delegate**; fee paid by a separate key (§16) | **VERIFIED** | `wBg7GnL8ryKo9qRVtLi64E29dRuuANjLmS93wuDHFv4MA65HkwQybBkWjbW36gunRfNpohpWjWkzmMnroPsYzUn` |
+| Delegated amount decreases after payout | VERIFIED (750,000 left) | — |
+| Transfer above the remaining allowance | VERIFIED rejected (simulation failed onchain) | — |
+
+**Still open:**
+- **Item 4:** Privy **policy** parsing of Token-2022 instructions is untested. Next step is a
+  program-allowlist policy test.
+- **Item 2:** wallet-count limits and pricing: ASSUMPTION.
+- **OQ-4:** the authorization model is still provisional. These wallets have no owner, so the app
+  secret controls them.
+
+**Conclusion:** Privy server wallets meet the core §14 requirement on devnet. §14 does not force a
+shared global delegate.
