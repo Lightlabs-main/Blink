@@ -7,6 +7,7 @@ import { buildApp } from './app.ts'
 import { PrivyAuthVerifier } from './auth.ts'
 import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
+import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
 // Blink's own .env at the repository root, regardless of the process cwd.
@@ -35,12 +36,15 @@ if (env.DATABASE_URL) {
   process.exit(1)
 }
 
+const readRpc = env.XSTOCK_READ_RPC_URL ? createSolanaRpc(env.XSTOCK_READ_RPC_URL) : undefined
+
 const app = buildApp({
   env,
   auth: new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET }),
   campaigns,
   rpc: createSolanaRpc(env.SOLANA_RPC_URL),
-  market: env.XSTOCK_READ_RPC_URL ? new XStockMarket(createSolanaRpc(env.XSTOCK_READ_RPC_URL)) : undefined,
+  market: readRpc ? new XStockMarket(readRpc) : undefined,
+  holdings: readRpc ? new XStockHoldings(readRpc) : undefined,
   logger: true,
 })
 

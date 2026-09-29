@@ -1,25 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { api } from '../../lib/api'
 import { CAMPAIGN_TYPE_LABEL } from '../../lib/format'
-import { Badge, ErrorNote, Muted, Panel, PrimaryButton, Title } from '../../ui/screen'
+import { Badge, ErrorNote, Muted, Panel, PrimaryButton, Title, TopInset } from '../../ui/screen'
 
 export default function Drops() {
   const router = useRouter()
   const live = useQuery({ queryKey: ['campaigns', 'live'], queryFn: api.liveCampaigns })
   const campaigns = live.data?.campaigns ?? []
-  const insets = useSafeAreaInsets()
 
   return (
     <ScrollView
       className="flex-1 bg-zinc-950"
       contentContainerClassName="gap-5 px-5 pb-12"
-      contentContainerStyle={{ paddingTop: insets.top + 20 }}
       refreshControl={<RefreshControl onRefresh={() => void live.refetch()} refreshing={live.isRefetching} tintColor="#6ee7b7" />}
     >
+      <TopInset extra={0} />
       <Title kicker="Live now">Drops</Title>
 
       <PrimaryButton onPress={() => router.push('/scan')}>Scan a Blink QR code</PrimaryButton>

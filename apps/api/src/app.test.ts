@@ -162,3 +162,15 @@ describe('read endpoints', () => {
     expect(res.json().xstocks[0]).toMatchObject({ multiplier: null, paused: null })
   })
 })
+
+describe('GET /v1/me/holdings', () => {
+  it('requires auth', async () => {
+    build()
+    expect((await app.inject({ method: 'GET', url: '/v1/me/holdings' })).statusCode).toBe(401)
+  })
+  it('reports unavailable without a read source, listing verified wallets only', async () => {
+    build()
+    const res = await app.inject({ method: 'GET', url: '/v1/me/holdings', headers: { authorization: 'Bearer good-token' } })
+    expect(res.json()).toEqual({ available: false, wallets: [{ wallet: CREATOR, balances: null }] })
+  })
+})
