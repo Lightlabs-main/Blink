@@ -7,9 +7,15 @@
       "output": "static"
     },
     "name": "Blink-to-Stock",
-    "slug": "blink-to-stock",
+    "slug": "blink",
+    "owner": "marisdigitals11s-team",
     "android": {
       "package": "com.blinktostock.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7dd3f562-b06d-4ec5-adb4-8f8a3f6bf90a"
+      }
     },
     "plugins": [
       [
