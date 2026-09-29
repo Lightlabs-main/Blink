@@ -22,6 +22,10 @@ export interface StoredCampaign extends NewCampaign {
 export interface CampaignRepository {
   create(campaign: NewCampaign): Promise<StoredCampaign>
   findById(id: string): Promise<StoredCampaign | null>
+  /** Newest first. */
+  listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]>
+  /** Newest first. */
+  listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]>
 }
 
 export function toSummary(c: StoredCampaign): CampaignSummary {
@@ -58,5 +62,19 @@ export class InMemoryCampaignRepository implements CampaignRepository {
 
   async findById(id: string): Promise<StoredCampaign | null> {
     return this.rows.get(id) ?? null
+  }
+
+  async listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]> {
+    return this.newestFirst().filter((c) => c.status === status).slice(0, limit)
+  }
+
+  async listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]> {
+    return this.newestFirst()
+      .filter((c) => c.creatorPrivyUserId === creatorPrivyUserId)
+      .slice(0, limit)
+  }
+
+  private newestFirst(): StoredCampaign[] {
+    return [...this.rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   }
 }

@@ -7,6 +7,7 @@ import { buildApp } from './app.ts'
 import { PrivyAuthVerifier } from './auth.ts'
 import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
+import { XStockMarket } from './xstock-market.ts'
 
 // Blink's own .env at the repository root, regardless of the process cwd.
 try {
@@ -39,6 +40,7 @@ const app = buildApp({
   auth: new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET }),
   campaigns,
   rpc: createSolanaRpc(env.SOLANA_RPC_URL),
+  market: env.XSTOCK_READ_RPC_URL ? new XStockMarket(createSolanaRpc(env.XSTOCK_READ_RPC_URL)) : undefined,
   logger: true,
 })
 

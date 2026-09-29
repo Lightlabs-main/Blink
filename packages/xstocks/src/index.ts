@@ -46,6 +46,14 @@ export const REVIEWED_XSTOCK_EXTENSIONS = [
   'TokenMetadata',
 ] as const
 
+/** 10^n as bigint without the ** operator (portable to Hermes/Babel targets on mobile). */
+export function pow10(n: number): bigint {
+  if (!Number.isInteger(n) || n < 0 || n > 38) throw new ScaledUiError('exponent out of range')
+  let r = 1n
+  for (let i = 0; i < n; i++) r *= 10n
+  return r
+}
+
 export class ScaledUiError extends Error {
   override name = 'ScaledUiError'
 }
@@ -59,7 +67,7 @@ export function multiplierToFraction(multiplier: number): { numerator: bigint; d
   const text = multiplier.toString()
   if (!/^\d+(\.\d+)?$/.test(text)) throw new ScaledUiError(`unsupported multiplier representation '${text}'`)
   const [i = '0', f = ''] = text.split('.')
-  return { numerator: BigInt(i + f), denominator: 10n ** BigInt(f.length) }
+  return { numerator: BigInt(i + f), denominator: pow10(f.length) }
 }
 
 /**
@@ -70,8 +78,8 @@ export function multiplierToFraction(multiplier: number): { numerator: bigint; d
 export function rawToUiShares(raw: bigint, decimals: number, multiplier: number, displayDecimals = 6): string {
   if (raw < 0n) throw new ScaledUiError('raw amount must be non-negative')
   const m = multiplierToFraction(multiplier)
-  const unit = 10n ** BigInt(displayDecimals)
-  const scaled = (raw * m.numerator * unit) / (10n ** BigInt(decimals) * m.denominator)
+  const unit = pow10(displayDecimals)
+  const scaled = (raw * m.numerator * unit) / (pow10(decimals) * m.denominator)
   const whole = scaled / unit
   const frac = (scaled % unit).toString().padStart(displayDecimals, '0').replace(/0+$/, '')
   return frac ? `${whole}.${frac}` : whole.toString()
@@ -86,6 +94,6 @@ export function uiSharesToRawFloor(uiShares: string, decimals: number, multiplie
   const m = multiplierToFraction(multiplier)
   const [i = '0', f = ''] = uiShares.split('.')
   const shares = BigInt(i + f)
-  const sharesScale = 10n ** BigInt(f.length)
-  return (shares * 10n ** BigInt(decimals) * m.denominator) / (sharesScale * m.numerator)
+  const sharesScale = pow10(f.length)
+  return (shares * pow10(decimals) * m.denominator) / (sharesScale * m.numerator)
 }

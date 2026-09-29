@@ -1,13 +1,15 @@
 import '../global.css'
 
-import { Slot } from 'expo-router'
+import { Stack } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
 
 import { AppProviders } from '../features/core/data-access/app-providers'
 
 export default function Layout() {
   return (
     <AppProviders>
-      <Slot />
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#09090b' }, animation: 'fade' }} />
     </AppProviders>
   )
 }
