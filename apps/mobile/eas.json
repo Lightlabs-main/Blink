@@ -7,7 +7,8 @@
     "base": {
       "env": {
         "EXPO_PUBLIC_PRIVY_APP_ID": "cmum2bfmo006d0dkzf5bi33ie",
-        "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6dz4M49RRsCqddP7WiNApGBfK4ptLhgfSQYsEG8DBNT"
+        "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6dz4M49RRsCqddP7WiNApGBfK4ptLhgfSQYsEG8DBNT",
+        "EXPO_PUBLIC_BLINK_API_URL": "https://blink-api.38-49-209-149.sslip.io"
       }
     },
     "development": {
