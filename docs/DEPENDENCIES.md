@@ -108,3 +108,12 @@ unless noted.
   payer. This is ASSUMPTION; the wallet gives no detail.
 - **Wallet dApp identity:** shown as "Blink-to-Stock · blinktostock://app", with "Only confirm if
   you trust this website".
+
+### 2026-09-29 — Build #2 on device
+
+- **Build:** EAS Build `4531e9e8-e495-42a1-b5e5-b2c4bd9cc34a` (development; adds expo-camera, expo-haptics, react-native-qrcode-svg, bottom-tabs), FINISHED.
+- **Verified by Maris on device:**
+  - Email OTP login and sign-out work.
+  - Creating a campaign draft works; persisted in Postgres with raw amount `6600000000` for 66 TSLAx.
+  - After installing build #2, the QR scanner and safe-area layout work.
+- **Lesson:** after `git pull` on the VPS, `blink-metro` kept serving stale JS until restarted with its cache cleared. Deploy procedure: pull, then `pm2 delete blink-metro`, clear `apps/mobile/node_modules/.cache/metro`, and start `infra/metro.ecosystem.config.cjs` again (Blink process only).
