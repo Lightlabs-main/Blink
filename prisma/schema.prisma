@@ -48,6 +48,7 @@ model Campaign {
   /// External Solana wallet verified by Privy SIWS and linked to creatorPrivyUserId (MASTER_PROMPT §25).
   creatorWallet        String
   mint                 String
+  xstockSymbol         String
   /// CreateAccountWithSeed seed, 32 ASCII chars (MASTER_PROMPT §11).
   campaignSeed         String         @db.VarChar(32)
   /// Server-derived; re-derived and compared before every operation.

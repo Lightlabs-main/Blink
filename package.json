@@ -13,7 +13,10 @@
     "prisma:generate": "prisma generate",
     "inspect-xstock": "tsx scripts/inspect-xstock.ts",
     "estimate-rent": "tsx scripts/estimate-rent.ts",
-    "verify-delegation": "tsx scripts/verify-delegation.ts"
+    "verify-delegation": "tsx scripts/verify-delegation.ts",
+    "db:guard": "tsx scripts/db-guard.ts",
+    "db:migrate": "tsx scripts/db-guard.ts && prisma migrate deploy",
+    "db:up": "docker compose -f infra/docker-compose.yml --env-file .env up -d"
   },
   "engines": {
     "node": ">=22.12.0"
