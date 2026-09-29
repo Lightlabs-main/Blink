@@ -81,3 +81,23 @@ unless noted.
 | JDK 17+, `JAVA_HOME` | **BLOCKED**: not found |
 | Android SDK, adb 33+ | **BLOCKED**: not found |
 | Readiness | Project creation ready. Android build, emulator and device workflows unavailable. |
+
+## Device verification log
+
+### 2026-09-29 — First development build on a real Android phone
+
+- **Build:** EAS Build `12c37559-ad11-4104-b05a-337c7ce3617f` (profile `development`), status
+  FINISHED. The dev server `blink-metro` runs on the VPS.
+- **MWA wallet connect:** **VERIFIED.** The sample's "Connect wallet" opened the user's wallet via
+  Mobile Wallet Adapter, the user approved, and the app showed the connected address
+  `Ctyk1E…prGPWM`. A devnet balance read also worked.
+- **Privy SIWS creator login:** **VERIFIED**, after enabling Solana (SVM) inside Privy's External
+  wallets login method. The first attempt returned "Login with solana wallet not allowed" because
+  SVM wasn't enabled. The phone showed Privy user `did:privy:…kz65ek`.
+- **Backend creator-wallet check:** **VERIFIED against real Privy data.**
+  - `users().list()` and `users()._get(id)` both work.
+  - The linked account is `{ type: 'wallet', chain_type: 'solana', wallet_client: 'unknown',
+    verified_at: <unix> }`, as the types predicted.
+  - `extractVerifiedExternalSolanaWallets` returns exactly `Ctyk1E…prGPWM`.
+- **Not yet tested:** MWA signMessage and signTransaction (sample buttons), email login (not in the
+  sample), and any Blink campaign transaction.
