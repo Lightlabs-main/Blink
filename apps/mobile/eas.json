@@ -1,0 +1,35 @@
+{
+  "cli": {
+    "version": ">= 24.8.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "env": {
+        "EXPO_PUBLIC_PRIVY_APP_ID": "cmum2bfmo006d0dkzf5bi33ie",
+        "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6dz4M49RRsCqddP7WiNApGBfK4ptLhgfSQYsEG8DBNT"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}

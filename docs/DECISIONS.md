@@ -74,3 +74,17 @@ isolation. The local PC has under 1 GB of disk. Expo's EAS Build compiles in the
 
 The VPS global Node is v22.23.1, so `.nvmrc` is 22.23.1. All dependencies support
 `^22.12` (vitest engines verified). Local development on Node 26 also works.
+
+## D-11 — Expo / EAS project linkage (2026-09-29)
+
+- Expo owner: `marisdigitals11s-team`
+- Slug: `blink` (it must match the Expo project; it is independent of the Android package)
+- projectId: `7dd3f562-b06d-4ec5-adb4-8f8a3f6bf90a`
+
+The Privy App ID and Client ID are public identifiers, so they live in `apps/mobile/eas.json`
+profile `env`. EAS builds don't rely on the git-ignored local `.env`.
+
+`EXPO_TOKEN` (a personal access token) lives only in the VPS `.env`.
+
+Build profiles: `development` (dev client APK), `preview` and `production` (APK). Free plan:
+15 Android builds a month; the account is blocked, not billed, when they run out.
