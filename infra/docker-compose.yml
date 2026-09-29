@@ -1,0 +1,35 @@
+# Blink-to-Stock's own PostgreSQL. Isolated compose project, network and volume (MASTER_PROMPT VPS isolation).
+# Usage (from repo root):  docker compose -f infra/docker-compose.yml --env-file .env up -d
+# Never run prune commands on the shared host.
+name: blink-to-stock
+
+services:
+  blink-postgres:
+    image: postgres:16
+    container_name: blink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: blink_to_stock
+      POSTGRES_USER: blink_app
+      POSTGRES_PASSWORD: ${BLINK_POSTGRES_PASSWORD:?set BLINK_POSTGRES_PASSWORD in .env}
+    ports:
+      # Loopback only — the host firewall is not relied upon.
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - blink-postgres-data:/var/lib/postgresql/data
+    networks:
+      - blink-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U blink_app -d blink_to_stock']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+
+volumes:
+  blink-postgres-data:
+    name: blink-postgres-data
+
+networks:
+  blink-network:
+    name: blink-network

@@ -1,4 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["apps/api/src", "packages/*/src", "scripts", "prisma.config.ts"]
+  "include": ["apps/api/src", "packages/*/src", "scripts", "prisma.config.ts"],
+  "exclude": ["apps/api/src/generated"]
 }

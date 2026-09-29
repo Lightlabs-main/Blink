@@ -1,14 +1,18 @@
+import { fileURLToPath } from 'node:url'
+
 import { loadEnv } from '@blink/config'
 import { createSolanaRpc } from '@solana/kit'
 
 import { buildApp } from './app.ts'
 import { PrivyAuthVerifier } from './auth.ts'
-import { InMemoryCampaignRepository } from './campaign-repo.ts'
+import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
+import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
 
+// Blink's own .env at the repository root, regardless of the process cwd.
 try {
-  process.loadEnvFile('.env')
+  process.loadEnvFile(fileURLToPath(new URL('../../../.env', import.meta.url)))
 } catch {
-  // rely on the process environment
+  // No file: rely on the process environment.
 }
 
 const env = loadEnv()
@@ -17,19 +21,35 @@ if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) {
   process.exit(1)
 }
 
-// TODO(Codex): swap for the Prisma-backed repository once a Blink-only PostgreSQL database exists.
-// In-memory storage loses data on restart and is refused outside BLINK_ENV=local.
-if (env.BLINK_ENV !== 'local') {
-  console.error('Refusing to start: persistent campaign storage is not wired yet (BLINK_ENV must be local).')
+let campaigns: CampaignRepository
+let prisma: ReturnType<typeof createPrismaClient> | undefined
+if (env.DATABASE_URL) {
+  prisma = createPrismaClient(env.DATABASE_URL)
+  campaigns = new PrismaCampaignRepository(prisma)
+} else if (env.BLINK_ENV === 'local') {
+  console.warn('DATABASE_URL not set: using in-memory campaign storage (local only, data lost on restart).')
+  campaigns = new InMemoryCampaignRepository()
+} else {
+  console.error('Refusing to start: DATABASE_URL is required outside BLINK_ENV=local.')
   process.exit(1)
 }
 
 const app = buildApp({
   env,
   auth: new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET }),
-  campaigns: new InMemoryCampaignRepository(),
+  campaigns,
   rpc: createSolanaRpc(env.SOLANA_RPC_URL),
   logger: true,
 })
+
+app.addHook('onClose', async () => {
+  await prisma?.$disconnect()
+})
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void app.close().then(() => process.exit(0))
+  })
+}
 
 await app.listen({ host: env.API_HOST, port: env.API_PORT })
