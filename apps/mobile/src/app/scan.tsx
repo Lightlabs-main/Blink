@@ -4,12 +4,14 @@ import { Text, View } from 'react-native'
 
 import { campaignIdFromScan } from '../lib/format'
 import { haptics } from '../lib/haptics'
+import { hasNativeModule } from '../lib/native'
 import { ErrorNote, Muted, PrimaryButton, Screen, Title } from '../ui/screen'
 
 type CameraModule = typeof import('expo-camera')
 
 // expo-camera is native: builds without it (the first dev build) must show a message instead of crashing.
 function loadCamera(): CameraModule | null {
+  if (!hasNativeModule('ExpoCamera')) return null
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('expo-camera') as CameraModule
@@ -67,7 +69,7 @@ function Scanner({ camera }: { camera: CameraModule }) {
         }}
         style={{ flex: 1 }}
       />
-      <View className="absolute bottom-0 left-0 right-0 gap-3 bg-black/70 px-5 pb-10 pt-5">
+      <View className="absolute bottom-0 left-0 right-0 gap-3 bg-black/70 px-5 pb-12 pt-5">
         <Text className="text-center text-lg font-semibold text-white">Point at a Blink QR code</Text>
         <ErrorNote message={error} />
         <PrimaryButton variant="secondary" onPress={() => router.back()}>
