@@ -1,0 +1,96 @@
+// Blink-to-Stock database. Dedicated database only (MASTER_PROMPT VPS isolation): blink_to_stock.
+// Run migrations through `npm run db:migrate`, which refuses unless DATABASE_URL targets BLINK_DATABASE_NAME.
+// NEVER run `prisma migrate reset` against a shared or production database.
+//
+// Scope: only entities defined by received MASTER_PROMPT sections. Claim / Tap Rush session / payout
+// tables are intentionally absent until those sections are received.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../apps/api/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CampaignType {
+  GIFT
+  TAP_RUSH
+  EARLY_CLAIM
+  REFERRAL
+  SEEKER
+}
+
+enum CampaignStatus {
+  DRAFT
+  AWAITING_FUNDING
+  AWAITING_DELEGATION
+  LIVE
+  PAUSED
+  ENDED
+  CLOSED
+}
+
+enum SolanaCluster {
+  localnet
+  devnet
+  mainnet_beta @map("mainnet-beta")
+}
+
+model Campaign {
+  id                   String         @id @db.Uuid
+  type                 CampaignType
+  status               CampaignStatus @default(DRAFT)
+  cluster              SolanaCluster
+  /// Privy user id from a verified access token (MASTER_PROMPT §24).
+  creatorPrivyUserId   String
+  /// External Solana wallet verified by Privy SIWS and linked to creatorPrivyUserId (MASTER_PROMPT §25).
+  creatorWallet        String
+  mint                 String
+  /// CreateAccountWithSeed seed, 32 ASCII chars (MASTER_PROMPT §11).
+  campaignSeed         String         @db.VarChar(32)
+  /// Server-derived; re-derived and compared before every operation.
+  campaignTokenAccount String
+  /// Per-campaign delegate (MASTER_PROMPT §14). Null until provisioned.
+  delegateAddress      String?
+  delegateWalletRef    String?
+  /// Raw base units (u64) as decimal — never float.
+  allowanceRaw         Decimal        @db.Decimal(20, 0)
+  pauseReason          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@unique([cluster, campaignTokenAccount])
+  @@unique([creatorWallet, campaignSeed])
+  @@index([status])
+}
+
+/// MASTER_PROMPT §7 — every Blink-funded lamport, reserved before send and settled after confirmation.
+model BudgetLedgerEntry {
+  id               String        @id @default(uuid()) @db.Uuid
+  cluster          SolanaCluster
+  kind             String
+  /// RESERVED | SPENT | RELEASED
+  state            String
+  lamports         BigInt
+  campaignId       String?       @db.Uuid
+  txSignature      String?       @unique
+  idempotencyKey   String        @unique
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([cluster, state])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actor      String
+  action     String
+  campaignId String?  @db.Uuid
+  /// Never store secrets, tokens or private keys here.
+  details    Json
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId, createdAt])
+}

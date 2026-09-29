@@ -1,0 +1,83 @@
+# Dependencies
+
+Status vocabulary: VERIFIED / ASSUMPTION / BLOCKED / NEEDS_OWNER_DECISION. All dates are 2026-09-29
+unless noted.
+
+## Tooling
+
+| Dependency | Version | Purpose | Source | Status / limitation |
+|---|---|---|---|---|
+| Node.js | 22.23.1 (VPS) / 26.4.0 (local PC) | Runtime | `node --version` on each host | VERIFIED. `.nvmrc` = 22.23.1 to match the VPS global Node (D-10). |
+| npm | 11.17.0 | Workspaces | `npm --version` | VERIFIED. npm 11 skips install scripts not covered by `allowScripts` (prisma, @prisma/engines, esbuild). `prisma generate`, tsx and vitest still work. |
+| solana-mobile CLI | 0.5.0 | Bootstrap, doctor | `npx solana-mobile@latest --version` | VERIFIED. Commands: create, device, doctor, emulator, localnet, playground, templates, webshell. |
+| TypeScript | 6.0.3 | Types | npm | VERIFIED. Matches the mobile template (`~6.0.3`); npm `latest` is 7.0.2 and was deliberately not used. |
+| vitest | 5.0.2 | Tests | npm | VERIFIED |
+| tsx | 4.23.15 | Running TS scripts and the API | npm | VERIFIED |
+
+## Mobile template
+
+- `gh:solana-mobile/templates/mobile/sample-expo-kit-privy` is the only Expo + Kit + Privy template
+  listed by `create --list-template-ids`. Description: "A sample Solana mobile app with Expo, Privy
+  auth, Solana Kit, and Uniwind."
+- The repo README says it "requires native modules and Mobile Wallet Adapter support" (no Expo Go).
+- Scaffolded with `--skip-install --skip-git`.
+- Generated versions (from the template `package.json`): expo ~57.0.6, react-native 0.86.2,
+  react ~19.2.3, @privy-io/expo ^0.65.5, @privy-io/expo-native-extensions ^0.0.11,
+  @solana/kit ^7.0.0, @wallet-ui/react-native-kit ^4.2.1, expo-router ~57.0.6, uniwind 1.6.5,
+  typescript ~6.0.3.
+- Mobile dependencies are **NOT installed** (disk space).
+- Note: mobile pins kit ^7 while the backend uses 8.4.0. Shared packages (`domain`, `validation`)
+  do not import kit.
+
+## Backend / Solana
+
+| Dependency | Version | Purpose | Status / limitation |
+|---|---|---|---|
+| @solana/kit | 8.4.0 | RPC, addresses, transactions | VERIFIED exports at runtime. `createAddressWithSeed` enforces `MAX_SEED_LENGTH = 32` (dist source). |
+| @solana-program/token-2022 | 0.19.0 | Token-2022 instructions and decoders | VERIFIED: `getGetAccountDataSizeInstruction`, `getInitializeAccount3Instruction`, `getApproveCheckedInstruction`, `getRevokeInstruction`, `getTransferCheckedInstruction`, `getCloseAccountInstruction`, `fetchMint`, `fetchMaybeToken`, `getTokenSize`. Its Scaled UI helpers use JS float math, so they are display-only; payouts use raw bigint. |
+| @solana-program/system | 0.15.0 | `getCreateAccountWithSeedInstruction` | VERIFIED signature: `{ payer, newAccount, baseAccount?, base, seed, amount, space, programAddress }` |
+| @solana/sysvars | 8.4.0 | Token-2022 peer | VERIFIED |
+| @privy-io/node | 0.35.0 | Access-token verification, user lookup, server wallets | VERIFIED: `new PrivyClient({ appId, appSecret, jwtVerificationKey? })`, `utils().auth().verifyAccessToken(token)` → `{ user_id, session_id, app_id, … }`, `users()._get(id)`, `wallets().create(...)`, `wallets().solana().signTransaction(walletId, …)`. Optional peer `@solana/kit ^5.1.0` is **overridden to 8.4.0** (see DECISIONS D-4). |
+| fastify | 5.12.5 | HTTP API | VERIFIED |
+| zod | 4.6.5 | Validation | VERIFIED. In Zod 4, later checks still run after a failed check; see DECISIONS D-6. |
+| prisma / @prisma/client / @prisma/adapter-pg | 7.10.0 | ORM | VERIFIED. npm `latest` for `prisma` is `8.0.0-rc.17` (a release candidate), so stable 7.10.0 was chosen. Prisma 7 uses `prisma.config.ts` plus a driver adapter. `npm audit` reports 4 high findings, all transitive through the Prisma CLI (deepmerge-ts, mysql2). This is dev tooling and the runtime doesn't use them; the only offered fix is downgrading to Prisma 6. Revisit on the next Prisma patch. |
+| pg | 8.23.0 | PostgreSQL driver | VERIFIED |
+
+## Services and addresses
+
+| Item | Value | Source | Status |
+|---|---|---|---|
+| Solana mainnet public RPC | `https://api.mainnet.solana.com` | solana.com/docs/references/clusters | VERIFIED. Rate-limited (it returned HTTP 429 on `getTokenLargestAccounts`). Not for production; a dedicated provider is NEEDS_OWNER_DECISION. |
+| Solana devnet public RPC | `https://api.devnet.solana.com` | same | VERIFIED |
+| Token-2022 program | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` | `TOKEN_2022_PROGRAM_ADDRESS` in the installed package, and the owner of every xStock mint onchain | VERIFIED |
+| xStocks asset list | `GET https://api.backed.fi/api/v2/public/assets?page=N` | Found through docs.xstocks.fi | VERIFIED. 1,124 assets, paginated (`page.hasNextPage`). |
+| NVDAx mint | `Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh` | Backed API + mainnet RPC | VERIFIED |
+| TSLAx mint | `XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB` | Backed API + mainnet RPC | VERIFIED |
+| AAPLx mint | `XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp` | Backed API + mainnet RPC | VERIFIED |
+| SPYx mint | `XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W` | Backed API + mainnet RPC | VERIFIED |
+
+### xStock mint facts observed on mainnet (2026-09-29)
+
+- **Mint basics:** Token-2022; decimals 8; mint authority `7pt9…taCj`; freeze authority `JDq1…dxJNs`.
+- **Extensions:** MetadataPointer, PermanentDelegate, DefaultAccountState, ScaledUiAmountConfig,
+  PausableConfig, ConfidentialTransferMint, TransferHook, TokenMetadata.
+- **DefaultAccountState:** `state = 1` (Initialized). New accounts are not frozen.
+- **TransferHook:** `programId = 11111111111111111111111111111111`, meaning no hook is configured.
+  The hook authority `5aMN…FvEq` could set one later, so payouts must re-check it.
+- **PermanentDelegate:** `5aMN…FvEq`. The issuer can move tokens from any holder account. This is a
+  **disclosure item**.
+- **Pausable:** `paused = false`.
+- **Scaled UI multiplier:** NVDAx 1.0009…, rising to 1.0017… at unix 1789000200; TSLAx 1; AAPLx 1.0026….
+- **Campaign token account size:** **175 bytes** (not 165), via the Token-2022 `GetAccountDataSize`
+  simulation. Rent-exempt minimum: **1,539,240 lamports**. Measured for NVDAx.
+- **Recipient ATA size** (it adds ImmutableOwner): NOT YET MEASURED because the public RPC
+  rate-limited the query. Needed for the Blink SOL budget (§8: Blink pays recipient ATA rent).
+
+## Local environment (from `solana-mobile doctor`, 2026-09-29)
+
+| Check | Result |
+|---|---|
+| Disk space | **BLOCKED**: under 1 GB free. It needs 10 GB minimum; 20 GB is recommended. |
+| JDK 17+, `JAVA_HOME` | **BLOCKED**: not found |
+| Android SDK, adb 33+ | **BLOCKED**: not found |
+| Readiness | Project creation ready. Android build, emulator and device workflows unavailable. |

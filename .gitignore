@@ -1,0 +1,25 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+# Keys must never be committed
+*.keypair.json
+id.json
+keys/
+# Android / Expo
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/.expo/
+*.apk
+*.aab
+*.keystore
+*.jks
+# Generated Prisma client
+packages/db/generated/
+apps/api/src/generated/
+
+# Private operational notes (server addresses, ports, other projects). Never publish.
+docs/private/

@@ -1,0 +1,24 @@
+{
+  "name": "@blink/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@blink/config": "*",
+    "@blink/domain": "*",
+    "@blink/solana": "*",
+    "@blink/validation": "*",
+    "@blink/xstocks": "*",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "@privy-io/node": "0.35.0",
+    "@solana/kit": "8.4.0",
+    "fastify": "5.12.5",
+    "pg": "8.23.0",
+    "zod": "4.6.5"
+  }
+}

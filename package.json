@@ -1,0 +1,34 @@
+{
+  "name": "blink-to-stock",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/api",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "api:dev": "npm run dev -w @blink/api",
+    "prisma:generate": "prisma generate",
+    "inspect-xstock": "tsx scripts/inspect-xstock.ts",
+    "estimate-rent": "tsx scripts/estimate-rent.ts",
+    "verify-delegation": "tsx scripts/verify-delegation.ts"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "@types/pg": "8.23.1",
+    "prisma": "7.10.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.2"
+  },
+  "overrides": {
+    "@privy-io/node": {
+      "@solana/kit": "8.4.0"
+    }
+  }
+}
