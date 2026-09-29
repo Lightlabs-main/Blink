@@ -18,6 +18,7 @@ export default function Create() {
   const { getAccessToken } = usePrivy()
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(getAccessToken) })
   const xstocks = useQuery({ queryKey: ['xstocks'], queryFn: api.xstocks, staleTime: 60_000 })
+  const holdings = useQuery({ queryKey: ['holdings'], queryFn: () => api.holdings(getAccessToken), staleTime: 30_000 })
 
   const [type, setType] = useState<CampaignType>('TAP_RUSH')
   const [mint, setMint] = useState<string | null>(null)
@@ -26,6 +27,14 @@ export default function Create() {
   const wallets = me.data?.verifiedCreatorWallets ?? []
   const creatorWallet = wallets[0]
   const selected = xstocks.data?.xstocks.find((x) => x.mint === mint) ?? null
+  // Raw balance of the selected stock in the creator (funding) wallet; null when unknown.
+  const heldRaw = useMemo(() => {
+    if (!selected || !creatorWallet || !holdings.data?.available) return null
+    const b = holdings.data.wallets.find((w) => w.wallet === creatorWallet)?.balances?.[selected.mint]
+    return b === undefined ? null : BigInt(b)
+  }, [selected, creatorWallet, holdings.data])
+  const heldDisplay =
+    heldRaw !== null && selected?.multiplier != null ? rawToUiShares(heldRaw, selected.decimals, selected.multiplier) : null
 
   // Amount entered in shares; converted to raw base units rounding DOWN so a campaign never promises more
   // than it can pay (DECISIONS D-6). The raw value is what the API stores and the allowance will use.
@@ -93,6 +102,13 @@ export default function Create() {
           ))}
         </View>
         {selected ? <Muted>{selected.name}</Muted> : null}
+        {selected && heldDisplay !== null ? (
+          <Text className={heldRaw === 0n ? 'text-amber-200' : 'text-zinc-300'}>
+            {heldRaw === 0n
+              ? `Your wallet holds no ${selected.symbol} yet. You’ll need some to fund this campaign.`
+              : `Your wallet holds ${heldDisplay} ${selected.symbol}.`}
+          </Text>
+        ) : null}
         {selected?.paused ? <ErrorNote message="The issuer has paused this stock. Pick another one." /> : null}
       </Panel>
 
@@ -110,6 +126,11 @@ export default function Create() {
           <Muted>{`≈ ${conversion.display} ${selected?.symbol} (rounded down)`}</Muted>
         ) : null}
         {conversion && !conversion.ok ? <ErrorNote message={conversion.error} /> : null}
+        {conversion?.ok && heldRaw !== null && conversion.raw > heldRaw ? (
+          <Text className="text-amber-200">
+            {`That’s more than your wallet holds (${heldDisplay ?? '0'} ${selected?.symbol}). You can save the draft, but you’ll need enough stock before funding.`}
+          </Text>
+        ) : null}
       </Panel>
 
       <Panel>

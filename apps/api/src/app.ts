@@ -9,6 +9,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 
 import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './auth.ts'
 import { type CampaignRepository, toSummary } from './campaign-repo.ts'
+import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
 
 export interface AppDeps {
@@ -18,6 +19,8 @@ export interface AppDeps {
   rpc: Rpc<GetAccountInfoApi>
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
+  /** Read-only mainnet xStock balances for creator wallets; optional. */
+  holdings?: XStockHoldings
   logger?: boolean
 }
 
@@ -72,6 +75,27 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const auth = await requireAuth(req)
     const verifiedCreatorWallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
     return { privyUserId: auth.privyUserId, verifiedCreatorWallets }
+  })
+
+  /**
+   * xStock balances (raw base units) of the caller's Privy-verified creator wallets. Wallet addresses come from
+   * Privy, never from the client. `available: false` when no read RPC is configured or the read fails.
+   */
+  app.get('/v1/me/holdings', async (req) => {
+    const auth = await requireAuth(req)
+    const wallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
+    const result: { wallet: string; balances: Record<string, string> | null }[] = []
+    let available = Boolean(deps.holdings)
+    for (const wallet of wallets) {
+      try {
+        result.push({ wallet, balances: (await deps.holdings?.forOwner(wallet)) ?? null })
+      } catch (err) {
+        available = false
+        req.log.warn({ err }, 'holdings read failed')
+        result.push({ wallet, balances: null })
+      }
+    }
+    return { available, wallets: result }
   })
 
   app.get('/v1/me/campaigns', async (req) => {

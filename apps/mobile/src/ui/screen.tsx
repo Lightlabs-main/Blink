@@ -4,25 +4,33 @@ import { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+/** Status-bar/notch spacer. A real View is used because className and style padding don't merge reliably. */
+export function TopInset({ extra = 20 }: { extra?: number }) {
+  const insets = useSafeAreaInsets()
+  return <View style={{ height: insets.top + extra }} />
+}
+
+function BottomInset() {
+  const insets = useSafeAreaInsets()
+  return <View style={{ height: insets.bottom + 24 }} />
+}
+
 /** Screen container that respects the notch/status bar and gesture bar on every device. */
 export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
-  const insets = useSafeAreaInsets()
-  const pad = { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }
   if (!scroll) {
     return (
-      <View className="flex-1 bg-zinc-950 px-5" style={pad}>
-        {children}
+      <View className="flex-1 bg-zinc-950 px-5">
+        <TopInset />
+        <View className="flex-1">{children}</View>
+        <BottomInset />
       </View>
     )
   }
   return (
-    <ScrollView
-      className="flex-1 bg-zinc-950"
-      contentContainerClassName="gap-5 px-5"
-      contentContainerStyle={pad}
-      keyboardShouldPersistTaps="handled"
-    >
+    <ScrollView className="flex-1 bg-zinc-950" contentContainerClassName="gap-5 px-5" keyboardShouldPersistTaps="handled">
+      <TopInset extra={0} />
       {children}
+      <BottomInset />
     </ScrollView>
   )
 }

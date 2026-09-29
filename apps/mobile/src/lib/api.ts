@@ -55,6 +55,8 @@ export const api = {
   liveCampaigns: () => request<{ campaigns: CampaignSummary[] }>('/v1/campaigns'),
   campaign: (id: string) => request<{ campaign: CampaignSummary }>(`/v1/campaigns/${encodeURIComponent(id)}`),
   me: (t: GetAccessToken) => authed<{ privyUserId: string; verifiedCreatorWallets: string[] }>(t, '/v1/me'),
+  holdings: (t: GetAccessToken) =>
+    authed<{ available: boolean; wallets: { wallet: string; balances: Record<string, string> | null }[] }>(t, '/v1/me/holdings'),
   myCampaigns: (t: GetAccessToken) => authed<{ campaigns: CampaignSummary[] }>(t, '/v1/me/campaigns'),
   createCampaign: (
     t: GetAccessToken,
