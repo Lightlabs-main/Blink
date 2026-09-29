@@ -1,4 +1,3 @@
-import { SUPPORTED_XSTOCKS } from '@blink/xstocks'
 import { address, type GetTokenAccountsByOwnerApi, type Rpc } from '@solana/kit'
 import { TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022'
 
@@ -15,6 +14,7 @@ export class XStockHoldings {
   constructor(
     private readonly rpc: Rpc<GetTokenAccountsByOwnerApi> | undefined,
     private readonly ttlMs = 30_000,
+    private readonly assets: { mint: string }[] = [],
   ) {}
 
   async forOwner(owner: string): Promise<Holdings | null> {
@@ -26,7 +26,7 @@ export class XStockHoldings {
       .getTokenAccountsByOwner(address(owner), { programId: TOKEN_2022_PROGRAM_ADDRESS }, { encoding: 'jsonParsed', commitment: 'confirmed' })
       .send()
 
-    const supported = new Set(SUPPORTED_XSTOCKS.map((x) => x.mint))
+    const supported = new Set(this.assets.map((x) => x.mint))
     const totals = new Map<string, bigint>()
     for (const { account } of value) {
       const info = (account.data as { parsed?: { info?: { mint?: string; tokenAmount?: { amount?: string } } } }).parsed?.info

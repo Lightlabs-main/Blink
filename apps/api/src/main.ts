@@ -1,11 +1,15 @@
 import { fileURLToPath } from 'node:url'
 
 import { loadEnv } from '@blink/config'
+import { PrivyClient } from '@privy-io/node'
 import { createSolanaRpc } from '@solana/kit'
 
 import { buildApp } from './app.ts'
+import { assetsForCluster } from './assets.ts'
 import { PrivyAuthVerifier } from './auth.ts'
 import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
+import { PrivyDelegateProvider } from './delegate.ts'
+import { SolanaFundingService } from './funding-service.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
@@ -36,15 +40,28 @@ if (env.DATABASE_URL) {
   process.exit(1)
 }
 
-const readRpc = env.XSTOCK_READ_RPC_URL ? createSolanaRpc(env.XSTOCK_READ_RPC_URL) : undefined
+const clusterRpc = createSolanaRpc(env.SOLANA_RPC_URL)
+const assets = assetsForCluster(env)
+// Asset data is read on the cluster the assets live on: real xStocks → mainnet read RPC; devnet test mint → devnet.
+let readRpc: typeof clusterRpc | undefined
+if (env.SOLANA_CLUSTER === 'mainnet-beta') {
+  readRpc = env.XSTOCK_READ_RPC_URL ? createSolanaRpc(env.XSTOCK_READ_RPC_URL) : clusterRpc
+} else if (assets.length) {
+  readRpc = clusterRpc
+}
+
+const privy = new PrivyClient({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
+const funding = new SolanaFundingService(clusterRpc, assets, new PrivyDelegateProvider(privy), campaigns)
 
 const app = buildApp({
   env,
   auth: new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET }),
   campaigns,
-  rpc: createSolanaRpc(env.SOLANA_RPC_URL),
-  market: readRpc ? new XStockMarket(readRpc) : undefined,
-  holdings: readRpc ? new XStockHoldings(readRpc) : undefined,
+  rpc: clusterRpc,
+  assets,
+  funding,
+  market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
+  holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,
 })
 

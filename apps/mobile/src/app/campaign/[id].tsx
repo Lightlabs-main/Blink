@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Share, Text, View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
 
+import { FundCampaign } from '../../features/campaign/fund-campaign'
 import { api, ApiError } from '../../lib/api'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, campaignLink, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
@@ -13,7 +14,8 @@ import { Badge, ErrorNote, Loading, Muted, Panel, PrimaryButton, Screen, Title }
 export default function CampaignScreen() {
   const router = useRouter()
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { user } = usePrivy()
+  const { user, getAccessToken } = usePrivy()
+  const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(getAccessToken), enabled: Boolean(user) })
   const campaign = useQuery({ queryKey: ['campaign', id], queryFn: () => api.campaign(String(id)), enabled: Boolean(id) })
   const xstocks = useQuery({ queryKey: ['xstocks'], queryFn: api.xstocks, staleTime: 60_000 })
 
@@ -34,6 +36,9 @@ export default function CampaignScreen() {
   const amount = x?.multiplier != null ? rawToUiShares(BigInt(c.allowanceRaw), x.decimals, x.multiplier) : null
   const link = campaignLink(c.id)
   const isLive = c.status === 'LIVE'
+  const isCreator = Boolean(me.data?.verifiedCreatorWallets.includes(c.creatorWallet))
+  const canFund = isCreator && (c.status === 'DRAFT' || c.status === 'AWAITING_FUNDING')
+  const amountLabel = amount ? `${amount} ${c.xstockSymbol}` : c.xstockSymbol
 
   return (
     <Screen>
@@ -57,6 +62,8 @@ export default function CampaignScreen() {
           Share link
         </PrimaryButton>
       </Panel>
+
+      {canFund ? <FundCampaign amountLabel={amountLabel} campaign={c} /> : null}
 
       <Panel>
         {isLive ? (

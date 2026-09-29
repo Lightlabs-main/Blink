@@ -1,5 +1,4 @@
 import { effectiveScaledUiMultiplier, inspectMint } from '@blink/solana'
-import { SUPPORTED_XSTOCKS } from '@blink/xstocks'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import { fetchSysvarClock } from '@solana/sysvars'
 
@@ -22,6 +21,7 @@ export class XStockMarket {
   constructor(
     private readonly rpc: Rpc<GetAccountInfoApi> | undefined,
     private readonly ttlMs = 60_000,
+    private readonly assets: { mint: string }[] = [],
   ) {}
 
   async getAll(): Promise<Map<string, XStockMarketInfo>> {
@@ -29,7 +29,7 @@ export class XStockMarket {
     if (this.cache && Date.now() - this.cache.at < this.ttlMs) return this.cache.data
     const clock = await fetchSysvarClock(this.rpc)
     const data = new Map<string, XStockMarketInfo>()
-    for (const x of SUPPORTED_XSTOCKS) {
+    for (const x of this.assets) {
       try {
         const info = await inspectMint(this.rpc, address(x.mint))
         if (!info.scaledUi) continue

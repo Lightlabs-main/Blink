@@ -23,6 +23,8 @@ export const envSchema = z.object({
   SOLANA_RPC_URL: z.url(),
   /** Read-only RPC for mainnet xStock mint data (multiplier, paused). Never used to send transactions. */
   XSTOCK_READ_RPC_URL: z.url().optional(),
+  /** Devnet-only test mint from scripts/devnet-test-mint.ts (no real value). Ignored on other clusters. */
+  DEVNET_TEST_MINT: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
   MAINNET_ENABLED: boolFlag,
   MAINNET_GO_APPROVED: boolFlag,
   MAINNET_BUDGET_LAMPORTS: lamports.default(MAINNET_TARGET_LAMPORTS),

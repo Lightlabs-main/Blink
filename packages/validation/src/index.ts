@@ -31,6 +31,17 @@ export const createCampaignRequest = z
   .strict()
 export type CreateCampaignRequest = z.infer<typeof createCampaignRequest>
 
+/** POST /v1/campaigns/:id/funding/submit — the wallet-signed transaction, base64 wire format. */
+export const submitFundingRequest = z
+  .object({
+    signedTransaction: z
+      .string()
+      .min(100)
+      .max(4096)
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/, 'must be base64'),
+  })
+  .strict()
+
 export const campaignSummary = z.object({
   id: z.uuid(),
   type: z.enum(CAMPAIGN_TYPES),
