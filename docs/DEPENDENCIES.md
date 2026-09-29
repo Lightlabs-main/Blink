@@ -101,3 +101,10 @@ unless noted.
   - `extractVerifiedExternalSolanaWallets` returns exactly `Ctyk1E…prGPWM`.
 - **Not yet tested:** MWA signMessage and signTransaction (sample buttons), email login (not in the
   sample), and any Blink campaign transaction.
+- **MWA signMessage:** **VERIFIED** on device (2026-09-29). A signature was returned.
+- **MWA signTransaction:** **VERIFIED** on device (2026-09-29). It signed the sample's devnet memo
+  transaction. The wallet's preview showed **"Unexpected error when analyzing the transaction"**,
+  most likely because the wallet was on mainnet while the transaction was devnet, with a 0 SOL
+  payer. This is ASSUMPTION; the wallet gives no detail.
+- **Wallet dApp identity:** shown as "Blink-to-Stock · blinktostock://app", with "Only confirm if
+  you trust this website".

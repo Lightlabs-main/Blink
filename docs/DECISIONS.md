@@ -88,3 +88,14 @@ profile `env`. EAS builds don't rely on the git-ignored local `.env`.
 
 Build profiles: `development` (dev client APK), `preview` and `production` (APK). Free plan:
 15 Android builds a month; the account is blocked, not billed, when they run out.
+
+## D-12 — Wallet-facing transaction rules (2026-09-29, from on-device testing)
+
+1. **Simulate before opening MWA.** Every Blink-built transaction is simulated server-side on the
+   target cluster (sigVerify=false) and must succeed before the app asks the wallet to sign. A
+   wallet preview error ("Unexpected error when analyzing the transaction") is treated as a UX bug.
+2. **Cluster consistency.** The app's MWA cluster must match `SOLANA_CLUSTER` from the backend.
+   The UI never infers it (§22).
+3. **The MWA identity URI must become the HTTPS `PUBLIC_WEB_ORIGIN`** once a domain exists, so
+   wallets display a real, verifiable origin instead of `blinktostock://app`. This is blocked on
+   the domain (NEEDS_OWNER_DECISION).
