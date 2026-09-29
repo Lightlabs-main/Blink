@@ -2,11 +2,26 @@ import { Button } from 'heroui-native/button'
 import { Card } from 'heroui-native/card'
 import { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+/** Screen container that respects the notch/status bar and gesture bar on every device. */
 export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
-  if (!scroll) return <View className="flex-1 bg-zinc-950 px-5 pb-8 pt-14">{children}</View>
+  const insets = useSafeAreaInsets()
+  const pad = { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }
+  if (!scroll) {
+    return (
+      <View className="flex-1 bg-zinc-950 px-5" style={pad}>
+        {children}
+      </View>
+    )
+  }
   return (
-    <ScrollView className="flex-1 bg-zinc-950" contentContainerClassName="gap-5 px-5 pb-12 pt-14" keyboardShouldPersistTaps="handled">
+    <ScrollView
+      className="flex-1 bg-zinc-950"
+      contentContainerClassName="gap-5 px-5"
+      contentContainerStyle={pad}
+      keyboardShouldPersistTaps="handled"
+    >
       {children}
     </ScrollView>
   )
