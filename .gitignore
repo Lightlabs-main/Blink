@@ -23,3 +23,6 @@ apps/api/src/generated/
 
 # Private operational notes (server addresses, ports, other projects). Never publish.
 docs/private/
+
+# Throwaway devnet keys and local secrets (never commit)
+.secrets/
