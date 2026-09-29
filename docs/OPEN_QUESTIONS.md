@@ -40,7 +40,7 @@ The campaign account (175 bytes) costs 1,539,240 lamports. If a recipient ATA is
 0.02 SOL covers only about 12 sponsored recipient ATAs, before transaction fees.
 Measure with a dedicated RPC.
 
-## OQ-8 — Privy SIWS nonce guarantees (§25) — ASSUMPTION
+## OQ-8 — Privy SIWS nonce guarantees (§25) — ASSUMPTION (the flow itself VERIFIED on device 2026-09-29)
 
 §25 requires a random, short-lived, single-use nonce and exact payload verification. Privy performs
 SIWS verification, but we haven't found documentation of its nonce expiry and single-use semantics.
