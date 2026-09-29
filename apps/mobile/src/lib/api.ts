@@ -50,6 +50,12 @@ export interface XStockListing {
   paused: boolean | null
 }
 
+export interface PreparedFunding {
+  transaction: string
+  minContextSlot: string
+  summary: { campaignAccount: string; delegate: string; amountRaw: string; rentLamports: string; accountSpace: string }
+}
+
 export const api = {
   xstocks: () => request<{ xstocks: XStockListing[] }>('/v1/xstocks'),
   liveCampaigns: () => request<{ campaigns: CampaignSummary[] }>('/v1/campaigns'),
@@ -58,6 +64,18 @@ export const api = {
   holdings: (t: GetAccessToken) =>
     authed<{ available: boolean; wallets: { wallet: string; balances: Record<string, string> | null }[] }>(t, '/v1/me/holdings'),
   myCampaigns: (t: GetAccessToken) => authed<{ campaigns: CampaignSummary[] }>(t, '/v1/me/campaigns'),
+  fundingPrepare: (t: GetAccessToken, id: string) =>
+    authed<PreparedFunding>(t, `/v1/campaigns/${encodeURIComponent(id)}/funding/prepare`, { method: 'POST' }),
+  fundingSubmit: (t: GetAccessToken, id: string, signedTransaction: string) =>
+    authed<{ signature: string; verified: boolean; campaign: CampaignSummary }>(
+      t,
+      `/v1/campaigns/${encodeURIComponent(id)}/funding/submit`,
+      { method: 'POST', body: JSON.stringify({ signedTransaction }) },
+    ),
+  fundingVerify: (t: GetAccessToken, id: string) =>
+    authed<{ verified: boolean; campaign: CampaignSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/funding/verify`, {
+      method: 'POST',
+    }),
   createCampaign: (
     t: GetAccessToken,
     body: { type: CampaignType; mint: string; allowanceRaw: string },

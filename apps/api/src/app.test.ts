@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from './app.ts'
 import { AuthError, type AuthVerifier, extractVerifiedExternalSolanaWallets } from './auth.ts'
-import { InMemoryCampaignRepository } from './campaign-repo.ts'
+import { InMemoryCampaignRepository, type StoredCampaign } from './campaign-repo.ts'
+import { type FundingService, FundingRequestError } from './funding-service.ts'
 
 // Arbitrary valid addresses used only as test inputs.
 const CREATOR = '11111111111111111111111111111112'
@@ -43,12 +44,18 @@ const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
 let app: ReturnType<typeof buildApp>
 afterEach(async () => app?.close())
 
-function build(opts: { wallets?: string[]; exists?: boolean } = {}) {
+const ASSETS = SUPPORTED_XSTOCKS.map((x) => ({ ...x, isTest: false }))
+
+function build(
+  opts: { wallets?: string[]; exists?: boolean; funding?: FundingService; repo?: InMemoryCampaignRepository; auth?: AuthVerifier } = {},
+) {
   app = buildApp({
     env,
-    auth: fakeAuth(opts.wallets ?? [CREATOR]),
-    campaigns: new InMemoryCampaignRepository(),
+    auth: opts.auth ?? fakeAuth(opts.wallets ?? [CREATOR]),
+    campaigns: opts.repo ?? new InMemoryCampaignRepository(),
     rpc: fakeRpc(opts.exists),
+    assets: ASSETS,
+    funding: opts.funding,
   })
   return app
 }
@@ -172,5 +179,113 @@ describe('GET /v1/me/holdings', () => {
     build()
     const res = await app.inject({ method: 'GET', url: '/v1/me/holdings', headers: { authorization: 'Bearer good-token' } })
     expect(res.json()).toEqual({ available: false, wallets: [{ wallet: CREATOR, balances: null }] })
+  })
+})
+
+describe('funding routes', () => {
+  const body = { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000' }
+  const auth = { authorization: 'Bearer good-token' }
+  const signed = { signedTransaction: 'A'.repeat(200) }
+
+  function fakeFunding(opts: { live?: boolean; submitError?: FundingRequestError } = {}): FundingService & { calls: string[] } {
+    const calls: string[] = []
+    return {
+      calls,
+      async prepare(c: StoredCampaign) {
+        calls.push('prepare')
+        return {
+          transaction: 'AAAA',
+          minContextSlot: '1',
+          summary: {
+            campaignAccount: c.campaignTokenAccount,
+            delegate: CREATOR,
+            amountRaw: c.allowanceRaw.toString(),
+            rentLamports: '1',
+            accountSpace: '175',
+          },
+        }
+      },
+      async submit() {
+        calls.push('submit')
+        if (opts.submitError) throw opts.submitError
+        return { signature: 'sig' }
+      },
+      async verify() {
+        calls.push('verify')
+        return { live: opts.live ?? true, status: { problems: [] } as never }
+      },
+    }
+  }
+
+  const url = (id: string, step: string) => `/v1/campaigns/${id}/funding/${step}`
+
+  it('prepare → submit → LIVE when verified onchain', async () => {
+    const funding = fakeFunding()
+    build({ funding })
+    const id = (await post(body)).json().campaign.id
+    expect((await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })).statusCode).toBe(200)
+    expect((await app.inject({ method: 'GET', url: `/v1/campaigns/${id}` })).json().campaign.status).toBe('AWAITING_FUNDING')
+    const sub = await app.inject({ method: 'POST', url: url(id, 'submit'), headers: auth, payload: signed })
+    expect(sub.statusCode).toBe(200)
+    expect(sub.json()).toMatchObject({ signature: 'sig', verified: true, campaign: { status: 'LIVE' } })
+    expect(funding.calls).toEqual(['prepare', 'submit', 'verify'])
+  })
+
+  it('stays AWAITING_FUNDING when onchain state does not verify', async () => {
+    build({ funding: fakeFunding({ live: false }) })
+    const id = (await post(body)).json().campaign.id
+    await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })
+    const sub = await app.inject({ method: 'POST', url: url(id, 'submit'), headers: auth, payload: signed })
+    expect(sub.json()).toMatchObject({ verified: false, campaign: { status: 'AWAITING_FUNDING' } })
+  })
+
+  it('only the creator can fund; anyone else gets 404', async () => {
+    const repo = new InMemoryCampaignRepository()
+    build({ funding: fakeFunding(), repo })
+    const id = (await post(body)).json().campaign.id
+    await app.close()
+
+    // Same repository, different authenticated user.
+    const intruder: AuthVerifier = {
+      async verifyAccessToken() {
+        return { privyUserId: 'did:privy:someone-else', sessionId: 's' }
+      },
+      async getVerifiedExternalSolanaWallets() {
+        return [OTHER_WALLET]
+      },
+    }
+    build({ funding: fakeFunding(), repo, auth: intruder })
+    const res = await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('rejects a malformed signed transaction body', async () => {
+    build({ funding: fakeFunding() })
+    const id = (await post(body)).json().campaign.id
+    await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })
+    const res = await app.inject({ method: 'POST', url: url(id, 'submit'), headers: auth, payload: { signedTransaction: 'not base64!' } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('surfaces funding errors with their code and HTTP status', async () => {
+    build({ funding: fakeFunding({ submitError: new FundingRequestError('TRANSACTION_MISMATCH', 'differs', 400) }) })
+    const id = (await post(body)).json().campaign.id
+    await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })
+    const res = await app.inject({ method: 'POST', url: url(id, 'submit'), headers: auth, payload: signed })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe('TRANSACTION_MISMATCH')
+  })
+
+  it('cannot submit before prepare', async () => {
+    build({ funding: fakeFunding() })
+    const id = (await post(body)).json().campaign.id
+    const res = await app.inject({ method: 'POST', url: url(id, 'submit'), headers: auth, payload: signed })
+    expect(res.statusCode).toBe(409)
+  })
+
+  it('503 when funding is not configured', async () => {
+    build()
+    const id = (await post(body)).json().campaign.id
+    expect((await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })).statusCode).toBe(503)
   })
 })

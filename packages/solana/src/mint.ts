@@ -18,8 +18,29 @@ export interface MintInspection {
   extensionKinds: string[]
   scaledUi: ScaledUiConfig | null
   pausable: { paused: boolean } | null
+  /** TransferHook program if one is set; null when absent or the all-zero "none" value. */
+  transferHookProgramId: Address | null
+  /** DefaultAccountState for new token accounts; null when the extension is absent (= Initialized). */
+  defaultAccountState: number | null
   /** Extensions that can block or alter transfers; campaign creation must review these. */
   transferAffectingExtensions: string[]
+}
+
+/** All-zero pubkey: the "none" value of OptionalNonZeroPubkey fields (observed on xStocks' TransferHook). */
+const ZERO_PUBKEY = '11111111111111111111111111111111'
+
+export type MintTransferBlocker = 'PAUSED' | 'TRANSFER_HOOK_ACTIVE' | 'DEFAULT_FROZEN'
+
+/**
+ * Reasons a campaign must not be funded or paid out right now (MASTER_PROMPT §9: pause if invalid).
+ * Re-check before every funding and payout; the issuer can change these at any time.
+ */
+export function mintTransferBlockers(m: MintInspection): MintTransferBlocker[] {
+  const out: MintTransferBlocker[] = []
+  if (m.pausable?.paused) out.push('PAUSED')
+  if (m.transferHookProgramId) out.push('TRANSFER_HOOK_ACTIVE')
+  if (m.defaultAccountState !== null && m.defaultAccountState !== 1) out.push('DEFAULT_FROZEN')
+  return out
 }
 
 export class MintInspectionError extends Error {
@@ -49,6 +70,8 @@ export async function inspectMint(rpc: Rpc<GetAccountInfoApi>, mint: Address): P
   const extensions: Extension[] = isSome(data.extensions) ? data.extensions.value : []
   const scaled = extensions.find((e) => e.__kind === 'ScaledUiAmountConfig')
   const pausable = extensions.find((e) => e.__kind === 'PausableConfig')
+  const hook = extensions.find((e) => e.__kind === 'TransferHook')
+  const defaultState = extensions.find((e) => e.__kind === 'DefaultAccountState')
   const kinds = extensions.map((e) => e.__kind)
   return {
     mint,
@@ -67,6 +90,8 @@ export async function inspectMint(rpc: Rpc<GetAccountInfoApi>, mint: Address): P
         }
       : null,
     pausable: pausable ? { paused: pausable.paused } : null,
+    transferHookProgramId: hook && hook.programId !== ZERO_PUBKEY ? hook.programId : null,
+    defaultAccountState: defaultState ? Number(defaultState.state) : null,
     transferAffectingExtensions: kinds.filter((k) => TRANSFER_AFFECTING.has(k)),
   }
 }

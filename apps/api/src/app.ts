@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
-import { createCampaignRequest } from '@blink/validation'
-import { findXStockByMint, SUPPORTED_XSTOCKS } from '@blink/xstocks'
+import { createCampaignRequest, submitFundingRequest } from '@blink/validation'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 
 import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './auth.ts'
-import { type CampaignRepository, toSummary } from './campaign-repo.ts'
+import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
+import type { Asset } from './assets.ts'
+import { type FundingService, FundingRequestError } from './funding-service.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
 
@@ -17,6 +18,10 @@ export interface AppDeps {
   auth: AuthVerifier
   campaigns: CampaignRepository
   rpc: Rpc<GetAccountInfoApi>
+  /** Campaign assets for the configured cluster (mainnet xStocks, or the devnet test mint). */
+  assets: Asset[]
+  /** Creator funding flow (prepare → wallet signs → submit → verify). Optional in tests. */
+  funding?: FundingService
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -42,6 +47,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AuthError) return sendError(reply, 401, 'UNAUTHENTICATED', err.message)
+    if (err instanceof FundingRequestError) return sendError(reply, err.httpStatus, err.code, err.message)
     const status = typeof (err as { statusCode?: number }).statusCode === 'number' ? (err as { statusCode: number }).statusCode : 500
     if (status < 500) return sendError(reply, status, 'BAD_REQUEST', err instanceof Error ? err.message : 'bad request')
     app.log.error(err)
@@ -58,9 +64,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       req.log.warn({ err }, 'xStock market data unavailable')
     }
     return {
-      xstocks: SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals }) => {
+      xstocks: deps.assets.map(({ symbol, name, mint, decimals, isTest }) => {
         const m = market.get(mint)
-        return { symbol, name, mint, decimals, multiplier: m?.multiplier ?? null, paused: m?.paused ?? null, asOf: m?.asOf ?? null }
+        return { symbol, name, mint, decimals, isTest, multiplier: m?.multiplier ?? null, paused: m?.paused ?? null, asOf: m?.asOf ?? null }
       }),
     }
   })
@@ -113,8 +119,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
     const body = parsed.data
 
-    const xstock = findXStockByMint(body.mint)
-    if (!xstock) return sendError(reply, 422, 'UNSUPPORTED_MINT', 'mint is not a supported xStock')
+    const xstock = deps.assets.find((x) => x.mint === body.mint)
+    if (!xstock) return sendError(reply, 422, 'UNSUPPORTED_MINT', 'this stock is not available on the current network')
 
     const verifiedWallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
     const requested = req.headers['x-creator-wallet']
@@ -162,6 +168,71 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!campaign) return sendError(reply, 404, 'NOT_FOUND', 'campaign not found')
     return { campaign: toSummary(campaign) }
   })
+
+  /** Loads a campaign the caller created; 404 otherwise (never reveal others' campaigns via these routes). */
+  async function requireOwnCampaign(req: FastifyRequest<{ Params: { id: string } }>): Promise<StoredCampaign> {
+    const auth = await requireAuth(req)
+    const c = /^[0-9a-f-]{36}$/.test(req.params.id) ? await deps.campaigns.findById(req.params.id) : null
+    if (!c || c.creatorPrivyUserId !== auth.privyUserId) throw new FundingRequestError('NOT_FOUND', 'campaign not found', 404)
+    if (c.cluster !== deps.env.SOLANA_CLUSTER) {
+      throw new FundingRequestError('WRONG_NETWORK', `this campaign belongs to ${c.cluster}`, 409)
+    }
+    return c
+  }
+
+  function requireFunding(): FundingService {
+    if (!deps.funding) throw new FundingRequestError('FUNDING_UNAVAILABLE', 'funding is not enabled on this server', 503)
+    return deps.funding
+  }
+
+  /** Step 1: build + simulate the single fund-and-approve transaction for the creator to sign. */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/funding/prepare', async (req) => {
+    const funding = requireFunding()
+    let c = await requireOwnCampaign(req)
+    if (c.status !== 'DRAFT' && c.status !== 'AWAITING_FUNDING') {
+      throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
+    }
+    const prepared = await funding.prepare(c)
+    if (c.status === 'DRAFT') c = (await deps.campaigns.transitionStatus(c.id, 'DRAFT', 'AWAITING_FUNDING')) ?? c
+    return prepared
+  })
+
+  /** Step 2: relay the creator-signed transaction (must match what was prepared), then verify onchain. */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/funding/submit', async (req, reply) => {
+    const funding = requireFunding()
+    const c = await requireOwnCampaign(req)
+    if (c.status !== 'AWAITING_FUNDING') throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
+    const parsed = submitFundingRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    const { signature } = await funding.submit(c, parsed.data.signedTransaction)
+    const live = await goLiveIfVerified(funding, c)
+    return { signature, campaign: toSummary(live.campaign), verified: live.verified }
+  })
+
+  /** Recovery: re-check onchain state (e.g. the app lost connection after signing). */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/funding/verify', async (req) => {
+    const funding = requireFunding()
+    const c = await requireOwnCampaign(req)
+    if (c.status === 'LIVE') return { campaign: toSummary(c), verified: true }
+    if (c.status !== 'AWAITING_FUNDING') throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
+    const live = await goLiveIfVerified(funding, c)
+    return { campaign: toSummary(live.campaign), verified: live.verified }
+  })
+
+  async function goLiveIfVerified(funding: FundingService, c: StoredCampaign) {
+    const { live, status } = await funding.verify(c)
+    if (!live) {
+      req_log_problems(status.problems)
+      return { campaign: c, verified: false }
+    }
+    const funded = (await deps.campaigns.transitionStatus(c.id, 'AWAITING_FUNDING', 'AWAITING_DELEGATION')) ?? c
+    const liveCampaign = (await deps.campaigns.transitionStatus(funded.id, 'AWAITING_DELEGATION', 'LIVE')) ?? funded
+    return { campaign: liveCampaign, verified: true }
+  }
+
+  function req_log_problems(problems: string[]) {
+    if (problems.length) app.log.warn({ problems }, 'funding not verified onchain yet')
+  }
 
   return app
 }

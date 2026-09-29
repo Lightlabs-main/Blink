@@ -1,7 +1,7 @@
 import type { CampaignStatus, SolanaCluster } from '@blink/domain'
 import { PrismaPg } from '@prisma/adapter-pg'
 
-import type { CampaignRepository, NewCampaign, StoredCampaign } from './campaign-repo.ts'
+import { assertTransition, type CampaignRepository, type NewCampaign, type StoredCampaign } from './campaign-repo.ts'
 import { type Campaign, PrismaClient, SolanaCluster as DbCluster } from './generated/prisma/client.ts'
 
 const toDbCluster: Record<SolanaCluster, DbCluster> = {
@@ -28,6 +28,7 @@ function toStored(row: Campaign): StoredCampaign {
     campaignSeed: row.campaignSeed,
     campaignTokenAccount: row.campaignTokenAccount,
     delegateAddress: row.delegateAddress,
+    delegateWalletRef: row.delegateWalletRef,
     // Decimal(20,0) → exact integer string → bigint; never via Number.
     allowanceRaw: BigInt(row.allowanceRaw.toFixed(0)),
     createdAt: row.createdAt,
@@ -76,5 +77,22 @@ export class PrismaCampaignRepository implements CampaignRepository {
       take: limit,
     })
     return rows.map(toStored)
+  }
+
+  async setDelegate(id: string, delegate: { address: string; walletRef: string }): Promise<StoredCampaign> {
+    // Only fill an empty delegate: a campaign never silently switches delegates (§14).
+    await this.prisma.campaign.updateMany({
+      where: { id, delegateAddress: null },
+      data: { delegateAddress: delegate.address, delegateWalletRef: delegate.walletRef },
+    })
+    const row = await this.prisma.campaign.findUniqueOrThrow({ where: { id } })
+    return toStored(row)
+  }
+
+  async transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus): Promise<StoredCampaign | null> {
+    assertTransition(from, to)
+    const { count } = await this.prisma.campaign.updateMany({ where: { id, status: from }, data: { status: to } })
+    if (count === 0) return null
+    return toStored(await this.prisma.campaign.findUniqueOrThrow({ where: { id } }))
   }
 }
