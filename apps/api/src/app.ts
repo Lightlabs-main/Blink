@@ -9,12 +9,15 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 
 import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './auth.ts'
 import { type CampaignRepository, toSummary } from './campaign-repo.ts'
+import type { XStockMarket } from './xstock-market.ts'
 
 export interface AppDeps {
   env: BlinkEnv
   auth: AuthVerifier
   campaigns: CampaignRepository
   rpc: Rpc<GetAccountInfoApi>
+  /** Read-only mainnet market data for xStocks; optional (tests, offline). */
+  market?: XStockMarket
   logger?: boolean
 }
 
@@ -44,9 +47,37 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get('/health', async () => ({ ok: true, cluster: deps.env.SOLANA_CLUSTER, demoMode: deps.env.DEMO_MODE }))
 
-  app.get('/v1/xstocks', async () => ({
-    xstocks: SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals }) => ({ symbol, name, mint, decimals })),
+  app.get('/v1/xstocks', async (req) => {
+    let market = new Map<string, { multiplier: number; paused: boolean; asOf: number }>()
+    try {
+      market = (await deps.market?.getAll()) ?? market
+    } catch (err) {
+      req.log.warn({ err }, 'xStock market data unavailable')
+    }
+    return {
+      xstocks: SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals }) => {
+        const m = market.get(mint)
+        return { symbol, name, mint, decimals, multiplier: m?.multiplier ?? null, paused: m?.paused ?? null, asOf: m?.asOf ?? null }
+      }),
+    }
+  })
+
+  /** Public: LIVE drops for the home feed. Empty until campaigns are funded and delegated. */
+  app.get('/v1/campaigns', async () => ({
+    campaigns: (await deps.campaigns.listByStatus('LIVE', 50)).map(toSummary),
   }))
+
+  /** The authenticated user as the backend sees them (never trusts client-supplied identity). */
+  app.get('/v1/me', async (req) => {
+    const auth = await requireAuth(req)
+    const verifiedCreatorWallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
+    return { privyUserId: auth.privyUserId, verifiedCreatorWallets }
+  })
+
+  app.get('/v1/me/campaigns', async (req) => {
+    const auth = await requireAuth(req)
+    return { campaigns: (await deps.campaigns.listByCreator(auth.privyUserId, 50)).map(toSummary) }
+  })
 
   /**
    * Create a DRAFT campaign. The creator wallet must be one Privy verified via SIWS for this user.

@@ -1,4 +1,4 @@
-import type { SolanaCluster } from '@blink/domain'
+import type { CampaignStatus, SolanaCluster } from '@blink/domain'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 import type { CampaignRepository, NewCampaign, StoredCampaign } from './campaign-repo.ts'
@@ -62,5 +62,19 @@ export class PrismaCampaignRepository implements CampaignRepository {
   async findById(id: string): Promise<StoredCampaign | null> {
     const row = await this.prisma.campaign.findUnique({ where: { id } })
     return row ? toStored(row) : null
+  }
+
+  async listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]> {
+    const rows = await this.prisma.campaign.findMany({ where: { status }, orderBy: { createdAt: 'desc' }, take: limit })
+    return rows.map(toStored)
+  }
+
+  async listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]> {
+    const rows = await this.prisma.campaign.findMany({
+      where: { creatorPrivyUserId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+    return rows.map(toStored)
   }
 }

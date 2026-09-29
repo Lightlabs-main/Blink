@@ -21,6 +21,8 @@ export const envSchema = z.object({
   BLINK_ENV: z.enum(['local', 'test', 'mainnet']).default('local'),
   SOLANA_CLUSTER: z.enum(['localnet', 'devnet', 'mainnet-beta']).default('devnet'),
   SOLANA_RPC_URL: z.url(),
+  /** Read-only RPC for mainnet xStock mint data (multiplier, paused). Never used to send transactions. */
+  XSTOCK_READ_RPC_URL: z.url().optional(),
   MAINNET_ENABLED: boolFlag,
   MAINNET_GO_APPROVED: boolFlag,
   MAINNET_BUDGET_LAMPORTS: lamports.default(MAINNET_TARGET_LAMPORTS),

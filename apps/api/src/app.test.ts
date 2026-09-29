@@ -130,3 +130,35 @@ describe('extractVerifiedExternalSolanaWallets', () => {
     ).toEqual(['A'])
   })
 })
+
+describe('read endpoints', () => {
+  it('GET /v1/campaigns lists only LIVE campaigns (none by default)', async () => {
+    build()
+    await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1' })
+    const res = await app.inject({ method: 'GET', url: '/v1/campaigns' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().campaigns).toEqual([])
+  })
+
+  it('GET /v1/me requires auth and returns verified wallets', async () => {
+    build()
+    expect((await app.inject({ method: 'GET', url: '/v1/me' })).statusCode).toBe(401)
+    const res = await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: 'Bearer good-token' } })
+    expect(res.json()).toEqual({ privyUserId: 'did:privy:test', verifiedCreatorWallets: [CREATOR] })
+  })
+
+  it('GET /v1/me/campaigns returns only my campaigns, newest first', async () => {
+    build()
+    const a = (await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1' })).json().campaign.id
+    await new Promise((r) => setTimeout(r, 5))
+    const b = (await post({ type: 'TAP_RUSH', mint: MINT, allowanceRaw: '2' })).json().campaign.id
+    const res = await app.inject({ method: 'GET', url: '/v1/me/campaigns', headers: { authorization: 'Bearer good-token' } })
+    expect(res.json().campaigns.map((c: { id: string }) => c.id)).toEqual([b, a])
+  })
+
+  it('GET /v1/xstocks returns null market fields without a market source', async () => {
+    build()
+    const res = await app.inject({ method: 'GET', url: '/v1/xstocks' })
+    expect(res.json().xstocks[0]).toMatchObject({ multiplier: null, paused: null })
+  })
+})

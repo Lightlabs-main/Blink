@@ -5,6 +5,9 @@ const path = require('path')
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname)
 
+// Shared, dependency-free packages from the monorepo (domain types, xStock amount math).
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, '../../packages')]
+
 // Apply uniwind modifications before exporting
 const uniwindConfig = withUniwindConfig(config, {
   // relative path to your global.css file

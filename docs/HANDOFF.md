@@ -36,3 +36,19 @@ Seeker verification, `smoke-mainnet.ts`, `devnet-test-mint.ts`, `verify-delegati
 - `GET /v1/xstocks` → `{ xstocks: [{ symbol, name, mint, decimals }] }`.
 
 Schemas: `packages/validation/src/index.ts`. Types: `packages/domain/src/index.ts`.
+
+## API contract v1 additions (owner: Claude) — 2026-09-29
+
+These are additive and nothing existing changed.
+
+- `GET /v1/xstocks`: each item now also carries `multiplier` (the effective Scaled UI multiplier
+  at the mainnet cluster clock; display only), `paused` and `asOf` (cluster unix seconds). All three
+  are `null` when `XSTOCK_READ_RPC_URL` is unset or the read fails.
+- `GET /v1/campaigns`: public, LIVE campaigns only, newest first, maximum 50.
+- `GET /v1/me` (auth): `{ privyUserId, verifiedCreatorWallets }`.
+- `GET /v1/me/campaigns` (auth): the caller's campaigns, newest first, maximum 50.
+
+The mobile app talks to `https://blink-api.38-49-209-149.sslip.io`, an interim hostname until there
+is a real domain. It shares `packages/domain` and `packages/xstocks` through
+`apps/mobile/src/shared`, so those two packages **must stay dependency-free** and avoid BigInt `**`
+(use `pow10`).
