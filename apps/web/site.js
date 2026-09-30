@@ -1,24 +1,11 @@
-// Blink-to-Stock website: mobile menu and live drops from the Blink API (same origin, /api).
+// Blink-to-Stock website: dateline, ticker and live drops from the Blink API (same origin, /api). Real data only.
 ;(function () {
-  const toggle = document.querySelector('.nav-toggle')
-  const links = document.getElementById('nav-links')
-  if (toggle && links) {
-    toggle.addEventListener('click', () => {
-      const open = links.classList.toggle('open')
-      toggle.setAttribute('aria-expanded', String(open))
-    })
-    links.addEventListener('click', (e) => {
-      if (e.target.closest('a')) {
-        links.classList.remove('open')
-        toggle.setAttribute('aria-expanded', 'false')
-      }
-    })
-  }
-
-  const list = document.getElementById('drop-list')
-  if (!list) return
-
   const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Early Claim', REFERRAL: 'Referral', SEEKER: 'Seeker Drop' }
+
+  const today = document.getElementById('today')
+  if (today) {
+    today.textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  }
 
   function el(tag, props, children) {
     const node = document.createElement(tag)
@@ -34,43 +21,68 @@
     return n.toLocaleString(undefined, { maximumFractionDigits: 6 })
   }
 
-  function empty() {
-    list.replaceChildren(
-      el('div', { className: 'card empty', style: 'grid-column: 1 / -1' }, [
-        el('h3', { textContent: 'No live drops right now' }),
-        el('p', { textContent: 'New drops appear here the moment a creator funds one. Got a QR code from a friend? Scan it with the app.' }),
-        el('a', { className: 'btn btn-primary', href: '/download/blink-to-stock.apk', textContent: 'Get the app' }),
-      ]),
-    )
+  const ticker = document.getElementById('ticker')
+  function loopTicker() {
+    // Two copies so the strip scrolls seamlessly (the animation moves it by half its width).
+    if (ticker && !ticker.dataset.looped) {
+      ticker.dataset.looped = '1'
+      for (const item of [...ticker.children]) ticker.append(item.cloneNode(true))
+    }
+  }
+
+  const rows = document.getElementById('drop-rows')
+  const sideTitle = document.getElementById('side-drops')
+  const sideNote = document.getElementById('side-drops-note')
+
+  function noDrops(message) {
+    if (rows) rows.replaceChildren(el('tr', { className: 'empty-row' }, [el('td', { colSpan: 5, textContent: message })]))
+    if (sideTitle) sideTitle.textContent = 'No live drops'
+    if (sideNote) sideNote.textContent = 'New drops are listed the moment a creator funds one. Got a QR from a friend? Scan it in the app.'
   }
 
   Promise.all([fetch('/api/v1/campaigns'), fetch('/api/v1/xstocks')])
     .then(async ([c, x]) => {
       if (!c.ok) throw new Error('unavailable')
-      const campaigns = (await c.json()).campaigns || []
+      const campaigns = ((await c.json()).campaigns || []).filter((d) => d.rewardPerClaimRaw)
       const assets = x.ok ? (await x.json()).xstocks : []
-      const claimable = campaigns.filter((d) => d.rewardPerClaimRaw)
-      if (!claimable.length) return empty()
-      list.replaceChildren(
-        ...claimable.slice(0, 9).map((d) => {
+
+      if (ticker) {
+        ticker.prepend(el('span', { className: 'ticker-item' }, [el('b', { textContent: 'LIVE' }), campaigns.length + (campaigns.length === 1 ? ' drop open now' : ' drops open now')]))
+      }
+      loopTicker()
+
+      if (!campaigns.length) return noDrops('No live drops right now — check back soon, or scan a friend’s QR in the app.')
+
+      if (sideTitle) sideTitle.textContent = campaigns.length + (campaigns.length === 1 ? ' live drop' : ' live drops')
+      if (sideNote) sideNote.textContent = 'Open for claiming right now. See Section B for the full listing.'
+
+      rows.replaceChildren(
+        ...campaigns.slice(0, 20).map((d) => {
           const asset = assets.find((a) => a.mint === d.mint)
           const reward = BigInt(d.rewardPerClaimRaw)
           const total = BigInt(d.allowanceRaw) / reward
           const taken = BigInt(d.claimedRaw) / reward
           const pct = total > 0n ? Number((taken * 100n) / total) : 0
-          const per = shares(d.rewardPerClaimRaw, asset)
-          return el('a', { className: 'card drop', href: '/c/' + d.id }, [
-            el('div', { className: 'drop-top' }, [
-              el('span', { className: 'badge live', textContent: LABEL[d.type] || 'Drop' }),
-              el('span', { className: 'badge neutral', textContent: d.cluster === 'mainnet-beta' ? 'Solana' : 'Devnet · test' }),
+          const row = el('tr', { tabIndex: 0 }, [
+            el('td', {}, [el('span', { className: 'sym', textContent: d.xstockSymbol })]),
+            el('td', { textContent: LABEL[d.type] || 'Drop' }),
+            el('td', { className: 'num', textContent: shares(d.rewardPerClaimRaw, asset) || '—' }),
+            el('td', {}, [
+              el('span', { className: 'bar' }, [el('span', { style: 'width:' + Math.min(100, pct) + '%' })]),
+              ' ' + taken + '/' + total,
             ]),
-            el('div', { className: 'drop-symbol', textContent: d.xstockSymbol }),
-            el('p', { textContent: per ? per + ' ' + d.xstockSymbol + ' per person' : 'Stock drop' }),
-            el('div', { className: 'meter' }, [el('span', { style: 'width:' + Math.min(100, pct) + '%' })]),
-            el('small', { className: 'muted', textContent: taken + ' of ' + total + ' claimed' }),
+            el('td', {}, [el('span', { className: 'status live', textContent: 'Open' })]),
           ])
+          row.dataset.href = '/c/' + d.id
+          const go = () => (location.href = row.dataset.href)
+          row.addEventListener('click', go)
+          row.addEventListener('keydown', (e) => e.key === 'Enter' && go())
+          return row
         }),
       )
     })
-    .catch(empty)
+    .catch(() => {
+      loopTicker()
+      noDrops('Listings are unavailable right now. Please try again shortly.')
+    })
 })()
