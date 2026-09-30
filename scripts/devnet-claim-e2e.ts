@@ -188,9 +188,10 @@ async function main() {
   log('onchain allowance decreased exactly', { delegatedAmount: status.delegatedAmount, balance: status.balance })
 
   const third = await claims.reserve({ campaignId: id, privyUserId: 'did:privy:recipient-3', recipientWallet: authority.address, amountRaw: REWARD_RAW, tapSessionId: null })
-  if (third.ok || third.reason !== 'EXHAUSTED') throw new Error('third claim should not fit the pool')
   const final = (await campaigns.findById(id))!
-  log('third claim refused before signing (pool used up)', { claimedRaw: final.claimedRaw, status: final.status })
+  // The payout that left less than one reward in the pool ends the drop, so a third claim finds it closed.
+  if (third.ok || third.reason !== 'NOT_LIVE' || final.status !== 'ENDED') throw new Error('third claim should be refused by an ENDED drop')
+  log('drop ENDED when the pool could not fit another reward; third claim refused before signing', { claimedRaw: final.claimedRaw, status: final.status })
 
   console.log('\nClaims devnet end-to-end test: PASSED')
 }
