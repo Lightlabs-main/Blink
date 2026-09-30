@@ -2,7 +2,7 @@
  * API contract schemas (owner: Claude). Shared by apps/api and apps/mobile.
  * Record every change in docs/HANDOFF.md before Codex depends on it.
  */
-import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, isClaimableType, TAP_RUSH_LIMITS } from '@blink/domain'
+import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, isClaimableType, REFERRAL_CODE_RE, TAP_RUSH_LIMITS } from '@blink/domain'
 import { z } from 'zod'
 
 /** Base58 Solana address shape. Format check only — onchain existence/ownership is verified server-side. */
@@ -58,20 +58,32 @@ export const createCampaignRequest = z
   })
 export type CreateCampaignRequest = z.infer<typeof createCampaignRequest>
 
-/** POST /v1/campaigns/:id/tap-rush/finish — the client's tap count for a server-started session. */
+const MAX_TAPS = TAP_RUSH_LIMITS.maxSeconds * TAP_RUSH_LIMITS.maxTapsPerSecond
+
+/**
+ * POST /v1/campaigns/:id/tap-rush/finish — the tap count plus each tap's time in ms since the round started on the
+ * device (D-14). The server judges timing patterns, not just the count.
+ */
 export const finishTapRushRequest = z
   .object({
     sessionId: z.uuid(),
-    taps: z
-      .number()
-      .int()
-      .min(0)
-      .max(TAP_RUSH_LIMITS.maxSeconds * TAP_RUSH_LIMITS.maxTapsPerSecond),
+    taps: z.number().int().min(0).max(MAX_TAPS),
+    tapTimesMs: z
+      .array(
+        z
+          .number()
+          .int()
+          .min(0)
+          .max(TAP_RUSH_LIMITS.maxSeconds * 1000 + 2000),
+      )
+      .max(MAX_TAPS),
   })
   .strict()
 
-/** POST /v1/campaigns/:id/claim — Tap Rush claims name their qualifying session. */
-export const claimRequest = z.object({ tapSessionId: z.uuid().optional() }).strict()
+export const referralCode = z.string().regex(REFERRAL_CODE_RE, 'invalid invite code')
+
+/** POST /v1/campaigns/:id/claim — Tap Rush claims name their qualifying session; referral claims their invite code. */
+export const claimRequest = z.object({ tapSessionId: z.uuid().optional(), ref: referralCode.optional() }).strict()
 
 /** POST /v1/campaigns/:id/funding/submit — the wallet-signed transaction, base64 wire format. */
 export const submitFundingRequest = z
@@ -99,6 +111,7 @@ export const campaignSummary = z.object({
   rewardPerClaimRaw: rawAmount.nullable(),
   claimedRaw: rawAmount,
   tapRush: tapRushRules.nullable(),
+  pauseReason: z.string().nullable(),
   createdAt: z.iso.datetime(),
 })
 

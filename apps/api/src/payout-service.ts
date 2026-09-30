@@ -1,6 +1,6 @@
 import type { BlinkEnv } from '@blink/config'
 import type { PauseReason } from '@blink/domain'
-import { buildPayoutTransaction, checkCampaignDelegation, type DelegationProblem, PayoutError } from '@blink/solana'
+import { buildPayoutTransaction, checkCampaignDelegation, type DelegationProblem, inspectMint, mintTransferBlockers, PayoutError } from '@blink/solana'
 import {
   address,
   type Base64EncodedWireTransaction,
@@ -56,6 +56,8 @@ export interface PayoutService {
   /** Updates a SENDING claim from the chain: PAID, FAILED once its blockhash expired unseen, or unchanged. */
   reconcile(claim: StoredClaim): Promise<StoredClaim>
   feePayerAddress(): Promise<string>
+  /** §9: can this campaign pay at least one more reward right now? Used to resume a PAUSED drop. */
+  checkReady(campaign: StoredCampaign): Promise<{ ok: true } | { ok: false; reason: PauseReason; detail: string[] }>
 }
 
 const CONFIRM_TIMEOUT_MS = 30_000
@@ -186,6 +188,24 @@ export class SolanaPayoutService implements PayoutService {
     }
     if (current.status === 'PAID') await this.endIfExhausted(campaign.id)
     return current
+  }
+
+  async checkReady(campaign: StoredCampaign): Promise<{ ok: true } | { ok: false; reason: PauseReason; detail: string[] }> {
+    if (!campaign.delegateAddress || campaign.rewardPerClaimRaw === null) return { ok: false, reason: 'DELEGATION_REVOKED', detail: ['NO_DELEGATE'] }
+    const mint = await inspectMint(this.deps.rpc, address(campaign.mint))
+    const blockers = mintTransferBlockers(mint)
+    if (blockers.length) return { ok: false, reason: 'MINT_STATE_CHANGED', detail: blockers }
+    const status = await checkCampaignDelegation(this.deps.rpc, {
+      account: address(campaign.campaignTokenAccount),
+      mint: address(campaign.mint),
+      creator: address(campaign.creatorWallet),
+      delegate: address(campaign.delegateAddress),
+    })
+    if (!status.valid || status.distributable < campaign.rewardPerClaimRaw) {
+      const reason = status.problems.map((p) => PAUSE_FOR[p]).find(Boolean) ?? 'INSUFFICIENT_BALANCE'
+      return { ok: false, reason, detail: status.problems }
+    }
+    return { ok: true }
   }
 
   async reconcile(claim: StoredClaim): Promise<StoredClaim> {

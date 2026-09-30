@@ -86,3 +86,21 @@ status: RESERVED | SENDING | PAID | FAILED, txSignature, failureReason, createdA
 
 **Devnet end-to-end check:** `npx tsx scripts/devnet-claim-e2e.ts`. It needs the same
 `.secrets/` files and Privy credentials as SPIKE-1.
+
+## API contract v3: Referral, Tap Rush timings, resume (owner: Claude, 2026-09-30)
+
+Built under the DECISIONS D-14 assumptions. Migration: `20260930120000_referrals_tap_checks`.
+
+- **`POST …/tap-rush/finish` (breaking):** the body is now `{ sessionId, taps, tapTimesMs }`,
+  where `tapTimesMs` holds integer ms since the round started, one per tap. A round that fails the
+  checks returns 422 ROUND_REJECTED.
+- **`POST …/claim`:** also accepts `ref` (an 8-character invite code), which REFERRAL drops
+  require. New errors: 403 NEEDS_INVITE / SELF_REFERRAL.
+- **`GET …/referral`** (auth) → `{ referral: { campaignId, code, bonus: ClaimSummary | null } |
+  null }`. **`POST …/referral`** creates the code if needed. The creator gets 403 OWN_CAMPAIGN.
+- **`POST …/referral/bonus/retry`** (auth) → `{ claim }`. It resends a FAILED bonus once the
+  friend is PAID; otherwise it returns 409 FRIEND_NOT_PAID.
+- **`POST …/resume`** (creator) → `{ campaign }`: PAUSED → LIVE, or → ENDED when less than one
+  reward is left. 409 STILL_NOT_READY means the onchain check still fails.
+- **Summaries:** `ClaimSummary` adds `kind: CLAIM | REFERRAL_BONUS`; `CampaignSummary` adds
+  `pauseReason`.

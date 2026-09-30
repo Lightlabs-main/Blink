@@ -12,6 +12,7 @@ import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-
 import { type ClaimRepository, InMemoryClaimRepository, type ServiceWalletStore } from './claim-repo.ts'
 import { PrivyDelegateProvider, PrivyServerWalletSigner } from './delegate.ts'
 import { SolanaFundingService } from './funding-service.ts'
+import { ClaimService } from './claim-service.ts'
 import { SolanaPayoutService } from './payout-service.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
 import { PrismaClaimRepository } from './prisma-claim-repo.ts'
@@ -76,9 +77,10 @@ const payouts = new SolanaPayoutService({
   log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
 })
 
+const auth = new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
 const app = buildApp({
   env,
-  auth: new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET }),
+  auth,
   campaigns,
   rpc: clusterRpc,
   assets,
@@ -91,6 +93,7 @@ const app = buildApp({
 })
 
 app.addHook('onClose', async () => {
+  clearInterval(sweepTimer)
   await prisma?.$disconnect()
 })
 
@@ -101,6 +104,21 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 await app.listen({ host: env.API_HOST, port: env.API_PORT })
+
+// D-13/D-14: confirm SENDING payouts and release abandoned reservations even when nobody is looking at them.
+const sweeper = new ClaimService({ env, auth, campaigns, claims, payouts, log: app.log })
+let sweeping = false
+const sweepTimer = setInterval(() => {
+  if (sweeping) return
+  sweeping = true
+  sweeper
+    .sweep()
+    .catch((err: unknown) => app.log.warn({ err }, 'claim sweep failed'))
+    .finally(() => {
+      sweeping = false
+    })
+}, 60_000)
+sweepTimer.unref()
 
 // Resolve (or create once) the §16 fee payer at boot so its address is in the logs for funding.
 payouts.feePayerAddress().then(

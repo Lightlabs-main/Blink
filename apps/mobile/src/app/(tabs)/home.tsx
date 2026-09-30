@@ -203,7 +203,7 @@ export default function Home() {
                   <ListRow
                     leading={<StockAvatar isTest={asset?.isTest} logo={asset?.logo} size={36} symbol={r.xstockSymbol} />}
                     onPress={() => router.push(`/campaign/${r.campaignId}`)}
-                    subtitle={r.status === 'PAID' ? 'Received' : 'Sending…'}
+                    subtitle={`${r.kind === 'REFERRAL_BONUS' ? 'Referral bonus' : 'Claimed'} · ${r.status === 'PAID' ? 'received' : 'sending…'}`}
                     title={`${amount ? `${amount} ` : ''}${r.xstockSymbol}`}
                     trailing={<Badge label={r.status === 'PAID' ? 'Paid' : 'Pending'} tone={r.status === 'PAID' ? 'live' : 'warn'} />}
                   />

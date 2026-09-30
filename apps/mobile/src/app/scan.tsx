@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../design/icons'
 import { color, gutter, radius, space } from '../design/tokens'
 import { Button, EmptyState, IconButton, Loading, NavBar, Notice, Row, Screen, T } from '../design/ui'
-import { campaignIdFromScan } from '../lib/format'
+import { campaignRoute, parseCampaignLink } from '../lib/format'
 import { haptics } from '../lib/haptics'
 import { hasNativeModule } from '../lib/native'
 
@@ -70,14 +70,14 @@ function Scanner({ camera }: { camera: CameraModule }) {
         facing="back"
         onBarcodeScanned={({ data }) => {
           if (handled.current) return
-          const id = campaignIdFromScan(data)
-          if (!id) {
+          const link = parseCampaignLink(data)
+          if (!link) {
             setError('That QR code isn’t a Blink campaign.')
             return
           }
           handled.current = true
           haptics.success()
-          router.replace(`/campaign/${id}`)
+          router.replace(campaignRoute(link.id, link.ref) as `/campaign/${string}`)
         }}
         style={StyleSheet.absoluteFill}
       />

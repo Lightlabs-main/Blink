@@ -77,13 +77,15 @@ export interface CampaignSummary {
   claimedRaw: RawAmount
   /** Tap Rush rules; null for other mechanics. */
   tapRush: TapRushRules | null
+  /** Why Blink paused the drop (a PauseReason); null unless PAUSED. */
+  pauseReason: string | null
   createdAt: string
 }
 
 /**
- * Mechanics recipients can claim today (D-13). REFERRAL and SEEKER need rules that are not specified yet.
+ * Mechanics recipients can claim today (D-13, D-14). SEEKER needs Seeker Genesis Token rules that are not specified yet.
  */
-export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH'] as const satisfies readonly CampaignType[]
+export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH', 'REFERRAL'] as const satisfies readonly CampaignType[]
 
 export function isClaimableType(type: CampaignType): boolean {
   return (CLAIMABLE_TYPES as readonly CampaignType[]).includes(type)
@@ -103,7 +105,42 @@ export const TAP_RUSH_LIMITS = {
   maxSeconds: 30,
   maxTapsPerSecond: 20,
   maxAttempts: 10,
+  /** D-14: two taps closer than this are not a finger. */
+  minTapIntervalMs: 25,
+  /** D-14: coefficient of variation of tap intervals below this looks machine-timed. */
+  minIntervalVariation: 0.05,
 } as const
+
+export type TapRoundVerdict = { ok: true } | { ok: false; reason: 'COUNT_MISMATCH' | 'OUT_OF_ORDER' | 'OUT_OF_ROUND' | 'TOO_FAST' | 'BURST' | 'ROBOTIC' }
+
+/**
+ * D-14: checks a Tap Rush round's tap timings (ms since the round started on the device) for human patterns.
+ * Raises the bar for scripted results; a determined attacker can still synthesize human-like timings.
+ */
+export function assessTapRound(tapTimesMs: readonly number[], taps: number, seconds: number): TapRoundVerdict {
+  if (tapTimesMs.length !== taps) return { ok: false, reason: 'COUNT_MISMATCH' }
+  const roundMs = seconds * 1000
+  for (let i = 0; i < tapTimesMs.length; i++) {
+    const t = tapTimesMs[i]!
+    if (t < 0 || t > roundMs + 300) return { ok: false, reason: 'OUT_OF_ROUND' }
+    if (i > 0 && t < tapTimesMs[i - 1]!) return { ok: false, reason: 'OUT_OF_ORDER' }
+  }
+  const intervals: number[] = []
+  for (let i = 1; i < tapTimesMs.length; i++) intervals.push(tapTimesMs[i]! - tapTimesMs[i - 1]!)
+  // Two thumbs landing together can produce the odd tiny gap; only a pattern of them is rejected.
+  const tooClose = intervals.filter((d) => d < TAP_RUSH_LIMITS.minTapIntervalMs).length
+  if (tooClose > Math.max(1, Math.floor(intervals.length * 0.05))) return { ok: false, reason: 'TOO_FAST' }
+  for (let i = 0, j = 0; i < tapTimesMs.length; i++) {
+    while (tapTimesMs[i]! - tapTimesMs[j]! >= 1000) j++
+    if (i - j + 1 > TAP_RUSH_LIMITS.maxTapsPerSecond) return { ok: false, reason: 'BURST' }
+  }
+  if (intervals.length >= 10) {
+    const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length
+    const variance = intervals.reduce((a, d) => a + (d - mean) ** 2, 0) / intervals.length
+    if (mean > 0 && Math.sqrt(variance) / mean < TAP_RUSH_LIMITS.minIntervalVariation) return { ok: false, reason: 'ROBOTIC' }
+  }
+  return { ok: true }
+}
 
 export const TAP_RUSH_DEFAULTS: TapRushRules = { goal: 50, seconds: 10 }
 
@@ -120,9 +157,17 @@ export function maxClaims(allowanceRaw: bigint, rewardPerClaimRaw: bigint): bigi
 export const CLAIM_STATUSES = ['RESERVED', 'SENDING', 'PAID', 'FAILED'] as const
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number]
 
+/** D-14: REFERRAL_BONUS is the referrer's reward when a friend claims through their invite code. */
+export const CLAIM_KINDS = ['CLAIM', 'REFERRAL_BONUS'] as const
+export type ClaimKind = (typeof CLAIM_KINDS)[number]
+
+/** Referral invite codes: 8 characters from an unambiguous alphabet. */
+export const REFERRAL_CODE_RE = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/
+
 export interface ClaimSummary {
   id: string
   campaignId: string
+  kind: ClaimKind
   cluster: SolanaCluster
   mint: string
   xstockSymbol: string
@@ -133,6 +178,13 @@ export interface ClaimSummary {
   txSignature: string | null
   failureReason: string | null
   createdAt: string
+}
+
+/** The caller's invite for a REFERRAL drop and the bonus it earned (at most one per person, D-14). */
+export interface ReferralSummary {
+  campaignId: string
+  code: string
+  bonus: ClaimSummary | null
 }
 
 export interface TapRushSessionSummary {

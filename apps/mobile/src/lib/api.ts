@@ -1,4 +1,4 @@
-import type { CampaignSummary, CampaignType, ClaimSummary, TapRushRules, TapRushSessionSummary } from '../shared'
+import type { CampaignSummary, CampaignType, ClaimSummary, ReferralSummary, TapRushRules, TapRushSessionSummary } from '../shared'
 
 const baseUrl = process.env.EXPO_PUBLIC_BLINK_API_URL
 
@@ -96,19 +96,26 @@ export const api = {
       headers: creatorWallet ? { 'x-creator-wallet': creatorWallet } : undefined,
     }),
   /** Pays the fixed reward to the caller's Blink wallet. Waits for the network (up to ~30 s). */
-  claim: (t: GetAccessToken, id: string, tapSessionId?: string) =>
+  claim: (t: GetAccessToken, id: string, opts: { tapSessionId?: string; ref?: string } = {}) =>
     authed<{ claim: ClaimSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/claim`, {
       method: 'POST',
-      body: JSON.stringify(tapSessionId ? { tapSessionId } : {}),
+      body: JSON.stringify(opts),
     }),
+  myReferral: (t: GetAccessToken, id: string) => authed<{ referral: ReferralSummary | null }>(t, `/v1/campaigns/${encodeURIComponent(id)}/referral`),
+  createReferral: (t: GetAccessToken, id: string) =>
+    authed<{ referral: ReferralSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/referral`, { method: 'POST' }),
+  retryBonus: (t: GetAccessToken, id: string) =>
+    authed<{ claim: ClaimSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/referral/bonus/retry`, { method: 'POST' }),
+  resume: (t: GetAccessToken, id: string) =>
+    authed<{ campaign: CampaignSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/resume`, { method: 'POST' }),
   myClaim: (t: GetAccessToken, id: string) => authed<{ claim: ClaimSummary | null }>(t, `/v1/campaigns/${encodeURIComponent(id)}/claim`),
   myClaims: (t: GetAccessToken) => authed<{ claims: ClaimSummary[] }>(t, '/v1/me/claims'),
   tapRushStart: (t: GetAccessToken, id: string) =>
     authed<{ session: TapRushSessionSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/start`, { method: 'POST' }),
-  tapRushFinish: (t: GetAccessToken, id: string, sessionId: string, taps: number) =>
+  tapRushFinish: (t: GetAccessToken, id: string, sessionId: string, tapTimesMs: number[]) =>
     authed<{ qualified: boolean; taps: number; goal: number; attemptsLeft: number }>(
       t,
       `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/finish`,
-      { method: 'POST', body: JSON.stringify({ sessionId, taps }) },
+      { method: 'POST', body: JSON.stringify({ sessionId, taps: tapTimesMs.length, tapTimesMs }) },
     ),
 }

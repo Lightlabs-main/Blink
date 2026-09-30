@@ -48,7 +48,7 @@ export default function EmailLogin() {
   const router = useRouter()
   // Only in-app campaign routes are accepted as a return target (e.g. "Sign in to claim").
   const { next } = useLocalSearchParams<{ next?: string }>()
-  const returnTo = typeof next === 'string' && /^\/campaign\/[0-9a-f-]{36}$/.test(next) ? next : null
+  const returnTo = typeof next === 'string' && /^\/campaign\/[0-9a-f-]{36}(\?ref=[2-9A-HJ-NP-Z]{8})?$/.test(next) ? next : null
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')

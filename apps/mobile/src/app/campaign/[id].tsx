@@ -1,5 +1,5 @@
 import { usePrivy } from '@privy-io/expo'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Share, StyleSheet, View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
@@ -8,13 +8,13 @@ import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Badge, Button, Card, Divider, GlowCard, Loading, NavBar, Notice, Row, Screen, Stepper, StockAvatar, T } from '../../design/ui'
-import { ClaimPanel } from '../../features/campaign/claim-panel'
+import { ClaimPanel, sentence } from '../../features/campaign/claim-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap, useMe } from '../../lib/data'
-import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, campaignLink, networkLabel, shortAddress } from '../../lib/format'
+import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, campaignLink, networkLabel, pauseReasonText, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
-import { maxClaims, PRODUCT_COPY } from '../../shared'
+import { maxClaims, PRODUCT_COPY, REFERRAL_CODE_RE } from '../../shared'
 
 const STEP_OF = { DRAFT: 0, AWAITING_FUNDING: 1, AWAITING_DELEGATION: 1, LIVE: 3, PAUSED: 3, ENDED: 3, CLOSED: 3 } as const
 
@@ -31,12 +31,24 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 export default function CampaignScreen() {
   const router = useRouter()
-  const { id } = useLocalSearchParams<{ id: string }>()
-  const { user } = usePrivy()
+  const { id, ref } = useLocalSearchParams<{ id: string; ref?: string }>()
+  const referralCode = typeof ref === 'string' && REFERRAL_CODE_RE.test(ref) ? ref : null
+  const { user, getAccessToken } = usePrivy()
+  const queryClient = useQueryClient()
   const me = useMe()
   const assets = useAssetMap()
   const campaign = useQuery({ queryKey: ['campaign', id], queryFn: () => api.campaign(String(id)), enabled: Boolean(id) })
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'))
+  const resume = useMutation({
+    mutationFn: () => api.resume(getAccessToken, String(id)),
+    onSuccess: (res) => {
+      haptics.success()
+      queryClient.setQueryData(['campaign', String(id)], res)
+      void queryClient.invalidateQueries({ queryKey: ['my-campaigns'] })
+      void queryClient.invalidateQueries({ queryKey: ['campaigns', 'live'] })
+    },
+    onError: () => haptics.error(),
+  })
 
   if (campaign.isPending) return <Loading label="Opening campaign…" />
   if (campaign.error) {
@@ -107,9 +119,25 @@ export default function CampaignScreen() {
         </Card>
       ) : null}
 
-      {!isCreator && !preLive ? <ClaimPanel asset={asset} campaign={c} /> : null}
+      {!isCreator && !preLive ? <ClaimPanel asset={asset} campaign={c} referralCode={referralCode} /> : null}
 
-      {isCreator && !preLive && reward ? (
+      {isCreator && c.status === 'PAUSED' ? (
+        <Card style={{ gap: space.md }} tone="danger">
+          <Row>
+            <Icon name="shield" size={20} stroke={color.danger} />
+            <T variant="heading">Your drop is paused</T>
+          </Row>
+          <T variant="label" color={color.text}>
+            {`${pauseReasonText(c.pauseReason)} Fix it in your wallet, then check again — Blink re-checks your campaign account onchain before going live.`}
+          </T>
+          <Notice message={resume.error ? sentence(resume.error.message) : null} />
+          <Button icon="refresh" loading={resume.isPending} onPress={() => resume.mutate()}>
+            Check again & resume
+          </Button>
+        </Card>
+      ) : null}
+
+      {isCreator && !preLive && c.status !== 'PAUSED' && reward ? (
         <Card style={{ gap: space.sm }} tone={isLive ? 'lime' : 'raised'}>
           <Row>
             <Icon name="bolt" size={20} stroke={color.lime} />

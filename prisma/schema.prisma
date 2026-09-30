@@ -75,17 +75,17 @@ model Campaign {
 
 /// MASTER_PROMPT §7 — every Blink-funded lamport, reserved before send and settled after confirmation.
 model BudgetLedgerEntry {
-  id               String        @id @default(uuid()) @db.Uuid
-  cluster          SolanaCluster
-  kind             String
+  id             String        @id @default(uuid()) @db.Uuid
+  cluster        SolanaCluster
+  kind           String
   /// RESERVED | SPENT | RELEASED
-  state            String
-  lamports         BigInt
-  campaignId       String?       @db.Uuid
-  txSignature      String?       @unique
-  idempotencyKey   String        @unique
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  state          String
+  lamports       BigInt
+  campaignId     String?       @db.Uuid
+  txSignature    String?       @unique
+  idempotencyKey String        @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([cluster, state])
 }
@@ -97,10 +97,16 @@ enum ClaimStatus {
   FAILED
 }
 
-/// D-13: one reward per Privy user and per recipient wallet per campaign. A FAILED row is reused on retry.
+enum ClaimKind {
+  CLAIM
+  REFERRAL_BONUS
+}
+
+/// D-13/D-14: one reward of each kind per Privy user and per recipient wallet per campaign. A FAILED row is reused on retry.
 model Claim {
   id                   String      @id @db.Uuid
   campaignId           String      @db.Uuid
+  kind                 ClaimKind   @default(CLAIM)
   privyUserId          String
   /// Privy embedded wallet of privyUserId, resolved server-side.
   recipientWallet      String
@@ -112,27 +118,43 @@ model Claim {
   failureReason        String?
   /// Tap Rush claims consume exactly one qualifying session.
   tapSessionId         String?     @unique @db.Uuid
+  /// D-14: invite code a friend's CLAIM came through.
+  referralCode         String?
+  /// D-14: a REFERRAL_BONUS names the friend's CLAIM that earned it; one bonus per friend claim.
+  bonusForClaimId      String?     @unique @db.Uuid
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  @@unique([campaignId, privyUserId])
-  @@unique([campaignId, recipientWallet])
+  @@unique([campaignId, privyUserId, kind])
+  @@unique([campaignId, recipientWallet, kind])
   @@index([privyUserId, createdAt])
   @@index([status])
 }
 
 model TapRushSession {
-  id          String    @id @db.Uuid
-  campaignId  String    @db.Uuid
-  privyUserId String
-  goal        Int
-  seconds     Int
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  taps        Int?
-  qualified   Boolean   @default(false)
+  id           String    @id @db.Uuid
+  campaignId   String    @db.Uuid
+  privyUserId  String
+  goal         Int
+  seconds      Int
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  taps         Int?
+  qualified    Boolean   @default(false)
+  /// D-14: why a finished round did not count (timing or tap-pattern check).
+  rejectReason String?
 
   @@index([campaignId, privyUserId])
+}
+
+/// D-14: a person's invite code for one REFERRAL campaign.
+model Referral {
+  code        String   @id
+  campaignId  String   @db.Uuid
+  privyUserId String
+  createdAt   DateTime @default(now())
+
+  @@unique([campaignId, privyUserId])
 }
 
 /// Blink-operated server wallets that are not per-campaign, e.g. the §16 fee payer. `role` includes the cluster.
