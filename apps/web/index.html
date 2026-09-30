@@ -3,40 +3,332 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Blink-to-Stock</title>
-    <meta name="description" content="Tokenized stocks as shareable drops. Scan a QR, play or claim, and get real stock on Solana." />
+    <title>Blink-to-Stock — Stocks you can share</title>
+    <meta name="description" content="Blink-to-Stock turns tokenized stocks into shareable drops. Scan a QR code, claim or win in Tap Rush, and receive real xStocks on Solana. No seed phrase, no exchange, no fees." />
+    <meta name="theme-color" content="#07080b" />
     <link rel="icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <meta property="og:title" content="Blink-to-Stock — Stocks you can share" />
+    <meta property="og:description" content="Tokenized stocks as shareable drops on Solana. Claim, play or invite a friend — and get real stock in your wallet." />
+    <meta property="og:image" content="https://blinksol.site/icon.png" />
+    <meta property="og:url" content="https://blinksol.site/" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main>
-      <div class="brand"><img src="/icon.png" alt="" /> Blink-to-Stock</div>
-
-      <div>
-        <div class="overline">The social distribution network for tokenized stocks</div>
-        <h1>Stocks you can share.</h1>
-      </div>
-      <p>
-        A friend, creator or business drops real tokenized stock as a link or QR code. Open it in Blink, play Tap Rush or
-        claim, and the stock lands in your own wallet on Solana. No seed phrase, no exchange, no fees.
-      </p>
-
-      <a class="btn primary" href="/download/blink-to-stock.apk">Download the Android app</a>
-
-      <div class="card">
-        <h2>How it works</h2>
-        <div class="steps">
-          <div class="step"><b>1</b><p>A creator funds a drop from their own wallet. The stock stays in an account they own.</p></div>
-          <div class="step"><b>2</b><p>They share a link or QR. You open it in Blink and sign in with your email.</p></div>
-          <div class="step"><b>3</b><p>Claim it, win it in Tap Rush, or get it with a friend's invite. It's sent straight to your wallet.</p></div>
+    <header class="site-header">
+      <nav class="container nav" aria-label="Main">
+        <a class="brand" href="/"><img src="/icon.png" alt="" width="32" height="32" /> Blink-to-Stock</a>
+        <button class="nav-toggle" aria-controls="nav-links" aria-expanded="false" aria-label="Open menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a href="#drops">Live drops</a>
+          <a href="#how">How it works</a>
+          <a href="#creators">For creators</a>
+          <a href="#security">Security</a>
+          <a href="#faq">FAQ</a>
+          <a class="btn btn-primary btn-sm" href="/download/blink-to-stock.apk">Get the app</a>
         </div>
-      </div>
+      </nav>
+    </header>
 
-      <p class="note">
-        Blink determines campaign eligibility; asset settlement is transparent and verifiable on Solana. Currently running
-        on Solana devnet with test stock that has no real value.
-      </p>
-      <footer>Built for the Solana Mobile CLOCK IN Hackathon · Android</footer>
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <div class="container hero-grid">
+          <div>
+            <span class="pill"><span class="dot"></span> Built for Solana Mobile · Android</span>
+            <h1>Stocks you can <em>share.</em></h1>
+            <p class="lead">
+              Blink-to-Stock turns tokenized stocks into drops you can send with a link or a QR code. Claim it, win it in Tap
+              Rush or get it with a friend — and real stock lands in your own wallet on Solana.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="/download/blink-to-stock.apk">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" /></svg>
+                Download for Android
+              </a>
+              <a class="btn btn-secondary" href="#drops">See live drops</a>
+            </div>
+            <p class="hero-note">No seed phrase · No exchange · No fees to claim</p>
+          </div>
+
+          <div class="phone-wrap" aria-hidden="true">
+            <div class="phone">
+              <div class="screen">
+                <div class="m-hud">
+                  <div><div class="m-label">Taps</div><div class="m-num">36/50</div></div>
+                  <div style="text-align: right"><div class="m-label">Time</div><div class="m-num">4.2</div></div>
+                </div>
+                <div class="m-bar"><span></span></div>
+                <div class="m-tap">
+                  <div class="m-button">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12z" /></svg>
+                  </div>
+                </div>
+                <div class="m-card">
+                  <div class="m-coin">NV</div>
+                  <div><b>Win 0.01 NVDAx</b><small>Tap Rush · real stock on Solana</small></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live drops (real data from the Blink API) -->
+      <section id="drops" class="alt">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">Live now</div>
+            <h2>Drops you can claim today</h2>
+            <p class="lead">Real campaigns funded by creators. Open one on your phone to claim, play or invite a friend.</p>
+          </div>
+          <div class="drops" id="drop-list" aria-live="polite">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section id="how">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">How it works</div>
+            <h2>From a QR code to real stock in seconds</h2>
+            <p class="lead">
+              Normally, owning a tokenized stock means a crypto wallet, a seed phrase, buying SOL and finding an exchange.
+              Blink replaces all of that with one scan.
+            </p>
+          </div>
+          <div class="grid-3">
+            <div class="card">
+              <div class="step-num">01</div>
+              <h3>A creator drops stock</h3>
+              <p>A friend, creator, community or business funds a drop from their own Solana wallet and shares it as a link or QR code.</p>
+            </div>
+            <div class="card">
+              <div class="step-num">02</div>
+              <h3>You open it in Blink</h3>
+              <p>Scan the code or tap the link. Sign in with your email — Blink creates a secure wallet for you automatically.</p>
+            </div>
+            <div class="card lime">
+              <div class="step-num">03</div>
+              <h3>The stock is yours</h3>
+              <p>Claim it, win it or earn it with a friend. The stock is sent straight to your wallet, with a receipt you can check on Solana.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ways to earn -->
+      <section id="earn" class="alt">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">Ways to earn</div>
+            <h2>Every drop is a little different</h2>
+          </div>
+          <div class="earn">
+            <div class="card">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-1.5-3-5.5-3.5-5.5-1S10 7 12 7zm0 0c1.5-3 5.5-3.5 5.5-1S14 7 12 7z" /></svg></div>
+              <h3>Gift</h3>
+              <p>Someone sends you stock with a link. Open it and claim — that's it.</p>
+              <span class="tag">Live</span>
+            </div>
+            <div class="card">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" fill="currentColor" /></svg></div>
+              <h3>Tap Rush</h3>
+              <p>A full-screen, 10-second tapping challenge. Hit the goal and win the stock.</p>
+              <span class="tag">Live</span>
+            </div>
+            <div class="card">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2M9.5 2.5h5" /></svg></div>
+              <h3>Early Claim</h3>
+              <p>First come, first served. Be quick — when the pool is gone, the drop ends.</p>
+              <span class="tag">Live</span>
+            </div>
+            <div class="card">
+              <div class="icon violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.8 3.1 2.6 3.5 5.2" /></svg></div>
+              <h3>Referral</h3>
+              <p>Share your invite link. When a friend claims through it, you both get the stock.</p>
+              <span class="tag">Live</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- For creators -->
+      <section id="creators">
+        <div class="container split">
+          <div>
+            <div class="overline">For creators</div>
+            <h2 style="font-size: clamp(34px, 5vw, 52px); margin-top: 14px">Give away stock without giving up control</h2>
+            <p class="lead" style="margin-top: 16px">
+              Run a campaign from your own Solana wallet. Pick a stock, set how much each person gets, fund it with one
+              signature and share the QR.
+            </p>
+            <ul class="checks">
+              <li>Your campaign stock stays in an account you own — never in a Blink wallet.</li>
+              <li>You approve an exact amount. Blink can distribute that much and not a single share more.</li>
+              <li>Each campaign has its own distribution key, so one campaign can never touch another.</li>
+              <li>Revoke the approval from your wallet at any time; Blink pauses the drop automatically.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="flow">
+              <div class="flow-row">
+                <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h12a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5z" /><path d="M16.5 12h.01M3.5 9h17" /></svg></div>
+                <div><b>Your wallet</b><small>Connect with Mobile Wallet Adapter</small></div>
+              </div>
+              <div class="flow-arrow">↓</div>
+              <div class="flow-row">
+                <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg></div>
+                <div><b>Campaign account you own</b><small>Funded with the exact campaign amount</small></div>
+              </div>
+              <div class="flow-arrow">↓</div>
+              <div class="flow-row">
+                <div class="icon violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8.2 7.5 9.5 4.3-1.3 7.5-5 7.5-9.5V6z" /><path d="m8.8 12 2.2 2.2 4.4-4.4" /></svg></div>
+                <div><b>Exact, capped approval</b><small>Blink distributes only what you approved</small></div>
+              </div>
+              <div class="flow-arrow">↓</div>
+              <div class="flow-row" style="border-color: var(--lime-line)">
+                <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.8 3.1 2.6 3.5 5.2" /></svg></div>
+                <div><b>Your community</b><small>Each qualifying person gets the fixed amount</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security -->
+      <section id="security" class="alt">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">Security &amp; transparency</div>
+            <h2>Verifiable on Solana, by design</h2>
+            <p class="quote" style="margin-top: 22px">
+              “Blink determines campaign eligibility; asset settlement is transparent and verifiable on Solana.”
+            </p>
+          </div>
+          <div class="grid-3">
+            <div class="card">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg></div>
+              <h3>No custody</h3>
+              <p>Blink never holds creators' stock in a central treasury. Your keys stay in your wallet; Blink never sees them.</p>
+            </div>
+            <div class="card">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8.2 7.5 9.5 4.3-1.3 7.5-5 7.5-9.5V6z" /><path d="m8.8 12 2.2 2.2 4.4-4.4" /></svg></div>
+              <h3>Checked before every payout</h3>
+              <p>Every transfer is simulated first, and each campaign's approval is re-checked onchain before a single share moves.</p>
+            </div>
+            <div class="card">
+              <div class="icon violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg></div>
+              <h3>A receipt for every share</h3>
+              <p>Every reward is a real Solana transaction with a public receipt you can open in the Solana explorer.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Stocks -->
+      <section id="stocks">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">Supported stocks</div>
+            <h2>Real tokenized equities</h2>
+            <p class="lead">
+              Blink distributes xStocks — tokenized shares on Solana. Each mint address is verified onchain before it's
+              supported.
+            </p>
+          </div>
+          <div class="stocks">
+            <div class="card stock"><img src="https://xstocks-metadata.backed.fi/logos/tokens/NVDAx.png" alt="" loading="lazy" width="44" height="44" /><div><b>NVDAx</b><small>NVIDIA</small></div></div>
+            <div class="card stock"><img src="https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png" alt="" loading="lazy" width="44" height="44" /><div><b>TSLAx</b><small>Tesla</small></div></div>
+            <div class="card stock"><img src="https://xstocks-metadata.backed.fi/logos/tokens/AAPLx.png" alt="" loading="lazy" width="44" height="44" /><div><b>AAPLx</b><small>Apple</small></div></div>
+            <div class="card stock"><img src="https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png" alt="" loading="lazy" width="44" height="44" /><div><b>SPYx</b><small>S&amp;P 500</small></div></div>
+          </div>
+          <p class="fine">
+            The current test version runs on Solana devnet with a test stock that has no real value. Mainnet xStocks are
+            enabled only after launch approval.
+          </p>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq" class="alt">
+        <div class="container">
+          <div class="section-head">
+            <div class="overline">FAQ</div>
+            <h2>Questions, answered</h2>
+          </div>
+          <div class="faq">
+            <details>
+              <summary>Do I need a crypto wallet to claim?</summary>
+              <p>No. Sign in with your email and Blink creates a secure Solana wallet for you. Rewards are sent there automatically.</p>
+            </details>
+            <details>
+              <summary>Is it really free?</summary>
+              <p>Yes. Claiming costs you nothing — Blink covers the network fees for reward transfers. Creators pay for setting up and funding their own campaigns.</p>
+            </details>
+            <details>
+              <summary>Is this real stock?</summary>
+              <p>Blink distributes xStocks, tokenized shares on Solana. The current test version uses Solana devnet and a test stock with no real value while the app is being evaluated.</p>
+            </details>
+            <details>
+              <summary>How do creators stay in control?</summary>
+              <p>Campaign stock stays in an account the creator owns. The creator approves an exact amount that Blink may distribute, can revoke it at any time, and each campaign uses its own distribution key.</p>
+            </details>
+            <details>
+              <summary>How is Tap Rush kept fair?</summary>
+              <p>Rounds are timed by Blink's server, and each tap's timing is checked for human patterns. Each person can earn once per drop, with a limited number of tries.</p>
+            </details>
+            <details>
+              <summary>Which phones are supported?</summary>
+              <p>Blink is an Android app, designed with the Solana Seeker in mind. Download the APK from this site and install it on your phone.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section>
+        <div class="container">
+          <div class="cta">
+            <div class="overline">Get started</div>
+            <h2 style="margin-top: 14px">Your first stock is one scan away</h2>
+            <p class="lead">Download Blink for Android, sign in with your email and open a drop.</p>
+            <a class="btn btn-primary" href="/download/blink-to-stock.apk">Download for Android</a>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <a class="brand" href="/"><img src="/icon.png" alt="" width="32" height="32" /> Blink-to-Stock</a>
+          <div class="footer-links">
+            <a href="#drops">Live drops</a>
+            <a href="#how">How it works</a>
+            <a href="#security">Security</a>
+            <a href="#faq">FAQ</a>
+            <a href="https://github.com/Lightlabs-main/Blink" rel="noopener">GitHub</a>
+          </div>
+        </div>
+        <p class="fine">
+          Blink-to-Stock is built for the Solana Mobile CLOCK IN Hackathon. xStocks are tokenized securities issued by third
+          parties; Blink is not an issuer or broker and nothing here is investment advice. The current version runs on Solana
+          devnet with test assets that have no real value.
+        </p>
+      </div>
+    </footer>
+
+    <script src="/site.js" defer></script>
   </body>
 </html>

@@ -4,34 +4,60 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stock drop · Blink-to-Stock</title>
-    <meta name="description" content="Someone shared a tokenized stock drop with you. Open it in Blink-to-Stock." />
+    <meta name="description" content="Someone shared a tokenized stock drop with you. Open it in Blink-to-Stock to claim." />
+    <meta name="theme-color" content="#07080b" />
+    <meta property="og:title" content="You've got a stock drop on Blink-to-Stock" />
+    <meta property="og:description" content="Open it in Blink to claim real tokenized stock on Solana. Free, no seed phrase." />
+    <meta property="og:image" content="https://blinksol.site/icon.png" />
     <link rel="icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <!-- Served for /c/<campaign-id>[?ref=CODE]. With the app installed, Android opens these links in Blink directly. -->
-    <main>
-      <a class="brand" href="/" style="color: inherit; text-decoration: none"><img src="/icon.png" alt="" /> Blink-to-Stock</a>
+    <header class="site-header">
+      <nav class="container nav" aria-label="Main">
+        <a class="brand" href="/"><img src="/icon.png" alt="" width="32" height="32" /> Blink-to-Stock</a>
+        <a class="btn btn-secondary btn-sm" href="/download/blink-to-stock.apk">Get the app</a>
+      </nav>
+    </header>
 
-      <div class="card lime" id="drop">
-        <div class="overline" id="kind">Stock drop</div>
-        <div class="stock" id="symbol">Loading…</div>
-        <p id="headline">&nbsp;</p>
-        <div id="status"></div>
+    <main class="drop-page hero" style="padding-top: 40px">
+      <div class="container">
+        <div class="card lime drop-hero">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+            <span class="overline" id="kind">Stock drop</span>
+            <span id="status"></span>
+          </div>
+          <h1 id="symbol">Loading…</h1>
+          <p class="lead" id="headline">&nbsp;</p>
+        </div>
+
+        <a class="btn btn-primary btn-block" id="open" href="#">Open in Blink</a>
+        <a class="btn btn-secondary btn-block" href="/download/blink-to-stock.apk">Don't have Blink? Download for Android</a>
+
+        <div class="card" style="padding: 8px 24px">
+          <div class="detail"><span>Each person gets</span><strong id="reward">—</strong></div>
+          <div class="detail"><span>Claimed</span><strong id="claimed">—</strong></div>
+          <div class="detail"><span>Network</span><strong id="network">—</strong></div>
+        </div>
+
+        <div class="card">
+          <div class="overline">How to claim</div>
+          <ul class="checks" style="margin-top: 16px">
+            <li>Install Blink for Android and open this link again — it opens straight in the app.</li>
+            <li>Sign in with your email. A secure wallet is created for you.</li>
+            <li id="how-last">Claim, play or join — the stock is sent to your wallet for free.</li>
+          </ul>
+        </div>
+
+        <p class="fine">
+          The creator's stock stays in an account they own. Blink can only distribute the amount they approved. Every
+          reward is a public Solana transaction.
+        </p>
       </div>
-
-      <a class="btn primary" id="open" href="#">Open in Blink</a>
-      <a class="btn secondary" href="/download/blink-to-stock.apk">Don't have Blink? Download the app</a>
-
-      <div class="card">
-        <div class="row"><span>Each person gets</span><strong id="reward">—</strong></div>
-        <div class="row"><span>Claimed</span><strong id="claimed">—</strong></div>
-        <div class="row"><span>Network</span><strong id="network">—</strong></div>
-      </div>
-
-      <p class="note">
-        The creator's stock stays in an account they own. Blink can only distribute the amount they approved.
-      </p>
     </main>
 
     <script>
@@ -50,6 +76,7 @@
           $('open').style.display = 'none'
           return
         }
+        // Fallback for browsers that didn't hand the https link to the app.
         $('open').href = 'blinktostock://campaign/' + id + (ref ? '?ref=' + ref : '')
 
         // Display only: raw base units → shares with the stock's multiplier.
@@ -74,24 +101,27 @@
               ? 'A friend invited you. Claim through their link and you both get stock.'
               : campaign.type === 'TAP_RUSH' && campaign.tapRush
                 ? 'Tap ' + campaign.tapRush.goal + ' times in ' + campaign.tapRush.seconds + ' seconds to win real stock.'
-                : 'Real tokenized stock, sent to your Blink wallet. Free.'
+                : campaign.type === 'REFERRAL'
+                  ? 'Invite a friend — when they claim through your link, you both get stock.'
+                  : 'Real tokenized stock, sent to your wallet. Free.'
+            if (campaign.type === 'TAP_RUSH') $('how-last').textContent = 'Play Tap Rush — hit the goal and the stock is sent to your wallet.'
             const live = campaign.status === 'LIVE'
             const badge = document.createElement('span')
-            badge.className = 'badge' + (live ? '' : ' warn')
+            badge.className = 'badge ' + (live ? 'live' : 'warn')
             badge.textContent = live ? 'Live now' : campaign.status === 'ENDED' ? 'Ended' : campaign.status === 'PAUSED' ? 'Paused' : 'Not live yet'
-            $('status').appendChild(badge)
+            $('status').replaceChildren(badge)
             $('reward').textContent = per ? per + ' ' + campaign.xstockSymbol : '—'
             if (campaign.rewardPerClaimRaw) {
               const reward = BigInt(campaign.rewardPerClaimRaw)
               const total = BigInt(campaign.allowanceRaw) / reward
               $('claimed').textContent = (BigInt(campaign.claimedRaw) / reward).toString() + ' of ' + total.toString()
             }
-            $('network').textContent = campaign.cluster === 'mainnet-beta' ? 'Solana' : 'Solana devnet (test)'
+            $('network').textContent = campaign.cluster === 'mainnet-beta' ? 'Solana' : 'Solana devnet · test'
           })
           .catch((e) => {
             $('symbol').textContent = 'Unavailable'
             $('headline').textContent = e.message
-            $('headline').className = 'error'
+            $('headline').className = 'lead error'
           })
       })()
     </script>
