@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.blinktostock.app",
+      "sha256_cert_fingerprints": ["0F:0A:5A:84:EF:B8:3A:66:D1:BD:52:E5:38:85:A5:10:2F:25:8E:45:75:54:36:D6:E4:DA:DD:AC:D5:10:D3:6C"]
+    }
+  }
+]

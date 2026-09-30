@@ -10,7 +10,24 @@
     "slug": "blink",
     "owner": "marisdigitals11s-team",
     "android": {
-      "package": "com.blinktostock.app"
+      "package": "com.blinktostock.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "blinksol.site",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "extra": {
       "eas": {

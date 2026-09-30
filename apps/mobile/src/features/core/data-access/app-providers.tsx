@@ -7,8 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 // Cluster must match the backend's SOLANA_CLUSTER (DECISIONS D-12). Devnet until mainnet go-approval.
 const cluster = createSolanaDevnet()
-// Becomes the https PUBLIC_WEB_ORIGIN once a domain exists so wallets show a verifiable origin (D-12).
-const identity: AppIdentity = { name: 'Blink-to-Stock', uri: 'blinktostock://app' }
+// D-12: the https origin wallets show and can verify; the icon is resolved relative to it.
+const identity: AppIdentity = { name: 'Blink-to-Stock', uri: 'https://blinksol.site', icon: 'icon.png' }
 const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID
 const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 15_000 } } })
