@@ -124,3 +124,12 @@ unless noted.
   with no dev client), FINISHED. It includes claims, Tap Rush, Referral and resume (D-13, D-14).
 - **Signing:** the same default EAS keystore as the dev builds.
 - **Not yet verified on a device.**
+
+### 2026-09-30 — Release APK build #4 (blinksol.site)
+
+- **Build:** EAS Build `567b6e1b-7970-4b36-af48-45f7e41a8067` (profile `preview`), FINISHED.
+- **What changed:** the API is `https://api.blinksol.site`; `https://blinksol.site/c/*` App Links
+  are declared; the wallet identity is `https://blinksol.site`.
+- **Signing:** the certificate SHA-256 `0F:0A:…:D3:6C` matches `apps/web/.well-known/assetlinks.json`.
+- **Hosting:** the build is served at `https://blinksol.site/download/blink-to-stock.apk`.
+- **Not yet verified on a device.**
