@@ -23,7 +23,7 @@ import {
   StockAvatar,
   T,
 } from '../../design/ui'
-import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useNetwork, usePositions } from '../../lib/data'
+import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, greeting, networkLabel, shortAddress } from '../../lib/format'
 import { userEmail } from '../../lib/privy-user'
 import type { CampaignSummary } from '../../shared'
@@ -68,6 +68,7 @@ export default function Home() {
   const network = useNetwork()
   const live = useLiveCampaigns()
   const mine = useMyCampaigns()
+  const claims = useMyClaims()
   const assets = useAssetMap()
   const { positions, isLoading: positionsLoading } = usePositions()
   const [refreshing, setRefreshing] = useState(false)
@@ -78,6 +79,7 @@ export default function Home() {
   const isCreator = (me.data?.verifiedCreatorWallets.length ?? 0) > 0
   const myCampaigns = mine.data?.campaigns ?? []
   const liveDrops = live.data?.campaigns ?? []
+  const rewards = (claims.data?.claims ?? []).filter((c) => c.status !== 'FAILED')
 
   async function onRefresh() {
     setRefreshing(true)
@@ -186,6 +188,31 @@ export default function Home() {
           </ScrollView>
         )}
       </View>
+
+      {/* Rewards the user earned from drops */}
+      {rewards.length ? (
+        <View style={{ gap: space.md }}>
+          <SectionHeader title="Your rewards" />
+          <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+            {rewards.slice(0, 5).map((r, i) => {
+              const asset = assets.get(r.mint)
+              const amount = displayShares(asset, r.amountRaw)
+              return (
+                <View key={r.id}>
+                  {i > 0 ? <Divider /> : null}
+                  <ListRow
+                    leading={<StockAvatar isTest={asset?.isTest} logo={asset?.logo} size={36} symbol={r.xstockSymbol} />}
+                    onPress={() => router.push(`/campaign/${r.campaignId}`)}
+                    subtitle={r.status === 'PAID' ? 'Received' : 'Sending…'}
+                    title={`${amount ? `${amount} ` : ''}${r.xstockSymbol}`}
+                    trailing={<Badge label={r.status === 'PAID' ? 'Paid' : 'Pending'} tone={r.status === 'PAID' ? 'live' : 'warn'} />}
+                  />
+                </View>
+              )
+            })}
+          </Card>
+        </View>
+      ) : null}
 
       {/* Creator campaigns */}
       {isCreator ? (

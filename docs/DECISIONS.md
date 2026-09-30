@@ -99,3 +99,44 @@ Build profiles: `development` (dev client APK), `preview` and `production` (APK)
 3. **The MWA identity URI must become the HTTPS `PUBLIC_WEB_ORIGIN`** once a domain exists, so
    wallets display a real, verifiable origin instead of `blinktostock://app`. This is blocked on
    the domain (NEEDS_OWNER_DECISION).
+
+## D-13 — Claims, Tap Rush and payouts (2026-09-30, owner-approved ASSUMPTIONS)
+
+The MASTER_PROMPT sections on claims, Tap Rush, FOMO ordering and payouts have not arrived. Maris
+approved building them now on devnet with these rules. Each rule is an **ASSUMPTION** to replace
+when the real sections arrive.
+
+1. **Fixed amount per person.** The creator sets `rewardPerClaimRaw`. Claims are first come, first
+   served until the pool (`allowanceRaw`) cannot fit another reward.
+2. **One reward per Privy account and per recipient wallet per campaign.** The creator cannot claim
+   their own drop, by Privy user or by wallet.
+3. **Rewards go only to the caller's Privy embedded wallet.** Privy supplies the address, never the
+   client.
+4. **Claimable mechanics:** GIFT, EARLY_CLAIM and TAP_RUSH. REFERRAL and SEEKER can't be created
+   in the app and return `NOT_CLAIMABLE` until their rules are specified.
+5. **Tap Rush.** The server starts the round. A result counts only if it arrives at least
+   `seconds − 0.5 s` and at most `seconds + 120 s` after the start, with no more than 20 taps per
+   second. `goal` taps qualifies for one claim, and each qualifying round can be used once. There
+   are 10 rounds per user per campaign. Defaults: 50 taps in 10 s; the app offers 30 / 50 / 80.
+   **Known limit:** the tap count comes from the client, so a modified app could fake a result
+   within these bounds. Before mainnet, Tap Rush needs a stronger proof or a lower-value design.
+6. **Pool accounting.** `Campaign.claimedRaw` (reserved + paid) only moves through conditional
+   updates in the same database transaction as the claim row. A `CHECK` constraint keeps it
+   between 0 and `allowanceRaw`.
+7. **Payout transaction.** CreateAssociatedTokenIdempotent (payer: fee payer) followed by
+   TransferChecked from the campaign account, with the per-campaign Privy delegate as authority
+   (§9, §14). It is simulated first (D-12).
+8. **Fee payer (§16).** A separate Privy server wallet per cluster, created once and stored in
+   `ServiceWallet`. It holds no stock and no delegate authority. On devnet the API requests an
+   airdrop when it falls below 0.05 SOL.
+9. **No double pay.** The fee payer's signature (the transaction id) is stored before sending. A
+   SENDING claim becomes PAID when confirmed, or FAILED (releasing its reservation) only after its
+   blockhash has expired unseen. Retries never build a second transfer for a claim that could
+   still land.
+10. **Budget (§7).** Each payout reserves its estimate in `BudgetLedgerEntry`: 10,000 lamports in
+    fees, plus recipient-account rent when the account is created. On mainnet a reservation is
+    refused above the budget, and the MAINNET flags are required. Other clusters are recorded
+    only.
+11. **Automatic pause (§9).** Before every payout the onchain delegation is re-checked, along with
+    the mint's pause and transfer-hook state. A drop that can no longer pay out moves to PAUSED
+    with a reason. There is no resume flow yet.

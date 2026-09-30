@@ -1,4 +1,4 @@
-import type { CampaignSummary, CampaignType } from '../shared'
+import type { CampaignSummary, CampaignType, ClaimSummary, TapRushRules, TapRushSessionSummary } from '../shared'
 
 const baseUrl = process.env.EXPO_PUBLIC_BLINK_API_URL
 
@@ -87,7 +87,7 @@ export const api = {
     }),
   createCampaign: (
     t: GetAccessToken,
-    body: { type: CampaignType; mint: string; allowanceRaw: string },
+    body: { type: CampaignType; mint: string; allowanceRaw: string; rewardPerClaimRaw?: string; tapRush?: TapRushRules },
     creatorWallet?: string,
   ) =>
     authed<{ campaign: CampaignSummary }>(t, '/v1/campaigns', {
@@ -95,4 +95,20 @@ export const api = {
       body: JSON.stringify(body),
       headers: creatorWallet ? { 'x-creator-wallet': creatorWallet } : undefined,
     }),
+  /** Pays the fixed reward to the caller's Blink wallet. Waits for the network (up to ~30 s). */
+  claim: (t: GetAccessToken, id: string, tapSessionId?: string) =>
+    authed<{ claim: ClaimSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/claim`, {
+      method: 'POST',
+      body: JSON.stringify(tapSessionId ? { tapSessionId } : {}),
+    }),
+  myClaim: (t: GetAccessToken, id: string) => authed<{ claim: ClaimSummary | null }>(t, `/v1/campaigns/${encodeURIComponent(id)}/claim`),
+  myClaims: (t: GetAccessToken) => authed<{ claims: ClaimSummary[] }>(t, '/v1/me/claims'),
+  tapRushStart: (t: GetAccessToken, id: string) =>
+    authed<{ session: TapRushSessionSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/start`, { method: 'POST' }),
+  tapRushFinish: (t: GetAccessToken, id: string, sessionId: string, taps: number) =>
+    authed<{ qualified: boolean; taps: number; goal: number; attemptsLeft: number }>(
+      t,
+      `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/finish`,
+      { method: 'POST', body: JSON.stringify({ sessionId, taps }) },
+    ),
 }

@@ -4,14 +4,14 @@
 
 `sample-expo-kit-privy` (see DECISIONS D-1).
 
-## OQ-2 — Master spec incomplete — BLOCKED
+## OQ-2 — Master spec incomplete — PARTIALLY UNBLOCKED 2026-09-30
 
-`docs/MASTER_PROMPT.md` ends inside §26. The following are **not** implemented until the missing
-sections arrive:
-- claims, Tap Rush sessions, FOMO ordering and idempotency rules
-- payouts, reconciliation and notifications
-- Seeker/SGT
-- the smoke test
+`docs/MASTER_PROMPT.md` ends inside §26.
+- **Built under owner-approved assumptions (DECISIONS D-13), devnet only:** claims, Tap Rush
+  sessions, first-come ordering, idempotency, payouts and reconciliation. Replace these with the
+  real rules when the sections arrive.
+- **Still not implemented:** Referral and Seeker/SGT mechanics, notifications, the resume flow for
+  paused drops, and the mainnet smoke test.
 
 ## OQ-3 — Build machine not Android-ready — BLOCKED
 

@@ -2,8 +2,8 @@
 // Run migrations through `npm run db:migrate`, which refuses unless DATABASE_URL targets BLINK_DATABASE_NAME.
 // NEVER run `prisma migrate reset` against a shared or production database.
 //
-// Scope: only entities defined by received MASTER_PROMPT sections. Claim / Tap Rush session / payout
-// tables are intentionally absent until those sections are received.
+// Claim / Tap Rush / service-wallet tables follow owner-approved ASSUMPTIONS (docs/DECISIONS.md D-13) until
+// the missing MASTER_PROMPT sections arrive.
 
 generator client {
   provider = "prisma-client"
@@ -58,6 +58,12 @@ model Campaign {
   delegateWalletRef    String?
   /// Raw base units (u64) as decimal — never float.
   allowanceRaw         Decimal        @db.Decimal(20, 0)
+  /// D-13: fixed amount per recipient. Null = created before claiming existed (not claimable).
+  rewardPerClaimRaw    Decimal?       @db.Decimal(20, 0)
+  /// Reserved + paid. Only changed by conditional updates that keep it <= allowanceRaw.
+  claimedRaw           Decimal        @default(0) @db.Decimal(20, 0)
+  tapGoal              Int?
+  tapSeconds           Int?
   pauseReason          String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
@@ -82,6 +88,59 @@ model BudgetLedgerEntry {
   updatedAt        DateTime      @updatedAt
 
   @@index([cluster, state])
+}
+
+enum ClaimStatus {
+  RESERVED
+  SENDING
+  PAID
+  FAILED
+}
+
+/// D-13: one reward per Privy user and per recipient wallet per campaign. A FAILED row is reused on retry.
+model Claim {
+  id                   String      @id @db.Uuid
+  campaignId           String      @db.Uuid
+  privyUserId          String
+  /// Privy embedded wallet of privyUserId, resolved server-side.
+  recipientWallet      String
+  amountRaw            Decimal     @db.Decimal(20, 0)
+  status               ClaimStatus @default(RESERVED)
+  /// Fee-payer signature = transaction id; stored BEFORE sending so a retry never double-pays.
+  txSignature          String?     @unique
+  lastValidBlockHeight BigInt?
+  failureReason        String?
+  /// Tap Rush claims consume exactly one qualifying session.
+  tapSessionId         String?     @unique @db.Uuid
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@unique([campaignId, privyUserId])
+  @@unique([campaignId, recipientWallet])
+  @@index([privyUserId, createdAt])
+  @@index([status])
+}
+
+model TapRushSession {
+  id          String    @id @db.Uuid
+  campaignId  String    @db.Uuid
+  privyUserId String
+  goal        Int
+  seconds     Int
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  taps        Int?
+  qualified   Boolean   @default(false)
+
+  @@index([campaignId, privyUserId])
+}
+
+/// Blink-operated server wallets that are not per-campaign, e.g. the §16 fee payer. `role` includes the cluster.
+model ServiceWallet {
+  role      String   @id
+  address   String
+  walletRef String
+  createdAt DateTime @default(now())
 }
 
 model AuditLog {

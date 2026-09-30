@@ -65,3 +65,9 @@ export function networkLabel(cluster: string | undefined): { label: string; isTe
   if (cluster === 'devnet') return { label: 'Devnet · test money', isTest: true }
   return { label: cluster ?? 'Connecting…', isTest: true }
 }
+
+/** Public explorer receipt for a transaction on the campaign's cluster. */
+export function explorerTxUrl(signature: string, cluster: string): string {
+  const suffix = cluster === 'mainnet-beta' ? '' : `?cluster=${cluster === 'localnet' ? 'custom' : cluster}`
+  return `https://explorer.solana.com/tx/${signature}${suffix}`
+}

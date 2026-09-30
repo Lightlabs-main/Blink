@@ -67,7 +67,7 @@ const post = (body: unknown, headers: Record<string, string> = { authorization: 
   app.inject({ method: 'POST', url: '/v1/campaigns', payload: body as object, headers })
 
 describe('POST /v1/campaigns', () => {
-  const body = { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000000' }
+  const body = { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000000', rewardPerClaimRaw: '1' }
 
   it('401 without a valid Privy token', async () => {
     build()
@@ -156,7 +156,7 @@ describe('extractVerifiedExternalSolanaWallets', () => {
 describe('read endpoints', () => {
   it('GET /v1/campaigns lists only LIVE campaigns (none by default)', async () => {
     build()
-    await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1' })
+    await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1', rewardPerClaimRaw: '1' })
     const res = await app.inject({ method: 'GET', url: '/v1/campaigns' })
     expect(res.statusCode).toBe(200)
     expect(res.json().campaigns).toEqual([])
@@ -171,9 +171,9 @@ describe('read endpoints', () => {
 
   it('GET /v1/me/campaigns returns only my campaigns, newest first', async () => {
     build()
-    const a = (await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1' })).json().campaign.id
+    const a = (await post({ type: 'GIFT', mint: MINT, allowanceRaw: '1', rewardPerClaimRaw: '1' })).json().campaign.id
     await new Promise((r) => setTimeout(r, 5))
-    const b = (await post({ type: 'TAP_RUSH', mint: MINT, allowanceRaw: '2' })).json().campaign.id
+    const b = (await post({ type: 'TAP_RUSH', mint: MINT, allowanceRaw: '2', rewardPerClaimRaw: '1' })).json().campaign.id
     const res = await app.inject({ method: 'GET', url: '/v1/me/campaigns', headers: { authorization: 'Bearer good-token' } })
     expect(res.json().campaigns.map((c: { id: string }) => c.id)).toEqual([b, a])
   })
@@ -198,7 +198,7 @@ describe('GET /v1/me/holdings', () => {
 })
 
 describe('funding routes', () => {
-  const body = { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000' }
+  const body = { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '1' }
   const auth = { authorization: 'Bearer good-token' }
   const signed = { signedTransaction: 'A'.repeat(200) }
 

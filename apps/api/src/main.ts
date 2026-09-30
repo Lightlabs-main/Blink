@@ -7,10 +7,14 @@ import { createSolanaRpc } from '@solana/kit'
 import { buildApp } from './app.ts'
 import { assetsForCluster } from './assets.ts'
 import { PrivyAuthVerifier } from './auth.ts'
+import { type BudgetLedger, InMemoryBudgetLedger, PrismaBudgetLedger } from './budget-ledger.ts'
 import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
-import { PrivyDelegateProvider } from './delegate.ts'
+import { type ClaimRepository, InMemoryClaimRepository, type ServiceWalletStore } from './claim-repo.ts'
+import { PrivyDelegateProvider, PrivyServerWalletSigner } from './delegate.ts'
 import { SolanaFundingService } from './funding-service.ts'
+import { SolanaPayoutService } from './payout-service.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
+import { PrismaClaimRepository } from './prisma-claim-repo.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -28,13 +32,20 @@ if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) {
 }
 
 let campaigns: CampaignRepository
+let claims: ClaimRepository & ServiceWalletStore
+let ledger: BudgetLedger
 let prisma: ReturnType<typeof createPrismaClient> | undefined
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
   campaigns = new PrismaCampaignRepository(prisma)
+  claims = new PrismaClaimRepository(prisma)
+  ledger = new PrismaBudgetLedger(prisma, env)
 } else if (env.BLINK_ENV === 'local') {
   console.warn('DATABASE_URL not set: using in-memory campaign storage (local only, data lost on restart).')
-  campaigns = new InMemoryCampaignRepository()
+  const memory = new InMemoryCampaignRepository()
+  campaigns = memory
+  claims = new InMemoryClaimRepository(memory)
+  ledger = new InMemoryBudgetLedger(env)
 } else {
   console.error('Refusing to start: DATABASE_URL is required outside BLINK_ENV=local.')
   process.exit(1)
@@ -52,6 +63,18 @@ if (env.SOLANA_CLUSTER === 'mainnet-beta') {
 
 const privy = new PrivyClient({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
 const funding = new SolanaFundingService(clusterRpc, assets, new PrivyDelegateProvider(privy), campaigns)
+const payouts = new SolanaPayoutService({
+  env,
+  rpc: clusterRpc,
+  assets,
+  campaigns,
+  claims,
+  serviceWallets: claims,
+  signer: new PrivyServerWalletSigner(privy),
+  ledger,
+  // Payout logs go through the app's (redacting) logger once it exists.
+  log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
+})
 
 const app = buildApp({
   env,
@@ -60,6 +83,8 @@ const app = buildApp({
   rpc: clusterRpc,
   assets,
   funding,
+  claims,
+  payouts,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,
@@ -76,3 +101,9 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 await app.listen({ host: env.API_HOST, port: env.API_PORT })
+
+// Resolve (or create once) the §16 fee payer at boot so its address is in the logs for funding.
+payouts.feePayerAddress().then(
+  (feePayer) => app.log.info({ feePayer, cluster: env.SOLANA_CLUSTER }, 'payout fee payer ready'),
+  (err: unknown) => app.log.warn({ err }, 'payout fee payer unavailable; claims will fail until it is'),
+)

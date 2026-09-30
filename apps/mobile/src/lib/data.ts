@@ -28,6 +28,11 @@ export function useLiveCampaigns() {
   return useQuery({ queryKey: ['campaigns', 'live'], queryFn: api.liveCampaigns })
 }
 
+export function useMyClaims() {
+  const { getAccessToken, user } = usePrivy()
+  return useQuery({ queryKey: ['my-claims'], queryFn: () => api.myClaims(getAccessToken), enabled: Boolean(user) })
+}
+
 export function useHoldings() {
   const { getAccessToken, user } = usePrivy()
   return useQuery({ queryKey: ['holdings'], queryFn: () => api.holdings(getAccessToken), enabled: Boolean(user), staleTime: 30_000 })
