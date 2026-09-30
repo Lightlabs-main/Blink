@@ -3,19 +3,35 @@ import { getBase64EncodedWireTransaction, getBase64Encoder, getTransactionDecode
 import { useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
+import { Icon, type IconName } from '../../design/icons'
+import { color, space } from '../../design/tokens'
+import { Button, Card, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, type PreparedFunding } from '../../lib/api'
 import { shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { type CampaignSummary, PRODUCT_COPY } from '../../shared'
-import { ErrorNote, Muted, Panel, PrimaryButton } from '../../ui/screen'
 
 type Step = 'idle' | 'preparing' | 'review' | 'signing' | 'submitting' | 'done'
 
 function formatSol(lamports: string) {
   const n = Number(lamports) / 1e9
   return n < 0.001 ? n.toFixed(6) : n.toFixed(4)
+}
+
+function Point({ icon, title, body }: { icon: IconName; title: string; body: string }) {
+  return (
+    <Row style={{ alignItems: 'flex-start' }}>
+      <View style={styles.pointIcon}>
+        <Icon name={icon} size={16} stroke={color.lime} strokeWidth={2} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <T variant="bodyStrong">{title}</T>
+        <T variant="label">{body}</T>
+      </View>
+    </Row>
+  )
 }
 
 /**
@@ -76,7 +92,7 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         haptics.success()
         setStep('done')
       } else {
-        setError('Sent, but the network has not shown the funded account yet. Tap “Check again” in a moment.')
+        setError('Sent, but the network hasn’t shown the funded account yet. Tap “Check again” in a moment.')
         setStep('idle')
       }
     } catch (e) {
@@ -99,51 +115,79 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
 
   if (step === 'done') {
     return (
-      <Panel>
-        <Text className="text-lg font-semibold text-emerald-200">Your campaign is live</Text>
-        <Muted>{PRODUCT_COPY.treasuryStatement}</Muted>
-        {signature ? <Text className="font-mono text-xs text-zinc-500">{`Tx ${shortAddress(signature, 8, 8)}`}</Text> : null}
-      </Panel>
+      <Card style={{ gap: space.sm }} tone="lime">
+        <Row>
+          <Icon name="check" size={20} stroke={color.lime} strokeWidth={2.4} />
+          <T variant="heading">Funded — your campaign is live</T>
+        </Row>
+        <T variant="label" color={color.text}>
+          {PRODUCT_COPY.treasuryStatement}
+        </T>
+        {signature ? <T variant="caption">{`Transaction ${shortAddress(signature, 8, 8)}`}</T> : null}
+      </Card>
     )
   }
 
   if (step === 'review' || step === 'signing' || step === 'submitting') {
     return (
-      <Panel>
-        <Text className="text-lg font-semibold text-white">Approve in your wallet</Text>
-        <Muted>Your wallet will ask you to approve ONE transaction that:</Muted>
-        <View className="gap-2">
-          <Text className="text-zinc-200">{`1. Creates your campaign account (${formatSol(plan?.summary.rentLamports ?? '0')} SOL deposit, returned when you close the campaign).`}</Text>
-          <Text className="text-zinc-200">{`2. Moves ${amountLabel} from your wallet into that account. You still own it.`}</Text>
-          <Text className="text-zinc-200">{`3. Lets Blink hand out up to exactly ${amountLabel} — never more. You can revoke any time.`}</Text>
+      <Card style={{ gap: space.lg, borderColor: color.limeLine }}>
+        <View style={{ gap: 4 }}>
+          <T variant="overline">One approval</T>
+          <T variant="title">Approve in your wallet</T>
+          <T variant="label">Your wallet will show one transaction that does exactly this:</T>
         </View>
-        <Text className="text-xs text-zinc-500">{`Network: ${campaign.cluster} · plus a small network fee`}</Text>
-        <ErrorNote message={error} />
-        <PrimaryButton disabled={step !== 'review'} onPress={() => void onSign()}>
+        <Point
+          body={`${formatSol(plan?.summary.rentLamports ?? '0')} SOL deposit, returned when you close the campaign.`}
+          icon="layers"
+          title="Creates your campaign account"
+        />
+        <Point body="It stays in an account you own." icon="arrowRight" title={`Moves ${amountLabel} into it`} />
+        <Point body="Never more. You can revoke any time." icon="shield" title={`Lets Blink hand out up to exactly ${amountLabel}`} />
+        <T variant="caption">{`Network: ${campaign.cluster} · plus a small network fee`}</T>
+        <Notice message={error} />
+        <Button disabled={step !== 'review'} icon="wallet" loading={step === 'submitting'} onPress={() => void onSign()}>
           {step === 'signing' ? 'Waiting for your wallet…' : step === 'submitting' ? 'Confirming on Solana…' : 'Open wallet to approve'}
-        </PrimaryButton>
+        </Button>
         {step === 'review' ? (
-          <PrimaryButton variant="secondary" onPress={() => { setStep('idle'); setPlan(null) }}>
+          <Button
+            onPress={() => {
+              setStep('idle')
+              setPlan(null)
+            }}
+            size="md"
+            variant="ghost"
+          >
             Cancel
-          </PrimaryButton>
+          </Button>
         ) : null}
-      </Panel>
+      </Card>
     )
   }
 
   return (
-    <Panel>
-      <Text className="text-lg font-semibold text-white">Fund & go live</Text>
-      <Muted>{`Move ${amountLabel} into a campaign account you own and approve Blink to distribute exactly that amount.`}</Muted>
-      <ErrorNote message={error} />
-      <PrimaryButton loading={step === 'preparing'} onPress={() => void onPrepare()}>
+    <Card style={{ gap: space.md, borderColor: color.limeLine }}>
+      <Row style={{ alignItems: 'flex-start' }}>
+        <View style={styles.pointIcon}>
+          <Icon name="bolt" size={18} stroke={color.lime} strokeWidth={2.2} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T variant="heading">Fund & go live</T>
+          <T variant="label">{`Move ${amountLabel} into a campaign account you own and approve Blink to distribute exactly that.`}</T>
+        </View>
+      </Row>
+      <Notice message={error} />
+      <Button iconRight="arrowRight" loading={step === 'preparing'} onPress={() => void onPrepare()}>
         Review funding
-      </PrimaryButton>
+      </Button>
       {campaign.status === 'AWAITING_FUNDING' ? (
-        <PrimaryButton variant="secondary" onPress={() => void onVerify()}>
+        <Button icon="refresh" onPress={() => void onVerify()} size="md" variant="secondary">
           Check again
-        </PrimaryButton>
+        </Button>
       ) : null}
-    </Panel>
+    </Card>
   )
 }
+
+const styles = StyleSheet.create({
+  pointIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+})

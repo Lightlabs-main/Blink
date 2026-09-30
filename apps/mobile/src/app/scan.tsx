@@ -1,11 +1,14 @@
 import { useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
-import { Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Icon } from '../design/icons'
+import { color, gutter, radius, space } from '../design/tokens'
+import { Button, EmptyState, IconButton, Loading, NavBar, Notice, Row, Screen, T } from '../design/ui'
 import { campaignIdFromScan } from '../lib/format'
 import { haptics } from '../lib/haptics'
 import { hasNativeModule } from '../lib/native'
-import { ErrorNote, Muted, PrimaryButton, Screen, Title } from '../ui/screen'
 
 type CameraModule = typeof import('expo-camera')
 
@@ -21,38 +24,47 @@ function loadCamera(): CameraModule | null {
 }
 
 export default function Scan() {
+  const router = useRouter()
   const camera = loadCamera()
   if (!camera) {
     return (
       <Screen>
-        <Title kicker="Scan">Update needed</Title>
-        <Muted>This test build doesn’t include the camera yet. Install the newest Blink build to scan QR codes.</Muted>
+        <NavBar onBack={() => router.back()} title="Scan" />
+        <EmptyState body="This test build doesn’t include the camera yet. Install the newest Blink build to scan QR codes." icon="scan" title="Update needed" />
       </Screen>
     )
   }
   return <Scanner camera={camera} />
 }
 
+const FRAME = 250
+
 function Scanner({ camera }: { camera: CameraModule }) {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { CameraView, useCameraPermissions } = camera
   const [permission, requestPermission] = useCameraPermissions()
   const [error, setError] = useState<string | null>(null)
   const handled = useRef(false)
 
-  if (!permission) return <Screen><Muted>Checking camera permission…</Muted></Screen>
+  if (!permission) return <Loading label="Checking camera permission…" />
   if (!permission.granted) {
     return (
       <Screen>
-        <Title kicker="Scan">Camera access</Title>
-        <Muted>Blink uses the camera only to scan campaign QR codes.</Muted>
-        <PrimaryButton onPress={() => void requestPermission()}>Allow camera</PrimaryButton>
+        <NavBar onBack={() => router.back()} title="Scan" />
+        <EmptyState
+          action="Allow camera"
+          body="Blink uses the camera only to scan campaign QR codes. Nothing is recorded or uploaded."
+          icon="scan"
+          onAction={() => void requestPermission()}
+          title="Camera access"
+        />
       </Screen>
     )
   }
 
   return (
-    <View className="flex-1 bg-black">
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
       <CameraView
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         facing="back"
@@ -67,15 +79,69 @@ function Scanner({ camera }: { camera: CameraModule }) {
           haptics.success()
           router.replace(`/campaign/${id}`)
         }}
-        style={{ flex: 1 }}
+        style={StyleSheet.absoluteFill}
       />
-      <View className="absolute bottom-0 left-0 right-0 gap-3 bg-black/70 px-5 pb-12 pt-5">
-        <Text className="text-center text-lg font-semibold text-white">Point at a Blink QR code</Text>
-        <ErrorNote message={error} />
-        <PrimaryButton variant="secondary" onPress={() => router.back()}>
-          Cancel
-        </PrimaryButton>
+
+      {/* Dimmed surround with a clear viewfinder */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={styles.shade} />
+        <Row gap={0}>
+          <View style={[styles.shade, { height: FRAME }]} />
+          <View style={styles.frame}>
+            <View style={[styles.corner, { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: radius.lg }]} />
+            <View style={[styles.corner, { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: radius.lg }]} />
+            <View style={[styles.corner, { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: radius.lg }]} />
+            <View style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: radius.lg }]} />
+          </View>
+          <View style={[styles.shade, { height: FRAME }]} />
+        </Row>
+        <View style={styles.shade} />
+      </View>
+
+      <View style={[styles.top, { paddingTop: insets.top + space.md }]}>
+        <IconButton icon="close" label="Close scanner" onPress={() => router.back()} />
+        <View style={styles.pill}>
+          <Icon name="bolt" size={14} stroke={color.lime} strokeWidth={2.2} />
+          <T variant="label" color={color.text}>
+            Blink scanner
+          </T>
+        </View>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + space.xxl }]}>
+        <T variant="title" align="center">
+          Point at a Blink QR code
+        </T>
+        <T variant="label" align="center">
+          The drop opens automatically.
+        </T>
+        <Notice message={error} />
+        {error ? (
+          <Button onPress={() => setError(null)} size="md" variant="secondary">
+            Try again
+          </Button>
+        ) : null}
       </View>
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  shade: { flex: 1, backgroundColor: 'rgba(7,8,11,0.62)' },
+  frame: { width: FRAME, height: FRAME },
+  corner: { position: 'absolute', width: 44, height: 44, borderColor: color.lime },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: gutter, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(17,20,25,0.85)',
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: gutter, gap: space.sm },
+})

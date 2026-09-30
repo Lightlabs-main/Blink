@@ -1,12 +1,48 @@
 import { useLoginWithEmail } from '@privy-io/expo'
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
-import { TextInput } from 'react-native'
+import { useRef, useState } from 'react'
+import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
+import { font } from '../../design/fonts'
+import { Icon } from '../../design/icons'
+import { color, radius, space } from '../../design/tokens'
+import { Button, NavBar, Notice, Row, Screen, T } from '../../design/ui'
 import { haptics } from '../../lib/haptics'
-import { ErrorNote, Muted, Panel, PrimaryButton, Screen, Title } from '../../ui/screen'
 
-const inputClass = 'rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-lg text-white'
+/** Six visible boxes backed by one hidden input (paste and autofill friendly). */
+function CodeInput({ value, onChange, onComplete }: { value: string; onChange: (v: string) => void; onComplete: (v: string) => void }) {
+  const ref = useRef<TextInput>(null)
+  return (
+    <Pressable onPress={() => ref.current?.focus()}>
+      <Row gap={space.sm} style={{ justifyContent: 'space-between' }}>
+        {Array.from({ length: 6 }).map((_, i) => {
+          const filled = i < value.length
+          const active = i === value.length
+          return (
+            <View key={i} style={[styles.box, filled && { borderColor: color.borderStrong }, active && { borderColor: color.lime }]}>
+              <T style={{ ...font('display'), fontSize: 26, color: color.text }}>{value[i] ?? ''}</T>
+            </View>
+          )
+        })}
+      </Row>
+      <TextInput
+        autoComplete="one-time-code"
+        autoFocus
+        inputMode="numeric"
+        maxLength={6}
+        onChangeText={(v) => {
+          const digits = v.replace(/\D/g, '').slice(0, 6)
+          onChange(digits)
+          if (digits.length === 6) onComplete(digits)
+        }}
+        ref={ref}
+        style={styles.hidden}
+        textContentType="oneTimeCode"
+        value={value}
+      />
+    </Pressable>
+  )
+}
 
 export default function EmailLogin() {
   const router = useRouter()
@@ -16,7 +52,6 @@ export default function EmailLogin() {
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
   const emailValid = /^\S+@\S+\.\S+$/.test(email.trim())
 
   async function onSend() {
@@ -24,7 +59,6 @@ export default function EmailLogin() {
     setError(null)
     try {
       await sendCode({ email: email.trim() })
-      haptics.tap()
       setStep('code')
     } catch (e) {
       haptics.error()
@@ -34,15 +68,17 @@ export default function EmailLogin() {
     }
   }
 
-  async function onVerify() {
+  async function onVerify(value = code) {
+    if (value.length !== 6 || busy) return
     setBusy(true)
     setError(null)
     try {
-      await loginWithCode({ code: code.trim(), email: email.trim() })
+      await loginWithCode({ code: value, email: email.trim() })
       haptics.success()
-      router.replace('/drops')
+      router.replace('/home')
     } catch (e) {
       haptics.error()
+      setCode('')
       setError(e instanceof Error ? e.message : 'That code did not work')
     } finally {
       setBusy(false)
@@ -51,55 +87,81 @@ export default function EmailLogin() {
 
   return (
     <Screen>
-      <Title kicker="Sign in">{step === 'email' ? 'Your email' : 'Check your inbox'}</Title>
-      <Muted>
-        {step === 'email'
-          ? 'We’ll email you a one-time code. A wallet is created for you automatically — nothing to install.'
-          : `Enter the code we sent to ${email.trim()}. It expires in 10 minutes.`}
-      </Muted>
-      <Panel>
-        {step === 'email' ? (
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="email"
-            autoFocus
-            className={inputClass}
-            inputMode="email"
-            onChangeText={setEmail}
-            onSubmitEditing={() => emailValid && void onSend()}
-            placeholder="you@example.com"
-            placeholderTextColor="#71717a"
-            value={email}
-          />
-        ) : (
-          <TextInput
-            autoComplete="one-time-code"
-            autoFocus
-            className={`${inputClass} tracking-[8px]`}
-            inputMode="numeric"
-            maxLength={6}
-            onChangeText={(v) => setCode(v.replace(/\D/g, ''))}
-            placeholder="123456"
-            placeholderTextColor="#71717a"
-            value={code}
-          />
-        )}
-        <ErrorNote message={error} />
-        {step === 'email' ? (
-          <PrimaryButton disabled={!emailValid} loading={busy} onPress={() => void onSend()}>
+      <NavBar onBack={() => (step === 'code' ? setStep('email') : router.back())} />
+      <View style={{ gap: space.md }}>
+        <View style={styles.badgeIcon}>
+          <Icon name="mail" size={24} stroke={color.lime} />
+        </View>
+        <T variant="display">{step === 'email' ? 'What’s your email?' : 'Enter your code'}</T>
+        <T>
+          {step === 'email'
+            ? 'We’ll send a one-time code. A secure wallet is created for you automatically.'
+            : `We sent a 6-digit code to ${email.trim()}. It expires in 10 minutes.`}
+        </T>
+      </View>
+
+      {step === 'email' ? (
+        <View style={{ gap: space.lg }}>
+          <View style={styles.inputWrap}>
+            <Icon name="mail" size={20} stroke={color.textMuted} />
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              autoFocus
+              inputMode="email"
+              onChangeText={setEmail}
+              onSubmitEditing={() => emailValid && void onSend()}
+              placeholder="you@example.com"
+              placeholderTextColor={color.textMuted}
+              selectionColor={color.lime}
+              style={[styles.input, font('bodyMedium')]}
+              value={email}
+            />
+          </View>
+          <Notice message={error} />
+          <Button disabled={!emailValid} iconRight="arrowRight" loading={busy} onPress={() => void onSend()}>
             Send code
-          </PrimaryButton>
-        ) : (
-          <>
-            <PrimaryButton disabled={code.length !== 6} loading={busy} onPress={() => void onVerify()}>
-              Verify and continue
-            </PrimaryButton>
-            <PrimaryButton variant="secondary" onPress={() => { setStep('email'); setCode(''); setError(null) }}>
-              Use a different email
-            </PrimaryButton>
-          </>
-        )}
-      </Panel>
+          </Button>
+        </View>
+      ) : (
+        <View style={{ gap: space.lg }}>
+          <CodeInput onChange={setCode} onComplete={(v) => void onVerify(v)} value={code} />
+          <Notice message={error} />
+          <Button disabled={code.length !== 6} loading={busy} onPress={() => void onVerify()}>
+            Verify and continue
+          </Button>
+          <Button onPress={() => void onSend()} size="md" variant="ghost">
+            Resend code
+          </Button>
+        </View>
+      )}
     </Screen>
   )
 }
+
+const styles = StyleSheet.create({
+  badgeIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    height: 58,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    backgroundColor: color.surface,
+  },
+  input: { flex: 1, fontSize: 17, color: color.text },
+  box: {
+    flex: 1,
+    height: 60,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hidden: { position: 'absolute', opacity: 0, width: 1, height: 1 },
+})

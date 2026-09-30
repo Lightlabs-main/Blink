@@ -64,9 +64,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       req.log.warn({ err }, 'xStock market data unavailable')
     }
     return {
-      xstocks: deps.assets.map(({ symbol, name, mint, decimals, isTest }) => {
+      xstocks: deps.assets.map(({ symbol, name, mint, decimals, logo, isTest }) => {
         const m = market.get(mint)
-        return { symbol, name, mint, decimals, isTest, multiplier: m?.multiplier ?? null, paused: m?.paused ?? null, asOf: m?.asOf ?? null }
+        return { symbol, name, mint, decimals, logo, isTest, multiplier: m?.multiplier ?? null, paused: m?.paused ?? null, asOf: m?.asOf ?? null }
       }),
     }
   })
@@ -84,21 +84,28 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   })
 
   /**
-   * xStock balances (raw base units) of the caller's Privy-verified creator wallets. Wallet addresses come from
+   * xStock balances (raw base units) of the caller's embedded stock wallet and Privy-verified creator wallets. Wallet addresses come from
    * Privy, never from the client. `available: false` when no read RPC is configured or the read fails.
    */
   app.get('/v1/me/holdings', async (req) => {
     const auth = await requireAuth(req)
-    const wallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
-    const result: { wallet: string; balances: Record<string, string> | null }[] = []
+    const [creator, embedded] = await Promise.all([
+      deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId),
+      deps.auth.getEmbeddedSolanaWallets(auth.privyUserId),
+    ])
+    const wallets = [
+      ...embedded.map((wallet) => ({ wallet, kind: 'stock' as const })),
+      ...creator.map((wallet) => ({ wallet, kind: 'creator' as const })),
+    ]
+    const result: { wallet: string; kind: 'stock' | 'creator'; balances: Record<string, string> | null }[] = []
     let available = Boolean(deps.holdings)
-    for (const wallet of wallets) {
+    for (const w of wallets) {
       try {
-        result.push({ wallet, balances: (await deps.holdings?.forOwner(wallet)) ?? null })
+        result.push({ ...w, balances: (await deps.holdings?.forOwner(w.wallet)) ?? null })
       } catch (err) {
         available = false
         req.log.warn({ err }, 'holdings read failed')
-        result.push({ wallet, balances: null })
+        result.push({ ...w, balances: null })
       }
     }
     return { available, wallets: result }

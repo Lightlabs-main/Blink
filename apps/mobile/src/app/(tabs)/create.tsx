@@ -1,46 +1,67 @@
 import { usePrivy } from '@privy-io/expo'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
-import { Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
+import { font } from '../../design/fonts'
+import { Icon } from '../../design/icons'
+import { color, radius, space } from '../../design/tokens'
+import { Badge, Button, Card, Chip, EmptyState, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
 import { api, ApiError } from '../../lib/api'
-import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
+import { useAssets, useHoldings, useMe } from '../../lib/data'
+import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { CAMPAIGN_TYPES, type CampaignType, PRODUCT_COPY, rawToUiShares, uiSharesToRawFloor } from '../../shared'
-import { Chip, ErrorNote, Muted, Panel, PrimaryButton, Screen, Title } from '../../ui/screen'
 
 type Conversion = { ok: true; raw: bigint; display: string } | { ok: false; error: string }
+
+const STEPS = ['Mechanic', 'Stock', 'Amount', 'Review'] as const
+
+function StepHeader({ step }: { step: number }) {
+  return (
+    <View style={{ gap: space.md }}>
+      <Row gap={6}>
+        {STEPS.map((s, i) => (
+          <View key={s} style={[styles.progress, { backgroundColor: i <= step ? color.lime : color.surface3 }]} />
+        ))}
+      </Row>
+      <T variant="caption">{`Step ${step + 1} of ${STEPS.length} · ${STEPS[step]}`}</T>
+    </View>
+  )
+}
 
 export default function Create() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { getAccessToken } = usePrivy()
-  const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(getAccessToken) })
-  const xstocks = useQuery({ queryKey: ['xstocks'], queryFn: api.xstocks, staleTime: 60_000 })
-  const holdings = useQuery({ queryKey: ['holdings'], queryFn: () => api.holdings(getAccessToken), staleTime: 30_000 })
+  const me = useMe()
+  const assets = useAssets()
+  const holdings = useHoldings()
 
+  const [step, setStep] = useState(0)
   const [type, setType] = useState<CampaignType>('TAP_RUSH')
   const [mint, setMint] = useState<string | null>(null)
   const [shares, setShares] = useState('')
 
-  const wallets = me.data?.verifiedCreatorWallets ?? []
-  const creatorWallet = wallets[0]
-  const selected = xstocks.data?.xstocks.find((x) => x.mint === mint) ?? null
-  // Raw balance of the selected stock in the creator (funding) wallet; null when unknown.
+  const creatorWallet = me.data?.verifiedCreatorWallets[0]
+  const selected = assets.data?.xstocks.find((x) => x.mint === mint) ?? null
+
   const heldRaw = useMemo(() => {
     if (!selected || !creatorWallet || !holdings.data?.available) return null
     const b = holdings.data.wallets.find((w) => w.wallet === creatorWallet)?.balances?.[selected.mint]
     return b === undefined ? null : BigInt(b)
   }, [selected, creatorWallet, holdings.data])
-  const heldDisplay =
-    heldRaw !== null && selected?.multiplier != null ? rawToUiShares(heldRaw, selected.decimals, selected.multiplier) : null
 
-  // Amount entered in shares; converted to raw base units rounding DOWN so a campaign never promises more
-  // than it can pay (DECISIONS D-6). The raw value is what the API stores and the allowance will use.
+  const heldFor = (assetMint: string) => {
+    const b = holdings.data?.wallets.find((w) => w.wallet === creatorWallet)?.balances?.[assetMint]
+    const a = assets.data?.xstocks.find((x) => x.mint === assetMint)
+    return b && a?.multiplier != null ? rawToUiShares(BigInt(b), a.decimals, a.multiplier) : null
+  }
+
   const conversion = useMemo((): Conversion | null => {
     if (!selected || !shares) return null
-    if (selected.multiplier === null) return { ok: false, error: 'Live price data for this stock is unavailable right now.' }
+    if (selected.multiplier === null) return { ok: false, error: 'Live data for this stock is unavailable right now.' }
     try {
       const raw = uiSharesToRawFloor(shares, selected.decimals, selected.multiplier)
       if (raw <= 0n) return { ok: false, error: 'Amount is too small.' }
@@ -50,6 +71,8 @@ export default function Create() {
     }
   }, [selected, shares])
 
+  const overHoldings = conversion?.ok && heldRaw !== null && conversion.raw > heldRaw
+
   const create = useMutation({
     mutationFn: async () => {
       if (!selected || !conversion?.ok) throw new Error('Complete the form first')
@@ -58,95 +81,220 @@ export default function Create() {
     onSuccess: ({ campaign }) => {
       haptics.success()
       void queryClient.invalidateQueries({ queryKey: ['my-campaigns'] })
+      setStep(0)
+      setShares('')
       router.push(`/campaign/${campaign.id}`)
     },
     onError: () => haptics.error(),
   })
 
-  if (me.isSuccess && !creatorWallet) {
+  function fillFraction(f: number) {
+    if (heldRaw === null || !selected || selected.multiplier == null) return
+    const raw = (heldRaw * BigInt(Math.round(f * 100))) / 100n
+    setShares(rawToUiShares(raw, selected.decimals, selected.multiplier, 8))
+  }
+
+  if (me.isPending) {
     return (
-      <Screen>
-        <Title kicker="Create">Start a campaign</Title>
-        <Panel>
-          <Text className="text-lg font-semibold text-white">Creators use their own wallet</Text>
-          <Muted>
-            Campaign stock comes from your Solana wallet, so sign in with it first. Recipients never need a wallet.
-          </Muted>
-          <PrimaryButton onPress={() => router.push('/login/wallet')}>Connect my Solana wallet</PrimaryButton>
-        </Panel>
+      <Screen tabBar>
+        <Skeleton height={34} width={200} />
+        <Skeleton height={220} radius={20} />
       </Screen>
     )
   }
 
-  return (
-    <Screen>
-      <Title kicker="Create">Start a campaign</Title>
-      {creatorWallet ? <Muted>{`Funding wallet: ${shortAddress(creatorWallet)}`}</Muted> : null}
-      <ErrorNote message={me.error?.message ?? xstocks.error?.message} />
-
-      <Panel>
-        <Text className="text-lg font-semibold text-white">1. How do people earn it?</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {CAMPAIGN_TYPES.map((t) => (
-            <Chip key={t} label={CAMPAIGN_TYPE_LABEL[t]} onPress={() => { haptics.tap(); setType(t) }} selected={type === t} />
-          ))}
+  if (!creatorWallet) {
+    return (
+      <Screen tabBar>
+        <View style={{ gap: space.sm }}>
+          <T variant="overline">Create</T>
+          <T variant="display">Give away stock</T>
         </View>
-        <Muted>{CAMPAIGN_TYPE_BLURB[type]}</Muted>
-      </Panel>
-
-      <Panel>
-        <Text className="text-lg font-semibold text-white">2. Which stock?</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {(xstocks.data?.xstocks ?? []).map((x) => (
-            <Chip key={x.mint} label={x.symbol} onPress={() => { haptics.tap(); setMint(x.mint) }} selected={mint === x.mint} />
-          ))}
-        </View>
-        {selected ? <Muted>{selected.name}</Muted> : null}
-        {selected && heldDisplay !== null ? (
-          <Text className={heldRaw === 0n ? 'text-amber-200' : 'text-zinc-300'}>
-            {heldRaw === 0n
-              ? `Your wallet holds no ${selected.symbol} yet. You’ll need some to fund this campaign.`
-              : `Your wallet holds ${heldDisplay} ${selected.symbol}.`}
-          </Text>
-        ) : null}
-        {selected?.paused ? <ErrorNote message="The issuer has paused this stock. Pick another one." /> : null}
-      </Panel>
-
-      <Panel>
-        <Text className="text-lg font-semibold text-white">3. Total to give away</Text>
-        <TextInput
-          className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-lg text-white"
-          inputMode="decimal"
-          onChangeText={(v) => setShares(v.replace(',', '.'))}
-          placeholder="Shares, e.g. 0.5"
-          placeholderTextColor="#71717a"
-          value={shares}
+        <EmptyState
+          action="Connect my Solana wallet"
+          body="Campaign stock comes from your own wallet, so connect it first. It’s added to this account — you stay signed in."
+          icon="wallet"
+          onAction={() => router.push('/login/wallet')}
+          title="Creators use their own wallet"
         />
-        {conversion?.ok ? (
-          <Muted>{`≈ ${conversion.display} ${selected?.symbol} (rounded down)`}</Muted>
-        ) : null}
-        {conversion && !conversion.ok ? <ErrorNote message={conversion.error} /> : null}
-        {conversion?.ok && heldRaw !== null && conversion.raw > heldRaw ? (
-          <Text className="text-amber-200">
-            {`That’s more than your wallet holds (${heldDisplay ?? '0'} ${selected?.symbol}). You can save the draft, but you’ll need enough stock before funding.`}
-          </Text>
-        ) : null}
-      </Panel>
+      </Screen>
+    )
+  }
 
-      <Panel>
-        <Muted>{PRODUCT_COPY.treasuryStatement}</Muted>
-        <ErrorNote message={create.error instanceof ApiError || create.error instanceof Error ? create.error.message : null} />
-        <PrimaryButton
-          disabled={!selected || !conversion?.ok || selected.paused === true || !creatorWallet}
-          loading={create.isPending}
-          onPress={() => create.mutate()}
-        >
-          Create draft
-        </PrimaryButton>
-        <Text className="text-xs leading-5 text-zinc-500">
-          This saves a draft. Funding it from your wallet comes next — nothing moves until you approve it in your wallet.
-        </Text>
-      </Panel>
+  const canNext =
+    (step === 0 && Boolean(type)) || (step === 1 && Boolean(selected) && !selected?.paused) || (step === 2 && Boolean(conversion?.ok))
+
+  return (
+    <Screen tabBar>
+      <View style={{ gap: space.sm }}>
+        <T variant="overline">New campaign</T>
+        <T variant="display">{step === 0 ? 'How do people earn it?' : step === 1 ? 'Pick a stock' : step === 2 ? 'How much in total?' : 'Review'}</T>
+      </View>
+      <StepHeader step={step} />
+
+      {step === 0 ? (
+        <View style={{ gap: space.md }}>
+          {CAMPAIGN_TYPES.map((t) => {
+            const on = type === t
+            return (
+              <Pressable
+                key={t}
+                onPress={() => {
+                  haptics.tap()
+                  setType(t)
+                }}
+                style={[styles.option, on && styles.optionOn]}
+              >
+                <View style={[styles.optionIcon, on && { backgroundColor: color.lime }]}>
+                  <Icon name={CAMPAIGN_TYPE_ICON[t]} size={22} stroke={on ? color.onLime : color.lime} strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T variant="bodyStrong">{CAMPAIGN_TYPE_LABEL[t]}</T>
+                  <T variant="label">{CAMPAIGN_TYPE_BLURB[t]}</T>
+                </View>
+                <View style={[styles.radio, on && { borderColor: color.lime }]}>{on ? <View style={styles.radioDot} /> : null}</View>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
+
+      {step === 1 ? (
+        <View style={{ gap: space.md }}>
+          {(assets.data?.xstocks ?? []).map((x) => {
+            const on = mint === x.mint
+            const held = heldFor(x.mint)
+            return (
+              <Pressable
+                key={x.mint}
+                onPress={() => {
+                  haptics.tap()
+                  setMint(x.mint)
+                }}
+                style={[styles.option, on && styles.optionOn]}
+              >
+                <StockAvatar isTest={x.isTest} logo={x.logo} size={44} symbol={x.symbol} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Row gap={6}>
+                    <T variant="bodyStrong">{x.symbol}</T>
+                    {x.paused ? <Badge label="Paused" tone="danger" /> : null}
+                  </Row>
+                  <T variant="label" numberOfLines={1}>
+                    {x.name}
+                  </T>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <T variant="caption">You hold</T>
+                  <T variant="numeric" color={held && held !== '0' ? color.text : color.textMuted}>
+                    {held ?? '0'}
+                  </T>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
+
+      {step === 2 && selected ? (
+        <Card style={{ gap: space.lg }}>
+          <Row>
+            <StockAvatar isTest={selected.isTest} logo={selected.logo} size={36} symbol={selected.symbol} />
+            <T variant="bodyStrong">{selected.symbol}</T>
+          </Row>
+          <View style={styles.amountWrap}>
+            <TextInput
+              autoFocus
+              inputMode="decimal"
+              onChangeText={(v) => setShares(v.replace(',', '.'))}
+              placeholder="0.00"
+              placeholderTextColor={color.textMuted}
+              selectionColor={color.lime}
+              style={[styles.amountInput, font('display')]}
+              value={shares}
+            />
+            <T variant="title" color={color.textDim}>
+              shares
+            </T>
+          </View>
+          {heldRaw !== null ? (
+            <Row gap={space.sm}>
+              <Chip label="25%" onPress={() => fillFraction(0.25)} selected={false} />
+              <Chip label="50%" onPress={() => fillFraction(0.5)} selected={false} />
+              <Chip label="Max" onPress={() => fillFraction(1)} selected={false} />
+            </Row>
+          ) : null}
+          <T variant="caption">{`Wallet ${shortAddress(creatorWallet)} holds ${heldFor(selected.mint) ?? '0'} ${selected.symbol}`}</T>
+          {conversion && !conversion.ok ? <Notice message={conversion.error} /> : null}
+          {overHoldings ? <Notice message="That’s more than your wallet holds. You can save a draft, but you’ll need enough stock to fund it." tone="warn" /> : null}
+        </Card>
+      ) : null}
+
+      {step === 3 && selected && conversion?.ok ? (
+        <Card style={{ gap: space.lg }}>
+          <Row>
+            <StockAvatar isTest={selected.isTest} logo={selected.logo} size={48} symbol={selected.symbol} />
+            <View>
+              <T variant="title">{`${conversion.display} ${selected.symbol}`}</T>
+              <T variant="label">{`${CAMPAIGN_TYPE_LABEL[type]} campaign`}</T>
+            </View>
+          </Row>
+          <View style={{ gap: space.md }}>
+            {[
+              ['Mechanic', CAMPAIGN_TYPE_LABEL[type]],
+              ['Stock', selected.name],
+              ['Total pool', `${conversion.display} ${selected.symbol} (rounded down)`],
+              ['Funding wallet', shortAddress(creatorWallet)],
+            ].map(([k, v]) => (
+              <Row key={k} style={{ justifyContent: 'space-between' }}>
+                <T variant="label">{k}</T>
+                <T variant="bodyStrong" style={{ flexShrink: 1, textAlign: 'right' }}>
+                  {v}
+                </T>
+              </Row>
+            ))}
+          </View>
+          <Notice message={PRODUCT_COPY.treasuryStatement} tone="info" />
+          <T variant="caption">Saving creates a draft. Nothing leaves your wallet until you fund it and approve in your wallet app.</T>
+          <Notice message={create.error instanceof ApiError || create.error instanceof Error ? create.error.message : null} />
+        </Card>
+      ) : null}
+
+      <Row gap={space.md}>
+        {step > 0 ? (
+          <Button icon="chevronLeft" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} variant="secondary">
+            Back
+          </Button>
+        ) : null}
+        {step < 3 ? (
+          <Button disabled={!canNext} iconRight="arrowRight" onPress={() => setStep((s) => s + 1)} style={{ flex: 2 }}>
+            Continue
+          </Button>
+        ) : (
+          <Button icon="check" loading={create.isPending} onPress={() => create.mutate()} style={{ flex: 2 }}>
+            Save draft
+          </Button>
+        )}
+      </Row>
     </Screen>
   )
 }
+
+const styles = StyleSheet.create({
+  progress: { flex: 1, height: 4, borderRadius: 2 },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+  },
+  optionOn: { borderColor: color.limeLine, backgroundColor: 'rgba(198,255,61,0.06)' },
+  optionIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.lime },
+  amountWrap: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  amountInput: { flex: 1, fontSize: 48, color: color.text, padding: 0 },
+})

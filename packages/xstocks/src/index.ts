@@ -4,6 +4,7 @@
  * Every mint here was verified two ways on 2026-09-29 (MASTER_PROMPT §5.2):
  *  1. Official Backed API: GET https://api.backed.fi/api/v2/public/assets (deployments[network=Solana].address)
  *  2. Onchain (mainnet): owner = Token-2022, decimals = 8, ScaledUiAmountConfig present, not paused
+ * Logos are the official Backed API `logo` values (HTTP 200 checked 2026-09-29).
  *     via `tsx scripts/inspect-xstock.ts`.
  *
  * Do not add entries from memory. Re-run both checks and update `verifiedAt`.
@@ -13,14 +14,15 @@ export interface SupportedXStock {
   name: string
   mint: string
   decimals: number
+  logo: string
   verifiedAt: string
 }
 
 export const SUPPORTED_XSTOCKS: readonly SupportedXStock[] = [
-  { symbol: 'NVDAx', name: 'NVIDIA xStock', mint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh', decimals: 8, verifiedAt: '2026-09-29' },
-  { symbol: 'TSLAx', name: 'Tesla xStock', mint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB', decimals: 8, verifiedAt: '2026-09-29' },
-  { symbol: 'AAPLx', name: 'Apple xStock', mint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp', decimals: 8, verifiedAt: '2026-09-29' },
-  { symbol: 'SPYx', name: 'SP500 xStock', mint: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W', decimals: 8, verifiedAt: '2026-09-29' },
+  { symbol: 'NVDAx', name: 'NVIDIA xStock', mint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/NVDAx.png', verifiedAt: '2026-09-29' },
+  { symbol: 'TSLAx', name: 'Tesla xStock', mint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png', verifiedAt: '2026-09-29' },
+  { symbol: 'AAPLx', name: 'Apple xStock', mint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/AAPLx.png', verifiedAt: '2026-09-29' },
+  { symbol: 'SPYx', name: 'SP500 xStock', mint: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png', verifiedAt: '2026-09-29' },
 ]
 
 export function findXStockByMint(mint: string): SupportedXStock | undefined {
