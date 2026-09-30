@@ -117,3 +117,10 @@ unless noted.
   - Creating a campaign draft works; persisted in Postgres with raw amount `6600000000` for 66 TSLAx.
   - After installing build #2, the QR scanner and safe-area layout work.
 - **Lesson:** after `git pull` on the VPS, `blink-metro` kept serving stale JS until restarted with its cache cleared. Deploy procedure: pull, then `pm2 delete blink-metro`, clear `apps/mobile/node_modules/.cache/metro`, and start `infra/metro.ecosystem.config.cjs` again (Blink process only).
+
+### 2026-09-30 — First release APK (build #3)
+
+- **Build:** EAS Build `34171533-125a-494e-9052-3555476a1507` (profile `preview`, release APK
+  with no dev client), FINISHED. It includes claims, Tap Rush, Referral and resume (D-13, D-14).
+- **Signing:** the same default EAS keystore as the dev builds.
+- **Not yet verified on a device.**
