@@ -96,9 +96,8 @@ Build profiles: `development` (dev client APK), `preview` and `production` (APK)
    wallet preview error ("Unexpected error when analyzing the transaction") is treated as a UX bug.
 2. **Cluster consistency.** The app's MWA cluster must match `SOLANA_CLUSTER` from the backend.
    The UI never infers it (§22).
-3. **The MWA identity URI must become the HTTPS `PUBLIC_WEB_ORIGIN`** once a domain exists, so
-   wallets display a real, verifiable origin instead of `blinktostock://app`. This is blocked on
-   the domain (NEEDS_OWNER_DECISION).
+3. **The MWA identity URI is the HTTPS origin `https://blinksol.site`**, with icon `icon.png`, so
+   wallets display a real, verifiable origin. Done 2026-09-30 (D-15).
 
 ## D-13 — Claims, Tap Rush and payouts (2026-09-30, owner-approved ASSUMPTIONS)
 
@@ -168,3 +167,20 @@ when the real sections arrive.
    checks pass again (§9). A paused drop with less than one reward left moves to ENDED instead.
 4. **Sweep.** Every 60 s the API confirms SENDING payouts and releases RESERVED claims older than
    2 minutes, so claims don't get stuck when nobody is watching.
+
+## D-15 — Domain blinksol.site (2026-09-30, Maris)
+
+- **API:** `https://api.blinksol.site`. The interim sslip.io host stays as an alias so older
+  builds keep working.
+- **Website:** `https://blinksol.site`, served from `apps/web`.
+  - `/` is the landing page.
+  - `/c/<id>[?ref=CODE]` is the campaign page. It opens the app when installed and offers the APK
+    otherwise.
+  - `/api/*` proxies the API on the same origin, so the site needs no CORS.
+  - `/download/blink-to-stock.apk` serves the current release APK. It is hosted on the server
+    only, not in git.
+- **Shareable links and QR codes** are now `https://blinksol.site/c/<id>`: verified Android App
+  Links, via `/.well-known/assetlinks.json` with the SHA-256 of the EAS default keystore. The
+  scanner still accepts the old `blinktostock://campaign/<id>` codes.
+- **Caddy:** Blink added its own site blocks after backing up the shared Caddyfile, and
+  validated the config before reloading.

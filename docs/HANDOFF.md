@@ -104,3 +104,7 @@ Built under the DECISIONS D-14 assumptions. Migration: `20260930120000_referrals
   reward is left. 409 STILL_NOT_READY means the onchain check still fails.
 - **Summaries:** `ClaimSummary` adds `kind: CLAIM | REFERRAL_BONUS`; `CampaignSummary` adds
   `pauseReason`.
+
+## API host (2026-09-30)
+
+New app builds call `https://api.blinksol.site`. The sslip.io host remains an alias (DECISIONS D-15).
