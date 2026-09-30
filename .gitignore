@@ -26,3 +26,7 @@ docs/private/
 
 # Throwaway devnet keys and local secrets (never commit)
 .secrets/
+
+# Server-side only: hosted APKs and database backups
+/downloads/
+/backups/

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stock drop · Blink-to-Stock</title>
+    <meta name="description" content="Someone shared a tokenized stock drop with you. Open it in Blink-to-Stock." />
+    <link rel="icon" href="/favicon.png" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- Served for /c/<campaign-id>[?ref=CODE]. With the app installed, Android opens these links in Blink directly. -->
+    <main>
+      <a class="brand" href="/" style="color: inherit; text-decoration: none"><img src="/icon.png" alt="" /> Blink-to-Stock</a>
+
+      <div class="card lime" id="drop">
+        <div class="overline" id="kind">Stock drop</div>
+        <div class="stock" id="symbol">Loading…</div>
+        <p id="headline">&nbsp;</p>
+        <div id="status"></div>
+      </div>
+
+      <a class="btn primary" id="open" href="#">Open in Blink</a>
+      <a class="btn secondary" href="/download/blink-to-stock.apk">Don't have Blink? Download the app</a>
+
+      <div class="card">
+        <div class="row"><span>Each person gets</span><strong id="reward">—</strong></div>
+        <div class="row"><span>Claimed</span><strong id="claimed">—</strong></div>
+        <div class="row"><span>Network</span><strong id="network">—</strong></div>
+      </div>
+
+      <p class="note">
+        The creator's stock stays in an account they own. Blink can only distribute the amount they approved.
+      </p>
+    </main>
+
+    <script>
+      ;(function () {
+        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+        const REF = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/
+        const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Early Claim', REFERRAL: 'Referral', SEEKER: 'Seeker Drop' }
+        const $ = (id) => document.getElementById(id)
+        const id = location.pathname.replace(/^\/c\//, '').replace(/\/$/, '')
+        const refParam = new URLSearchParams(location.search).get('ref')
+        const ref = refParam && REF.test(refParam) ? refParam : null
+
+        if (!UUID.test(id)) {
+          $('symbol').textContent = 'Not found'
+          $('headline').textContent = 'This link doesn’t match a Blink drop.'
+          $('open').style.display = 'none'
+          return
+        }
+        $('open').href = 'blinktostock://campaign/' + id + (ref ? '?ref=' + ref : '')
+
+        // Display only: raw base units → shares with the stock's multiplier.
+        function shares(raw, asset) {
+          if (!asset) return null
+          const n = (Number(raw) / Math.pow(10, asset.decimals)) * (asset.multiplier == null ? 1 : asset.multiplier)
+          return n.toLocaleString(undefined, { maximumFractionDigits: 6 })
+        }
+
+        Promise.all([fetch('/api/v1/campaigns/' + id), fetch('/api/v1/xstocks')])
+          .then(async ([c, x]) => {
+            if (c.status === 404) throw new Error('This drop doesn’t exist.')
+            if (!c.ok) throw new Error('Could not load this drop right now.')
+            const { campaign } = await c.json()
+            const assets = x.ok ? (await x.json()).xstocks : []
+            const asset = assets.find((a) => a.mint === campaign.mint)
+            const per = campaign.rewardPerClaimRaw ? shares(campaign.rewardPerClaimRaw, asset) : null
+            document.title = campaign.xstockSymbol + ' drop · Blink-to-Stock'
+            $('kind').textContent = (LABEL[campaign.type] || 'Stock') + ' drop'
+            $('symbol').textContent = campaign.xstockSymbol
+            $('headline').textContent = ref
+              ? 'A friend invited you. Claim through their link and you both get stock.'
+              : campaign.type === 'TAP_RUSH' && campaign.tapRush
+                ? 'Tap ' + campaign.tapRush.goal + ' times in ' + campaign.tapRush.seconds + ' seconds to win real stock.'
+                : 'Real tokenized stock, sent to your Blink wallet. Free.'
+            const live = campaign.status === 'LIVE'
+            const badge = document.createElement('span')
+            badge.className = 'badge' + (live ? '' : ' warn')
+            badge.textContent = live ? 'Live now' : campaign.status === 'ENDED' ? 'Ended' : campaign.status === 'PAUSED' ? 'Paused' : 'Not live yet'
+            $('status').appendChild(badge)
+            $('reward').textContent = per ? per + ' ' + campaign.xstockSymbol : '—'
+            if (campaign.rewardPerClaimRaw) {
+              const reward = BigInt(campaign.rewardPerClaimRaw)
+              const total = BigInt(campaign.allowanceRaw) / reward
+              $('claimed').textContent = (BigInt(campaign.claimedRaw) / reward).toString() + ' of ' + total.toString()
+            }
+            $('network').textContent = campaign.cluster === 'mainnet-beta' ? 'Solana' : 'Solana devnet (test)'
+          })
+          .catch((e) => {
+            $('symbol').textContent = 'Unavailable'
+            $('headline').textContent = e.message
+            $('headline').className = 'error'
+          })
+      })()
+    </script>
+  </body>
+</html>

@@ -30,16 +30,27 @@ export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   CLOSED: 'Closed',
 }
 
-/** Deep link for a campaign, optionally carrying a referral invite code. Becomes an https App Link once a domain exists (DECISIONS D-12). */
+export const WEB_ORIGIN = 'https://blinksol.site'
+
+/**
+ * Shareable campaign link, optionally carrying a referral invite code. An Android App Link: it opens Blink when
+ * installed and the campaign web page otherwise (DECISIONS D-12).
+ */
 export function campaignLink(id: string, ref?: string): string {
-  return `blinktostock://campaign/${id}${ref ? `?ref=${ref}` : ''}`
+  return `${WEB_ORIGIN}/c/${id}${ref ? `?ref=${ref}` : ''}`
 }
 
-const LINK = /^blinktostock:\/\/campaign\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\?ref=([^&#]+))?$/
+const UUID_SRC = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+// Current https links, plus the app-scheme links printed on QR codes before the domain existed.
+const LINKS = [
+  new RegExp(`^https://(?:www\\.)?blinksol\\.site/c/${UUID_SRC}/?(?:\\?ref=([^&#]+))?$`),
+  new RegExp(`^blinktostock://campaign/${UUID_SRC}(?:\\?ref=([^&#]+))?$`),
+]
 
 /** Accept only Blink campaign links from a scanned QR (with an optional valid invite code); never open arbitrary URLs. */
 export function parseCampaignLink(data: string): { id: string; ref: string | null } | null {
-  const m = data.trim().match(LINK)
+  const trimmed = data.trim()
+  const m = LINKS.map((re) => trimmed.match(re)).find(Boolean)
   if (!m) return null
   const ref = m[2] ?? null
   if (ref !== null && !REFERRAL_CODE_RE.test(ref)) return null
