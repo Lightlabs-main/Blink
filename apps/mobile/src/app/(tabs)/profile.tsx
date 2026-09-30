@@ -1,7 +1,8 @@
-import { usePrivy } from '@privy-io/expo'
+import { usePrivy, useUnlinkWallet } from '@privy-io/expo'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
-import { Share, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, Share, StyleSheet, View } from 'react-native'
 
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
@@ -23,6 +24,8 @@ export default function Profile() {
   const router = useRouter()
   const { user, logout } = usePrivy()
   const { disconnect, account } = useMobileWallet()
+  const queryClient = useQueryClient()
+  const { unlinkWallet } = useUnlinkWallet()
   const me = useMe()
   const mine = useMyCampaigns()
   const network = useNetwork()
@@ -34,6 +37,27 @@ export default function Profile() {
   const net = networkLabel(network.data?.cluster)
   const campaigns = mine.data?.campaigns ?? []
   const liveCount = campaigns.filter((c) => c.status === 'LIVE').length
+
+  function onRemoveWallet(wallet: string) {
+    const body = `${shortAddress(wallet, 6, 6)} will no longer be linked to your Blink account. Campaigns it already funded are not affected.`
+    Alert.alert('Remove creator wallet?', body, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () =>
+          void (async () => {
+            try {
+              await unlinkWallet({ address: wallet })
+              await disconnect().catch(() => {})
+              await Promise.all([queryClient.invalidateQueries({ queryKey: ['me'] }), queryClient.invalidateQueries({ queryKey: ['holdings'] })])
+            } catch (e) {
+              Alert.alert('Could not remove wallet', e instanceof Error ? e.message : 'Please try again.')
+            }
+          })(),
+      },
+    ])
+  }
 
   async function onLogout() {
     if (account) await disconnect().catch(() => {})
@@ -94,16 +118,21 @@ export default function Profile() {
                 onPress={() => void Share.share({ message: w })}
                 subtitle={shortAddress(w, 6, 6)}
                 title="Creator wallet"
-                trailing={<Icon name="share" size={18} stroke={color.textDim} />}
+                trailing={
+                  <Pressable accessibilityLabel="Remove creator wallet" hitSlop={12} onPress={() => onRemoveWallet(w)}>
+                    <Icon name="close" size={18} stroke={color.textDim} />
+                  </Pressable>
+                }
               />
             </View>
           ))}
-          {creatorWallets.length === 0 ? (
-            <>
-              <Divider />
-              <ListRow leading={<RowIcon icon="plus" />} onPress={() => router.push('/login/wallet')} subtitle="Create campaigns from your own wallet" title="Add creator wallet" />
-            </>
-          ) : null}
+          <Divider />
+          <ListRow
+            leading={<RowIcon icon="plus" />}
+            onPress={() => router.push('/login/wallet')}
+            subtitle={creatorWallets.length ? 'Link a different wallet' : 'Create campaigns from your own wallet'}
+            title="Add creator wallet"
+          />
         </Card>
       </View>
 

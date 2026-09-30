@@ -1,6 +1,7 @@
 import { useLinkWithSiws, useLoginWithSiws, usePrivy } from '@privy-io/expo'
+import { getAddressDecoder, getBase64Encoder } from '@solana/kit'
 import { useQueryClient } from '@tanstack/react-query'
-import { fromUint8Array, useMobileWallet } from '@wallet-ui/react-native-kit'
+import { fromUint8Array, transact, useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -38,7 +39,7 @@ function StepRow({ n, icon, title, body, state }: { n: number; icon: IconName; t
  */
 export default function WalletLogin() {
   const router = useRouter()
-  const { connect, signMessages } = useMobileWallet()
+  const { chain, deauthorizeSession, disconnect, identity } = useMobileWallet()
   const queryClient = useQueryClient()
   const { user } = usePrivy()
   const loginSiws = useLoginWithSiws()
@@ -59,13 +60,26 @@ export default function WalletLogin() {
     setError(null)
     try {
       setStep('connecting')
-      const account = await connect()
+      // Always start a fresh wallet session. Reusing the saved one sends the wallet app straight back to the
+      // previously approved account, even after the user deleted it, so they could never pick another wallet.
+      const fresh = await transact(async (wallet) => {
+        await deauthorizeSession(wallet).catch(() => {})
+        return await wallet.authorize({ chain, identity })
+      })
+      await disconnect()
+      const authorized = fresh.accounts[0]
+      if (!authorized) throw new Error('Your wallet app did not share an account')
+      const address = getAddressDecoder().decode(getBase64Encoder().encode(authorized.address))
       setStep('signing')
       const { message } = await siws.generateMessage({
         from: { domain: siwsDomain, uri: siwsUri },
-        wallet: { address: account.address.toString() },
+        wallet: { address },
       })
-      const signatureBytes = await signMessages(new TextEncoder().encode(message))
+      const [signatureBytes] = await transact(async (wallet) => {
+        await wallet.authorize({ auth_token: fresh.auth_token, chain, identity })
+        return await wallet.signMessages({ addresses: [authorized.address], payloads: [new TextEncoder().encode(message)] })
+      })
+      if (!signatureBytes) throw new Error('Your wallet app did not return a signature')
       setStep('verifying')
       const signature = fromUint8Array(signatureBytes)
       if (isLinking) {
