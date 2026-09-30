@@ -46,8 +46,16 @@ export interface XStockListing {
   name: string
   mint: string
   decimals: number
+  logo: string | null
+  isTest: boolean
   multiplier: number | null
   paused: boolean | null
+}
+
+export interface WalletHoldings {
+  wallet: string
+  kind: 'stock' | 'creator'
+  balances: Record<string, string> | null
 }
 
 export interface PreparedFunding {
@@ -62,7 +70,8 @@ export const api = {
   campaign: (id: string) => request<{ campaign: CampaignSummary }>(`/v1/campaigns/${encodeURIComponent(id)}`),
   me: (t: GetAccessToken) => authed<{ privyUserId: string; verifiedCreatorWallets: string[] }>(t, '/v1/me'),
   holdings: (t: GetAccessToken) =>
-    authed<{ available: boolean; wallets: { wallet: string; balances: Record<string, string> | null }[] }>(t, '/v1/me/holdings'),
+    authed<{ available: boolean; wallets: WalletHoldings[] }>(t, '/v1/me/holdings'),
+  health: () => request<{ ok: boolean; cluster: 'localnet' | 'devnet' | 'mainnet-beta'; demoMode: boolean }>('/health'),
   myCampaigns: (t: GetAccessToken) => authed<{ campaigns: CampaignSummary[] }>(t, '/v1/me/campaigns'),
   fundingPrepare: (t: GetAccessToken, id: string) =>
     authed<PreparedFunding>(t, `/v1/campaigns/${encodeURIComponent(id)}/funding/prepare`, { method: 'POST' }),

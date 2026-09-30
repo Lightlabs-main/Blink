@@ -1,13 +1,9 @@
 import { usePrivy } from '@privy-io/expo'
 import { Redirect, Tabs } from 'expo-router'
-import { Text } from 'react-native'
 
-import { haptics } from '../../lib/haptics'
-import { Loading } from '../../ui/screen'
-
-function TabIcon({ glyph, focused }: { glyph: string; focused: boolean }) {
-  return <Text style={{ fontSize: 18, color: focused ? '#6ee7b7' : '#71717a' }}>{glyph}</Text>
-}
+import { BlinkTabBar } from '../../design/tab-bar'
+import { color } from '../../design/tokens'
+import { Loading } from '../../design/ui'
 
 export default function TabsLayout() {
   const { isReady, user } = usePrivy()
@@ -16,17 +12,13 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      screenListeners={{ tabPress: () => haptics.tap() }}
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#6ee7b7',
-        tabBarInactiveTintColor: '#71717a',
-        tabBarStyle: { backgroundColor: '#09090b', borderTopColor: '#27272a' },
-      }}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.bg } }}
+      tabBar={(props) => <BlinkTabBar {...props} />}
     >
-      <Tabs.Screen name="drops" options={{ title: 'Drops', tabBarIcon: ({ focused }) => <TabIcon focused={focused} glyph="⚡" /> }} />
-      <Tabs.Screen name="create" options={{ title: 'Create', tabBarIcon: ({ focused }) => <TabIcon focused={focused} glyph="＋" /> }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabIcon focused={focused} glyph="◉" /> }} />
+      <Tabs.Screen name="home" />
+      <Tabs.Screen name="drops" />
+      <Tabs.Screen name="create" />
+      <Tabs.Screen name="profile" />
     </Tabs>
   )
 }

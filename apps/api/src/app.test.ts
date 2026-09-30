@@ -5,7 +5,7 @@ import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from './app.ts'
-import { AuthError, type AuthVerifier, extractVerifiedExternalSolanaWallets } from './auth.ts'
+import { AuthError, type AuthVerifier, extractEmbeddedSolanaWallets, extractVerifiedExternalSolanaWallets } from './auth.ts'
 import { InMemoryCampaignRepository, type StoredCampaign } from './campaign-repo.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 
@@ -22,6 +22,9 @@ function fakeAuth(wallets: string[]): AuthVerifier {
     },
     async getVerifiedExternalSolanaWallets() {
       return wallets
+    },
+    async getEmbeddedSolanaWallets() {
+      return []
     },
   }
 }
@@ -44,7 +47,7 @@ const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
 let app: ReturnType<typeof buildApp>
 afterEach(async () => app?.close())
 
-const ASSETS = SUPPORTED_XSTOCKS.map((x) => ({ ...x, isTest: false }))
+const ASSETS = SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals, logo }) => ({ symbol, name, mint, decimals, logo, isTest: false }))
 
 function build(
   opts: { wallets?: string[]; exists?: boolean; funding?: FundingService; repo?: InMemoryCampaignRepository; auth?: AuthVerifier } = {},
@@ -123,6 +126,18 @@ describe('POST /v1/campaigns', () => {
   })
 })
 
+describe('extractEmbeddedSolanaWallets', () => {
+  it('keeps only Privy embedded Solana wallets', () => {
+    expect(
+      extractEmbeddedSolanaWallets([
+        { type: 'wallet', chain_type: 'solana', wallet_client: 'privy', connector_type: 'embedded', address: 'E' },
+        { type: 'wallet', chain_type: 'solana', wallet_client: 'unknown', address: 'X', verified_at: 1 },
+        { type: 'wallet', chain_type: 'ethereum', wallet_client: 'privy', address: '0x' },
+      ]),
+    ).toEqual(['E'])
+  })
+})
+
 describe('extractVerifiedExternalSolanaWallets', () => {
   it('keeps only verified external Solana wallets', () => {
     expect(
@@ -178,7 +193,7 @@ describe('GET /v1/me/holdings', () => {
   it('reports unavailable without a read source, listing verified wallets only', async () => {
     build()
     const res = await app.inject({ method: 'GET', url: '/v1/me/holdings', headers: { authorization: 'Bearer good-token' } })
-    expect(res.json()).toEqual({ available: false, wallets: [{ wallet: CREATOR, balances: null }] })
+    expect(res.json()).toEqual({ available: false, wallets: [{ wallet: CREATOR, kind: 'creator', balances: null }] })
   })
 })
 
@@ -252,6 +267,9 @@ describe('funding routes', () => {
       },
       async getVerifiedExternalSolanaWallets() {
         return [OTHER_WALLET]
+      },
+      async getEmbeddedSolanaWallets() {
+        return []
       },
     }
     build({ funding: fakeFunding(), repo, auth: intruder })

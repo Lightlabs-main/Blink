@@ -6,6 +6,8 @@ export interface Asset {
   name: string
   mint: string
   decimals: number
+  /** Official logo URL, or null (devnet test assets have none). */
+  logo: string | null
   /** True for devnet test stand-ins that have no real-world value. */
   isTest: boolean
 }
@@ -16,10 +18,10 @@ export interface Asset {
  */
 export function assetsForCluster(env: BlinkEnv): Asset[] {
   if (env.SOLANA_CLUSTER === 'mainnet-beta') {
-    return SUPPORTED_XSTOCKS.map((x) => ({ ...x, isTest: false }))
+    return SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals, logo }) => ({ symbol, name, mint, decimals, logo, isTest: false }))
   }
   if (env.SOLANA_CLUSTER === 'devnet' && env.DEVNET_TEST_MINT) {
-    return [{ symbol: 'tNVDAx', name: 'Test NVIDIA (devnet, no value)', mint: env.DEVNET_TEST_MINT, decimals: 8, isTest: true }]
+    return [{ symbol: 'tNVDAx', name: 'Test NVIDIA (devnet, no value)', mint: env.DEVNET_TEST_MINT, decimals: 8, logo: null, isTest: true }]
   }
   return []
 }

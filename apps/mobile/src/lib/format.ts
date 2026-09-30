@@ -46,3 +46,22 @@ export function campaignIdFromScan(data: string): string | null {
   const id = rest.match(UUID)?.[0]
   return id && rest === id ? id : null
 }
+
+export const CAMPAIGN_TYPE_ICON = {
+  GIFT: 'gift',
+  TAP_RUSH: 'target',
+  EARLY_CLAIM: 'clock',
+  REFERRAL: 'users',
+  SEEKER: 'phone',
+} as const
+
+export function greeting(date = new Date()): string {
+  const h = date.getHours()
+  return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
+
+export function networkLabel(cluster: string | undefined): { label: string; isTest: boolean } {
+  if (cluster === 'mainnet-beta') return { label: 'Mainnet', isTest: false }
+  if (cluster === 'devnet') return { label: 'Devnet · test money', isTest: true }
+  return { label: cluster ?? 'Connecting…', isTest: true }
+}

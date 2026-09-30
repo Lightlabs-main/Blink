@@ -1,50 +1,107 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
 
-import { api } from '../../lib/api'
-import { CAMPAIGN_TYPE_LABEL } from '../../lib/format'
-import { Badge, ErrorNote, Muted, Panel, PrimaryButton, Title, TopInset } from '../../ui/screen'
+import { Icon } from '../../design/icons'
+import { color, space } from '../../design/tokens'
+import { Badge, Card, Chip, EmptyState, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
+import { displayShares, useAssetMap, useLiveCampaigns } from '../../lib/data'
+import { CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL } from '../../lib/format'
+import { CAMPAIGN_TYPES, type CampaignType } from '../../shared'
 
 export default function Drops() {
   const router = useRouter()
-  const live = useQuery({ queryKey: ['campaigns', 'live'], queryFn: api.liveCampaigns })
-  const campaigns = live.data?.campaigns ?? []
+  const queryClient = useQueryClient()
+  const live = useLiveCampaigns()
+  const assets = useAssetMap()
+  const [filter, setFilter] = useState<CampaignType | 'ALL'>('ALL')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const drops = useMemo(() => (live.data?.campaigns ?? []).filter((c) => filter === 'ALL' || c.type === filter), [live.data, filter])
 
   return (
-    <ScrollView
-      className="flex-1 bg-zinc-950"
-      contentContainerClassName="gap-5 px-5 pb-12"
-      refreshControl={<RefreshControl onRefresh={() => void live.refetch()} refreshing={live.isRefetching} tintColor="#6ee7b7" />}
+    <Screen
+      refreshControl={
+        <RefreshControl
+          onRefresh={async () => {
+            setRefreshing(true)
+            await queryClient.invalidateQueries({ queryKey: ['campaigns', 'live'] })
+            setRefreshing(false)
+          }}
+          refreshing={refreshing}
+          tintColor={color.lime}
+        />
+      }
+      tabBar
     >
-      <TopInset extra={0} />
-      <Title kicker="Live now">Drops</Title>
+      <View style={{ gap: space.sm }}>
+        <T variant="overline">Live now</T>
+        <T variant="display">Drops</T>
+        <T>Real stock you can claim, play for or earn — straight from creators.</T>
+      </View>
 
-      <PrimaryButton onPress={() => router.push('/scan')}>Scan a Blink QR code</PrimaryButton>
+      <ScrollView contentContainerStyle={{ gap: space.sm, paddingRight: space.xl }} horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -20 }}>
+        <Chip label="All" onPress={() => setFilter('ALL')} selected={filter === 'ALL'} />
+        {CAMPAIGN_TYPES.map((t) => (
+          <Chip icon={CAMPAIGN_TYPE_ICON[t]} key={t} label={CAMPAIGN_TYPE_LABEL[t]} onPress={() => setFilter(t)} selected={filter === t} />
+        ))}
+      </ScrollView>
 
-      <ErrorNote message={live.error?.message} />
+      <Notice message={live.error?.message} />
 
-      {live.isSuccess && campaigns.length === 0 ? (
-        <Panel>
-          <Text className="text-lg font-semibold text-white">No live drops yet</Text>
-          <Muted>
-            When a creator funds a campaign and approves Blink to distribute it, it shows up here. Got a link or QR
-            from a friend? Scan it above.
-          </Muted>
-        </Panel>
-      ) : null}
-
-      {campaigns.map((c) => (
-        <Pressable key={c.id} onPress={() => router.push(`/campaign/${c.id}`)}>
-          <Panel>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-2xl font-extrabold text-white">{c.xstockSymbol}</Text>
-              <Badge label="Live" tone="live" />
-            </View>
-            <Muted>{CAMPAIGN_TYPE_LABEL[c.type]}</Muted>
-          </Panel>
-        </Pressable>
-      ))}
-    </ScrollView>
+      {live.isPending ? (
+        <View style={{ gap: space.md }}>
+          <Skeleton height={96} radius={20} />
+          <Skeleton height={96} radius={20} />
+        </View>
+      ) : drops.length === 0 ? (
+        <EmptyState
+          action="Scan a QR code"
+          body={filter === 'ALL' ? 'Nothing is live yet. Drops appear here the moment a creator funds one.' : `No ${CAMPAIGN_TYPE_LABEL[filter]} drops live right now.`}
+          icon="bolt"
+          onAction={() => router.push('/scan')}
+          title="No drops here yet"
+        />
+      ) : (
+        drops.map((c) => {
+          const asset = assets.get(c.mint)
+          const amount = displayShares(asset, c.allowanceRaw)
+          return (
+            <Pressable
+              accessibilityRole="button"
+              key={c.id}
+              onPress={() => router.push(`/campaign/${c.id}`)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            >
+            <Card style={{ gap: space.md }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Row>
+                  <StockAvatar isTest={asset?.isTest} logo={asset?.logo} size={46} symbol={c.xstockSymbol} />
+                  <View>
+                    <T variant="title">{c.xstockSymbol}</T>
+                    <Row gap={6}>
+                      <Icon name={CAMPAIGN_TYPE_ICON[c.type]} size={14} stroke={color.lime} />
+                      <T variant="label">{CAMPAIGN_TYPE_LABEL[c.type]}</T>
+                    </Row>
+                  </View>
+                </Row>
+                <Badge dot label="Live" tone="live" />
+              </Row>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T variant="label">{amount ? `${amount} shares in the pool` : 'Stock pool'}</T>
+                <Row gap={4}>
+                  <T variant="label" color={color.lime}>
+                    Open drop
+                  </T>
+                  <Icon name="arrowRight" size={16} stroke={color.lime} />
+                </Row>
+              </Row>
+            </Card>
+            </Pressable>
+          )
+        })
+      )}
+    </Screen>
   )
 }

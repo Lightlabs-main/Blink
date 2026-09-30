@@ -16,6 +16,8 @@ export interface AuthVerifier {
   verifyAccessToken(token: string): Promise<AuthContext>
   /** External (non-embedded) Solana wallets Privy has verified for this user via SIWS. */
   getVerifiedExternalSolanaWallets(privyUserId: string): Promise<string[]>
+  /** Privy embedded Solana wallets (where recipients receive stock). Display/holdings only — never creator auth. */
+  getEmbeddedSolanaWallets(privyUserId: string): Promise<string[]>
 }
 
 export class AuthError extends Error {
@@ -56,6 +58,29 @@ export class PrivyAuthVerifier implements AuthVerifier {
     const user = await this.privy.users()._get(privyUserId)
     return extractVerifiedExternalSolanaWallets(user.linked_accounts)
   }
+
+  async getEmbeddedSolanaWallets(privyUserId: string): Promise<string[]> {
+    const user = await this.privy.users()._get(privyUserId)
+    return extractEmbeddedSolanaWallets(user.linked_accounts)
+  }
+}
+
+/** LinkedAccountSolanaEmbeddedWallet: { type: 'wallet', chain_type: 'solana', wallet_client: 'privy', connector_type: 'embedded' }. */
+export function extractEmbeddedSolanaWallets(linkedAccounts: readonly unknown[]): string[] {
+  const out: string[] = []
+  for (const account of linkedAccounts) {
+    if (!account || typeof account !== 'object') continue
+    const a = account as Record<string, unknown>
+    if (
+      a.type === 'wallet' &&
+      a.chain_type === 'solana' &&
+      (a.wallet_client === 'privy' || a.connector_type === 'embedded') &&
+      typeof a.address === 'string'
+    ) {
+      out.push(a.address)
+    }
+  }
+  return out
 }
 
 export function extractVerifiedExternalSolanaWallets(linkedAccounts: readonly unknown[]): string[] {
