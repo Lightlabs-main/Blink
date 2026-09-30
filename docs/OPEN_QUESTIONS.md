@@ -10,8 +10,9 @@
 - **Built under owner-approved assumptions (DECISIONS D-13), devnet only:** claims, Tap Rush
   sessions, first-come ordering, idempotency, payouts and reconciliation. Replace these with the
   real rules when the sections arrive.
-- **Still not implemented:** Referral and Seeker/SGT mechanics, notifications, the resume flow for
-  paused drops, and the mainnet smoke test.
+- **Referral, Tap Rush timing checks and resume:** added 2026-09-30 (D-14).
+- **Still not implemented:** Seeker/SGT mechanics, notifications, device attestation for Tap Rush,
+  and the mainnet smoke test.
 
 ## OQ-3 — Build machine not Android-ready — BLOCKED
 

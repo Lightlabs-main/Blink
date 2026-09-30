@@ -1,4 +1,4 @@
-import type { CampaignStatus, CampaignType } from '../shared'
+import { type CampaignStatus, type CampaignType, REFERRAL_CODE_RE } from '../shared'
 
 export function shortAddress(value: string, head = 4, tail = 4): string {
   return value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${value.slice(-tail)}`
@@ -16,7 +16,7 @@ export const CAMPAIGN_TYPE_BLURB: Record<CampaignType, string> = {
   GIFT: 'Send stock to someone with a link.',
   TAP_RUSH: 'People tap fast to earn stock.',
   EARLY_CLAIM: 'First people to claim get stock.',
-  REFERRAL: 'Reward people who bring friends.',
+  REFERRAL: 'People invite friends — both get stock.',
   SEEKER: 'A drop for Seeker phone owners.',
 }
 
@@ -30,21 +30,46 @@ export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   CLOSED: 'Closed',
 }
 
-/** Deep link for a campaign. Becomes an https App Link once a domain exists (DECISIONS D-12). */
-export function campaignLink(id: string): string {
-  return `blinktostock://campaign/${id}`
+/** Deep link for a campaign, optionally carrying a referral invite code. Becomes an https App Link once a domain exists (DECISIONS D-12). */
+export function campaignLink(id: string, ref?: string): string {
+  return `blinktostock://campaign/${id}${ref ? `?ref=${ref}` : ''}`
 }
 
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+const LINK = /^blinktostock:\/\/campaign\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\?ref=([^&#]+))?$/
 
-/** Accept only Blink campaign links from a scanned QR; never open arbitrary URLs. */
-export function campaignIdFromScan(data: string): string | null {
-  const prefix = 'blinktostock://campaign/'
-  const trimmed = data.trim()
-  if (!trimmed.startsWith(prefix)) return null
-  const rest = trimmed.slice(prefix.length)
-  const id = rest.match(UUID)?.[0]
-  return id && rest === id ? id : null
+/** Accept only Blink campaign links from a scanned QR (with an optional valid invite code); never open arbitrary URLs. */
+export function parseCampaignLink(data: string): { id: string; ref: string | null } | null {
+  const m = data.trim().match(LINK)
+  if (!m) return null
+  const ref = m[2] ?? null
+  if (ref !== null && !REFERRAL_CODE_RE.test(ref)) return null
+  return { id: m[1]!, ref }
+}
+
+/** In-app route for a campaign (used after scanning and as a sign-in return target). */
+export function campaignRoute(id: string, ref?: string | null): string {
+  return `/campaign/${id}${ref ? `?ref=${ref}` : ''}`
+}
+
+/** Why a drop is paused, in plain words (PauseReason). */
+export function pauseReasonText(reason: string | null): string {
+  switch (reason) {
+    case 'DELEGATION_REVOKED':
+      return 'Blink’s approval on your campaign account was removed.'
+    case 'DELEGATE_CHANGED':
+      return 'Your campaign account now approves a different address.'
+    case 'ALLOWANCE_EXHAUSTED':
+    case 'INSUFFICIENT_BALANCE':
+      return 'Your campaign account no longer has enough stock or approval for another reward.'
+    case 'ACCOUNT_FROZEN':
+      return 'Your campaign account was frozen by the stock’s issuer.'
+    case 'MINT_STATE_CHANGED':
+      return 'The stock’s issuer paused transfers.'
+    case 'BUDGET_EXHAUSTED':
+      return 'Blink paused payouts for now.'
+    default:
+      return 'Payouts are paused.'
+  }
 }
 
 export const CAMPAIGN_TYPE_ICON = {

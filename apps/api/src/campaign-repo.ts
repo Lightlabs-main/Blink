@@ -64,6 +64,7 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     rewardPerClaimRaw: c.rewardPerClaimRaw?.toString() ?? null,
     claimedRaw: c.claimedRaw.toString(),
     tapRush: c.tapRush,
+    pauseReason: c.pauseReason,
     createdAt: c.createdAt.toISOString(),
   }
 }

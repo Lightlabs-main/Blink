@@ -140,3 +140,31 @@ when the real sections arrive.
 11. **Automatic pause (§9).** Before every payout the onchain delegation is re-checked, along with
     the mint's pause and transfer-hook state. A drop that can no longer pay out moves to PAUSED
     with a reason. There is no resume flow yet.
+
+## D-14 — Tap Rush timing checks, Referral drops, resume and sweep (2026-09-30, owner-approved ASSUMPTIONS)
+
+1. **Tap Rush anti-cheat.** The app sends each tap's time in ms since the round started, not just
+   the count. The server rejects a round when any of these fail:
+   - the count doesn't match the times;
+   - a time falls outside the round, or the times are out of order;
+   - more than 5% of the gaps between taps (minimum 1) are under 25 ms;
+   - more than 20 taps land in any one second;
+   - with 10 or more gaps, their coefficient of variation is under 0.05 (metronome-perfect).
+
+   The rejection reason is stored on `TapRushSession.rejectReason`.
+   **Limit:** this stops simple scripts. A determined attacker can still fake human-like timings.
+   Real protection needs device attestation (Play Integrity), which is not built.
+2. **Referral.** Anyone signed in except the creator can get a personal 8-character invite code
+   (`?ref=` on the campaign link).
+   - A friend can claim a REFERRAL drop only through someone else's code.
+   - The friend and the referrer each get the fixed reward. The referrer is paid once, for the
+     first friend. Later friends still get their own reward.
+   - Both rewards are reserved together. If the pool can't fit both, the friend's claim is
+     refused rather than overdrawing.
+   - The bonus is paid only after the friend's reward is confirmed. A failed bonus can be resent
+     by the referrer.
+   - Anti-sybil is the same as other mechanics: one per Privy account and one per wallet.
+3. **Resume.** The creator can put a PAUSED drop back to LIVE once the onchain delegation and mint
+   checks pass again (§9). A paused drop with less than one reward left moves to ENDED instead.
+4. **Sweep.** Every 60 s the API confirms SENDING payouts and releases RESERVED claims older than
+   2 minutes, so claims don't get stuck when nobody is watching.

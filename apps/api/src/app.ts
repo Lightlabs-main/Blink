@@ -256,7 +256,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log })
   }
 
   async function claimResponse(claim: StoredClaim | null) {
@@ -290,6 +290,28 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get<{ Params: { id: string } }>('/v1/campaigns/:id/claim', async (req) => {
     const auth = await requireAuth(req)
     return claimResponse(await requireClaims().myClaim(auth, req.params.id))
+  })
+
+  /** Referral drops: the caller's invite code (POST creates it) and the bonus it earned. */
+  async function referralResponse(req: FastifyRequest<{ Params: { id: string } }>, create: boolean) {
+    const auth = await requireAuth(req)
+    const { referral, bonus } = await requireClaims().referral(auth, req.params.id, create)
+    if (!referral) return { referral: null }
+    const campaign = await deps.campaigns.findById(referral.campaignId)
+    return { referral: { campaignId: referral.campaignId, code: referral.code, bonus: bonus && campaign ? toClaimSummary(bonus, campaign) : null } }
+  }
+  app.get<{ Params: { id: string } }>('/v1/campaigns/:id/referral', (req) => referralResponse(req, false))
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/referral', (req) => referralResponse(req, true))
+
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/referral/bonus/retry', async (req) => {
+    const auth = await requireAuth(req)
+    return claimResponse(await requireClaims().retryBonus(auth, req.params.id))
+  })
+
+  /** Creator only: re-check a PAUSED drop onchain and put it back LIVE (or ENDED when too little is left). */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/resume', async (req) => {
+    const auth = await requireAuth(req)
+    return { campaign: toSummary(await requireClaims().resume(auth, req.params.id)) }
   })
 
   app.get('/v1/me/claims', async (req) => {

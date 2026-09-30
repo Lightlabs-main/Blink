@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
-import type { ClaimStatus, ClaimSummary } from '@blink/domain'
+import type { ClaimKind, ClaimStatus, ClaimSummary } from '@blink/domain'
 
 import type { InMemoryCampaignRepository, StoredCampaign } from './campaign-repo.ts'
 
 export interface StoredClaim {
   id: string
   campaignId: string
+  kind: ClaimKind
   privyUserId: string
   recipientWallet: string
   amountRaw: bigint
@@ -15,6 +16,8 @@ export interface StoredClaim {
   lastValidBlockHeight: bigint | null
   failureReason: string | null
   tapSessionId: string | null
+  referralCode: string | null
+  bonusForClaimId: string | null
   createdAt: Date
   /** Last status change; a reservation's age is measured from here. */
   updatedAt: Date
@@ -30,11 +33,21 @@ export interface StoredTapSession {
   finishedAt: Date | null
   taps: number | null
   qualified: boolean
+  rejectReason: string | null
+}
+
+export interface StoredReferral {
+  code: string
+  campaignId: string
+  privyUserId: string
 }
 
 export type ReserveResult =
-  /** `fresh: false` = the user already had an active or paid claim, returned unchanged (idempotent retry). */
-  | { ok: true; claim: StoredClaim; fresh: boolean }
+  /**
+   * `fresh: false` = the user already had an active or paid claim, returned unchanged (idempotent retry).
+   * `bonus` = the referrer's REFERRAL_BONUS reserved in the same step, or null when the referrer already earned it.
+   */
+  | { ok: true; claim: StoredClaim; bonus: StoredClaim | null; fresh: boolean }
   | { ok: false; reason: 'NOT_LIVE' | 'EXHAUSTED' | 'WALLET_ALREADY_CLAIMED' | 'SESSION_ALREADY_USED' }
 
 export interface NewReservation {
@@ -43,20 +56,29 @@ export interface NewReservation {
   recipientWallet: string
   amountRaw: bigint
   tapSessionId: string | null
+  /** D-14: a friend's claim through an invite also reserves the referrer's bonus (same amount), if still unearned. */
+  referral?: { code: string; referrerPrivyUserId: string; referrerWallet: string } | null
 }
 
 /**
- * Claims and Tap Rush sessions (DECISIONS D-13). The campaign's claimedRaw and the claim rows change together:
- * every amount held by a RESERVED/SENDING/PAID claim is counted in claimedRaw, and claimedRaw <= allowanceRaw.
+ * Claims, Tap Rush sessions and referral codes (DECISIONS D-13, D-14). The campaign's claimedRaw and the claim rows
+ * change together: every amount held by a RESERVED/SENDING/PAID claim is counted in claimedRaw, and
+ * claimedRaw <= allowanceRaw.
  */
 export interface ClaimRepository {
-  findForUser(campaignId: string, privyUserId: string): Promise<StoredClaim | null>
+  findForUser(campaignId: string, privyUserId: string, kind?: ClaimKind): Promise<StoredClaim | null>
+  findById(id: string): Promise<StoredClaim | null>
   listForUser(privyUserId: string, limit: number): Promise<StoredClaim[]>
+  /** SENDING claims, and RESERVED ones untouched since `staleBefore`: work for the reconcile sweep. */
+  listUnsettled(staleBefore: Date, limit: number): Promise<StoredClaim[]>
   /**
-   * Atomic: returns the user's existing RESERVED/SENDING/PAID claim unchanged; otherwise holds amountRaw against a
-   * LIVE campaign's remaining pool and creates the claim (or reuses the user's FAILED claim).
+   * Atomic: returns the user's existing RESERVED/SENDING/PAID claim unchanged; otherwise holds the amount against a
+   * LIVE campaign's remaining pool and creates the claim (or reuses the user's FAILED claim). With `referral`, it
+   * also holds and creates the referrer's bonus when the referrer has not earned one yet — both fit or neither.
    */
   reserve(input: NewReservation): Promise<ReserveResult>
+  /** FAILED → RESERVED for the same claim (e.g. a referrer retrying a failed bonus), holding its amount again. */
+  reReserve(id: string): Promise<{ ok: true; claim: StoredClaim } | { ok: false; reason: 'NOT_LIVE' | 'EXHAUSTED' | 'NOT_FAILED' }>
   /** RESERVED → SENDING, recording the signature before the transaction is sent. */
   markSending(id: string, txSignature: string, lastValidBlockHeight: bigint): Promise<void>
   /** SENDING → PAID. */
@@ -68,7 +90,15 @@ export interface ClaimRepository {
   countTapSessions(campaignId: string, privyUserId: string): Promise<number>
   findTapSession(id: string): Promise<StoredTapSession | null>
   /** Records the result once; returns null if the session was already finished. */
-  finishTapSession(id: string, result: { taps: number; qualified: boolean; finishedAt: Date }): Promise<StoredTapSession | null>
+  finishTapSession(
+    id: string,
+    result: { taps: number; qualified: boolean; finishedAt: Date; rejectReason: string | null },
+  ): Promise<StoredTapSession | null>
+
+  /** Returns the user's code for this campaign, creating it with `newCode` if absent; null if `newCode` is taken. */
+  getOrCreateReferral(campaignId: string, privyUserId: string, newCode: string): Promise<StoredReferral | null>
+  findReferral(code: string): Promise<StoredReferral | null>
+  findReferralForUser(campaignId: string, privyUserId: string): Promise<StoredReferral | null>
 }
 
 /** Blink-operated wallets that are not per-campaign (the §16 fee payer). */
@@ -82,6 +112,7 @@ export function toClaimSummary(claim: StoredClaim, campaign: StoredCampaign): Cl
   return {
     id: claim.id,
     campaignId: claim.campaignId,
+    kind: claim.kind,
     cluster: campaign.cluster,
     mint: campaign.mint,
     xstockSymbol: campaign.xstockSymbol,
@@ -98,12 +129,17 @@ export function toClaimSummary(claim: StoredClaim, campaign: StoredCampaign): Cl
 export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletStore {
   private readonly claims = new Map<string, StoredClaim>()
   private readonly sessions = new Map<string, StoredTapSession>()
+  private readonly referrals = new Map<string, StoredReferral>()
   private readonly serviceWallets = new Map<string, { address: string; walletRef: string }>()
 
   constructor(private readonly campaigns: InMemoryCampaignRepository) {}
 
-  async findForUser(campaignId: string, privyUserId: string) {
-    return [...this.claims.values()].find((c) => c.campaignId === campaignId && c.privyUserId === privyUserId) ?? null
+  async findForUser(campaignId: string, privyUserId: string, kind: ClaimKind = 'CLAIM') {
+    return this.find(campaignId, privyUserId, kind) ?? null
+  }
+
+  async findById(id: string) {
+    return this.claims.get(id) ?? null
   }
 
   async listForUser(privyUserId: string, limit: number) {
@@ -113,11 +149,17 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
       .slice(0, limit)
   }
 
+  async listUnsettled(staleBefore: Date, limit: number) {
+    return [...this.claims.values()]
+      .filter((c) => c.status === 'SENDING' || (c.status === 'RESERVED' && c.updatedAt < staleBefore))
+      .slice(0, limit)
+  }
+
   async reserve(input: NewReservation): Promise<ReserveResult> {
+    const existing = this.find(input.campaignId, input.privyUserId, 'CLAIM')
+    if (existing && existing.status !== 'FAILED') return { ok: true, claim: existing, bonus: null, fresh: false }
     const all = [...this.claims.values()]
-    const existing = all.find((c) => c.campaignId === input.campaignId && c.privyUserId === input.privyUserId)
-    if (existing && existing.status !== 'FAILED') return { ok: true, claim: existing, fresh: false }
-    if (all.some((c) => c.campaignId === input.campaignId && c.recipientWallet === input.recipientWallet && c.id !== existing?.id)) {
+    if (all.some((c) => c.campaignId === input.campaignId && c.kind === 'CLAIM' && c.recipientWallet === input.recipientWallet && c.id !== existing?.id)) {
       return { ok: false, reason: 'WALLET_ALREADY_CLAIMED' }
     }
     if (input.tapSessionId && all.some((c) => c.tapSessionId === input.tapSessionId && c.id !== existing?.id)) {
@@ -125,25 +167,55 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
     }
     const campaign = this.campaigns.row(input.campaignId)
     if (!campaign || campaign.status !== 'LIVE') return { ok: false, reason: 'NOT_LIVE' }
-    if (campaign.claimedRaw + input.amountRaw > campaign.allowanceRaw) return { ok: false, reason: 'EXHAUSTED' }
 
-    campaign.claimedRaw += input.amountRaw
-    const claim: StoredClaim = {
-      id: existing?.id ?? randomUUID(),
+    // The referrer earns once (D-14): only an absent or FAILED bonus row can be (re)filled.
+    const ref = input.referral
+    const priorBonus = ref ? this.find(input.campaignId, ref.referrerPrivyUserId, 'REFERRAL_BONUS') : undefined
+    const walletHasBonus =
+      ref && all.some((c) => c.campaignId === input.campaignId && c.kind === 'REFERRAL_BONUS' && c.recipientWallet === ref.referrerWallet && c.id !== priorBonus?.id)
+    const withBonus = Boolean(ref && (!priorBonus || priorBonus.status === 'FAILED') && !walletHasBonus)
+    const hold = input.amountRaw * (withBonus ? 2n : 1n)
+    if (campaign.claimedRaw + hold > campaign.allowanceRaw) return { ok: false, reason: 'EXHAUSTED' }
+
+    campaign.claimedRaw += hold
+    const now = new Date()
+    const claim = this.put({
+      ...blank(existing, now),
       campaignId: input.campaignId,
+      kind: 'CLAIM',
       privyUserId: input.privyUserId,
       recipientWallet: input.recipientWallet,
       amountRaw: input.amountRaw,
-      status: 'RESERVED',
-      txSignature: null,
-      lastValidBlockHeight: null,
-      failureReason: null,
       tapSessionId: input.tapSessionId,
-      createdAt: existing?.createdAt ?? new Date(),
-      updatedAt: new Date(),
-    }
-    this.claims.set(claim.id, claim)
-    return { ok: true, claim, fresh: true }
+      referralCode: ref?.code ?? null,
+      bonusForClaimId: null,
+    })
+    const bonus =
+      withBonus && ref
+        ? this.put({
+            ...blank(priorBonus, now),
+            campaignId: input.campaignId,
+            kind: 'REFERRAL_BONUS',
+            privyUserId: ref.referrerPrivyUserId,
+            recipientWallet: ref.referrerWallet,
+            amountRaw: input.amountRaw,
+            tapSessionId: null,
+            referralCode: ref.code,
+            bonusForClaimId: claim.id,
+          })
+        : null
+    return { ok: true, claim, bonus, fresh: true }
+  }
+
+  async reReserve(id: string) {
+    const c = this.claims.get(id)
+    if (!c || c.status !== 'FAILED') return { ok: false as const, reason: 'NOT_FAILED' as const }
+    const campaign = this.campaigns.row(c.campaignId)
+    if (!campaign || campaign.status !== 'LIVE') return { ok: false as const, reason: 'NOT_LIVE' as const }
+    if (campaign.claimedRaw + c.amountRaw > campaign.allowanceRaw) return { ok: false as const, reason: 'EXHAUSTED' as const }
+    campaign.claimedRaw += c.amountRaw
+    Object.assign(c, { status: 'RESERVED', failureReason: null, updatedAt: new Date() })
+    return { ok: true as const, claim: c }
   }
 
   async markSending(id: string, txSignature: string, lastValidBlockHeight: bigint) {
@@ -167,7 +239,7 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
   }
 
   async startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number }) {
-    const s: StoredTapSession = { id: randomUUID(), ...input, startedAt: new Date(), finishedAt: null, taps: null, qualified: false }
+    const s: StoredTapSession = { id: randomUUID(), ...input, startedAt: new Date(), finishedAt: null, taps: null, qualified: false, rejectReason: null }
     this.sessions.set(s.id, s)
     return s
   }
@@ -180,11 +252,28 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
     return this.sessions.get(id) ?? null
   }
 
-  async finishTapSession(id: string, result: { taps: number; qualified: boolean; finishedAt: Date }) {
+  async finishTapSession(id: string, result: { taps: number; qualified: boolean; finishedAt: Date; rejectReason: string | null }) {
     const s = this.sessions.get(id)
     if (!s || s.finishedAt) return null
     Object.assign(s, result)
     return s
+  }
+
+  async getOrCreateReferral(campaignId: string, privyUserId: string, newCode: string) {
+    const existing = [...this.referrals.values()].find((r) => r.campaignId === campaignId && r.privyUserId === privyUserId)
+    if (existing) return existing
+    if (this.referrals.has(newCode)) return null
+    const r = { code: newCode, campaignId, privyUserId }
+    this.referrals.set(newCode, r)
+    return r
+  }
+
+  async findReferral(code: string) {
+    return this.referrals.get(code) ?? null
+  }
+
+  async findReferralForUser(campaignId: string, privyUserId: string) {
+    return [...this.referrals.values()].find((r) => r.campaignId === campaignId && r.privyUserId === privyUserId) ?? null
   }
 
   async get(role: string) {
@@ -194,5 +283,27 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
   async putIfAbsent(role: string, wallet: { address: string; walletRef: string }) {
     if (!this.serviceWallets.has(role)) this.serviceWallets.set(role, wallet)
     return this.serviceWallets.get(role)!
+  }
+
+  private find(campaignId: string, privyUserId: string, kind: ClaimKind) {
+    return [...this.claims.values()].find((c) => c.campaignId === campaignId && c.privyUserId === privyUserId && c.kind === kind)
+  }
+
+  private put(c: StoredClaim) {
+    this.claims.set(c.id, c)
+    return c
+  }
+}
+
+/** A fresh RESERVED row, reusing a FAILED row's id and creation time when there is one. */
+function blank(reuse: StoredClaim | undefined, now: Date) {
+  return {
+    id: reuse?.id ?? randomUUID(),
+    status: 'RESERVED' as const,
+    txSignature: null,
+    lastValidBlockHeight: null,
+    failureReason: null,
+    createdAt: reuse?.createdAt ?? now,
+    updatedAt: now,
   }
 }

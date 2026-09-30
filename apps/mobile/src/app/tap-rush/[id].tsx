@@ -24,9 +24,13 @@ type Phase =
   | { name: 'claiming' }
   | { name: 'claimed'; claim: ClaimSummary }
 
-/** Counts down `durationMs`, reporting the time left every 100 ms, then calls onDone slightly after the end. */
+/**
+ * Counts down `durationMs`, reporting the time left every 100 ms, then calls onDone slightly after the end.
+ * Returns the round clock: ms since the round started, used to timestamp taps (D-14).
+ */
 function runRoundTimer(durationMs: number, timers: ReturnType<typeof setTimeout>[], onTick: (leftMs: number) => void, onDone: () => void) {
-  const endsAt = Date.now() + durationMs
+  const startedAt = Date.now()
+  const endsAt = startedAt + durationMs
   const tick = () => {
     const left = Math.max(0, endsAt - Date.now())
     onTick(left)
@@ -35,9 +39,10 @@ function runRoundTimer(durationMs: number, timers: ReturnType<typeof setTimeout>
     else timers.push(setTimeout(onDone, 250))
   }
   tick()
+  return () => Date.now() - startedAt
 }
 
-/** Full-screen Tap Rush (DECISIONS D-13): the server times the round; the client only counts taps. */
+/** Full-screen Tap Rush (DECISIONS D-13, D-14): the server times the round and judges the tap timings. */
 export default function TapRush() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -56,7 +61,8 @@ export default function TapRush() {
   const [pressed, setPressed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const session = useRef<{ id: string } | null>(null)
-  const tapsRef = useRef(0)
+  const tapTimes = useRef<number[]>([])
+  const roundClock = useRef<{ elapsed: () => number; durationMs: number } | null>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
@@ -89,7 +95,8 @@ export default function TapRush() {
   async function start() {
     setError(null)
     setTaps(0)
-    tapsRef.current = 0
+    tapTimes.current = []
+    roundClock.current = null
     setPhase({ name: 'countdown', n: 3 })
     haptics.tap()
     // The server clock starts now; the countdown only adds time, so the round can never look too short.
@@ -116,7 +123,8 @@ export default function TapRush() {
   function play(durationMs: number) {
     haptics.success()
     setPhase({ name: 'playing' })
-    runRoundTimer(durationMs, timers.current, setRemainingMs, () => void finish())
+    const elapsed = runRoundTimer(durationMs, timers.current, setRemainingMs, () => void finish())
+    roundClock.current = { elapsed, durationMs }
   }
 
   async function finish() {
@@ -124,14 +132,14 @@ export default function TapRush() {
     if (!s) return
     setPhase({ name: 'checking' })
     try {
-      const result = await api.tapRushFinish(getAccessToken, campaignId, s.id, tapsRef.current)
+      const result = await api.tapRushFinish(getAccessToken, campaignId, s.id, tapTimes.current)
       if (!result.qualified) {
         haptics.error()
         setPhase({ name: 'missed', taps: result.taps, attemptsLeft: result.attemptsLeft })
         return
       }
       setPhase({ name: 'claiming' })
-      const { claim } = await api.claim(getAccessToken, campaignId, s.id)
+      const { claim } = await api.claim(getAccessToken, campaignId, { tapSessionId: s.id })
       queryClient.setQueryData(claimQueryKey(campaignId), { claim })
       if (claim.status === 'PAID') haptics.success()
       void refresh()
@@ -143,9 +151,13 @@ export default function TapRush() {
   }
 
   function onTap() {
-    if (phase.name !== 'playing') return
-    tapsRef.current += 1
-    setTaps(tapsRef.current)
+    const clock = roundClock.current
+    if (phase.name !== 'playing' || !clock) return
+    const at = Math.round(clock.elapsed())
+    // Taps after the buzzer don't count.
+    if (at > clock.durationMs) return
+    tapTimes.current.push(at)
+    setTaps(tapTimes.current.length)
     haptics.tap()
   }
 
