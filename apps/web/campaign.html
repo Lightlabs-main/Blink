@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stock drop · Blink-to-Stock</title>
     <meta name="description" content="Someone shared a tokenized stock drop with you. Open it in Blink-to-Stock to claim." />
-    <meta name="theme-color" content="#f3eee3" />
+    <meta name="theme-color" content="#f3eee3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="You've been sent a stock drop on Blink-to-Stock" />
     <meta property="og:description" content="Open it in Blink to claim real tokenized stock on Solana. Free, no seed phrase." />
     <meta property="og:image" content="https://blinksol.site/icon.png" />
@@ -16,6 +17,13 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Apply the reader's saved edition before paint (falls back to the system setting).
+      try {
+        const t = localStorage.getItem('blink-theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -23,7 +31,13 @@
     <header class="container">
       <div class="topline">
         <a class="label kicker" href="/">← Blink-to-Stock</a>
-        <a class="label kicker" href="/download/blink-to-stock.apk">Get the app →</a>
+        <div class="topline-end">
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between day and night edition">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+            <span data-theme-label>Night</span>
+          </button>
+          <a class="label kicker" href="/download/blink-to-stock.apk">Get the app →</a>
+        </div>
       </div>
       <hr class="rule-double" />
     </header>
@@ -139,5 +153,6 @@
           })
       })()
     </script>
+    <script src="/theme.js" defer></script>
   </body>
 </html>
