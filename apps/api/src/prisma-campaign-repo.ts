@@ -15,7 +15,7 @@ const fromDbCluster: Record<DbCluster, SolanaCluster> = {
   mainnet_beta: 'mainnet-beta',
 }
 
-function toStored(row: Campaign): StoredCampaign {
+export function toStored(row: Campaign): StoredCampaign {
   return {
     id: row.id,
     type: row.type,
@@ -31,6 +31,10 @@ function toStored(row: Campaign): StoredCampaign {
     delegateWalletRef: row.delegateWalletRef,
     // Decimal(20,0) → exact integer string → bigint; never via Number.
     allowanceRaw: BigInt(row.allowanceRaw.toFixed(0)),
+    rewardPerClaimRaw: row.rewardPerClaimRaw === null ? null : BigInt(row.rewardPerClaimRaw.toFixed(0)),
+    claimedRaw: BigInt(row.claimedRaw.toFixed(0)),
+    tapRush: row.tapGoal !== null && row.tapSeconds !== null ? { goal: row.tapGoal, seconds: row.tapSeconds } : null,
+    pauseReason: row.pauseReason,
     createdAt: row.createdAt,
   }
 }
@@ -55,6 +59,9 @@ export class PrismaCampaignRepository implements CampaignRepository {
         campaignSeed: c.campaignSeed,
         campaignTokenAccount: c.campaignTokenAccount,
         allowanceRaw: c.allowanceRaw.toString(),
+        rewardPerClaimRaw: c.rewardPerClaimRaw?.toString() ?? null,
+        tapGoal: c.tapRush?.goal ?? null,
+        tapSeconds: c.tapRush?.seconds ?? null,
       },
     })
     return toStored(row)
@@ -89,9 +96,12 @@ export class PrismaCampaignRepository implements CampaignRepository {
     return toStored(row)
   }
 
-  async transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus): Promise<StoredCampaign | null> {
+  async transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus, pauseReason?: string): Promise<StoredCampaign | null> {
     assertTransition(from, to)
-    const { count } = await this.prisma.campaign.updateMany({ where: { id, status: from }, data: { status: to } })
+    const { count } = await this.prisma.campaign.updateMany({
+      where: { id, status: from },
+      data: { status: to, pauseReason: to === 'PAUSED' ? (pauseReason ?? null) : null },
+    })
     if (count === 0) return null
     return toStored(await this.prisma.campaign.findUniqueOrThrow({ where: { id } }))
   }

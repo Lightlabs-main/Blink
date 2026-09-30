@@ -52,3 +52,37 @@ The mobile app talks to `https://blink-api.38-49-209-149.sslip.io`, an interim h
 is a real domain. It shares `packages/domain` and `packages/xstocks` through
 `apps/mobile/src/shared`, so those two packages **must stay dependency-free** and avoid BigInt `**`
 (use `pow10`).
+
+## API contract v2: claims and Tap Rush (owner: Claude, 2026-09-30)
+
+Built at Maris's request under the DECISIONS D-13 assumptions. **Codex should review:**
+`apps/api` (claim-service, payout-service, budget-ledger, claim repositories), `packages/solana`
+(payout.ts) and the `prisma/` migration `20260930000000_claims_tap_rush`.
+
+- **`POST /v1/campaigns` (breaking):** GIFT, EARLY_CLAIM and TAP_RUSH now require
+  `rewardPerClaimRaw` (u64 string, > 0, ≤ `allowanceRaw`). TAP_RUSH may also send
+  `tapRush: { goal, seconds }`; defaults are `{ goal: 50, seconds: 10 }`.
+- **`CampaignSummary`:** adds `rewardPerClaimRaw` (null for older drafts, which cannot be
+  claimed), `claimedRaw` and `tapRush`.
+- **`POST /v1/campaigns/:id/tap-rush/start`** (auth) → `{ session: { id, campaignId, goal,
+  seconds, startedAt, attemptsLeft } }`.
+  - Errors: 409 NOT_TAP_RUSH / ALREADY_CLAIMED / NOT_LIVE / EXHAUSTED, 403 OWN_CAMPAIGN,
+    429 NO_ATTEMPTS_LEFT.
+- **`POST /v1/campaigns/:id/tap-rush/finish`** (auth) `{ sessionId, taps }` →
+  `{ qualified, taps, goal, attemptsLeft }`.
+  - Errors: 422 ROUND_TIMING_INVALID / ROUND_REJECTED, 409 SESSION_FINISHED,
+    404 SESSION_NOT_FOUND.
+- **`POST /v1/campaigns/:id/claim`** (auth) `{ tapSessionId? }` → `{ claim: ClaimSummary }`.
+  - Idempotent per user and campaign. It waits up to about 30 s for confirmation; a `SENDING`
+    result means poll `GET …/claim`.
+  - Errors: 403 OWN_CAMPAIGN / NOT_QUALIFIED; 409 NOT_LIVE / NOT_CLAIMABLE / EXHAUSTED /
+    WALLET_ALREADY_CLAIMED / NO_STOCK_WALLET / CAMPAIGN_PAUSED; 503 PAYOUTS_UNAVAILABLE.
+- **`GET /v1/campaigns/:id/claim`** (auth) → `{ claim | null }`. A SENDING claim is reconciled
+  against the chain first.
+- **`GET /v1/me/claims`** (auth) → `{ claims: ClaimSummary[] }`, newest first, maximum 50.
+
+`ClaimSummary`: `{ id, campaignId, cluster, mint, xstockSymbol, amountRaw, recipientWallet,
+status: RESERVED | SENDING | PAID | FAILED, txSignature, failureReason, createdAt }`.
+
+**Devnet end-to-end check:** `npx tsx scripts/devnet-claim-e2e.ts`. It needs the same
+`.secrets/` files and Privy credentials as SPIKE-1.

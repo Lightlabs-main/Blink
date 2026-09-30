@@ -1,15 +1,19 @@
 import { randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
+import { TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
-import { createCampaignRequest, submitFundingRequest } from '@blink/validation'
+import { claimRequest, createCampaignRequest, finishTapRushRequest, submitFundingRequest } from '@blink/validation'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 
 import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './auth.ts'
 import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
+import { type ClaimRepository, type StoredClaim, toClaimSummary } from './claim-repo.ts'
+import { ClaimService } from './claim-service.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
+import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
 
@@ -22,6 +26,10 @@ export interface AppDeps {
   assets: Asset[]
   /** Creator funding flow (prepare → wallet signs → submit → verify). Optional in tests. */
   funding?: FundingService
+  /** Claims and Tap Rush sessions (DECISIONS D-13). Claim routes return 503 without it. */
+  claims?: ClaimRepository
+  /** Reward payouts; claims return 503 PAYOUTS_UNAVAILABLE without it. */
+  payouts?: PayoutService
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -48,6 +56,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AuthError) return sendError(reply, 401, 'UNAUTHENTICATED', err.message)
     if (err instanceof FundingRequestError) return sendError(reply, err.httpStatus, err.code, err.message)
+    if (err instanceof ClaimError) return sendError(reply, err.httpStatus, err.code, err.message)
     const status = typeof (err as { statusCode?: number }).statusCode === 'number' ? (err as { statusCode: number }).statusCode : 500
     if (status < 500) return sendError(reply, status, 'BAD_REQUEST', err instanceof Error ? err.message : 'bad request')
     app.log.error(err)
@@ -166,6 +175,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       campaignSeed,
       campaignTokenAccount,
       allowanceRaw: BigInt(body.allowanceRaw),
+      rewardPerClaimRaw: body.rewardPerClaimRaw === undefined ? null : BigInt(body.rewardPerClaimRaw),
+      tapRush: body.type === 'TAP_RUSH' ? (body.tapRush ?? TAP_RUSH_DEFAULTS) : null,
     })
     return reply.status(201).send({ campaign: toSummary(stored) })
   })
@@ -240,6 +251,57 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   function req_log_problems(problems: string[]) {
     if (problems.length) app.log.warn({ problems }, 'funding not verified onchain yet')
   }
+
+  // ---- Recipient claims and Tap Rush (DECISIONS D-13) ----
+
+  function requireClaims(): ClaimService {
+    if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts })
+  }
+
+  async function claimResponse(claim: StoredClaim | null) {
+    if (!claim) return { claim: null }
+    const campaign = await deps.campaigns.findById(claim.campaignId)
+    return { claim: campaign ? toClaimSummary(claim, campaign) : null }
+  }
+
+  /** Starts a server-timed Tap Rush round. The client starts its timer when this returns. */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/start', async (req) => {
+    const auth = await requireAuth(req)
+    return { session: await requireClaims().startTapRush(auth, req.params.id) }
+  })
+
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/finish', async (req, reply) => {
+    const auth = await requireAuth(req)
+    const parsed = finishTapRushRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    return requireClaims().finishTapRush(auth, req.params.id, parsed.data)
+  })
+
+  /** Claims the fixed reward and pays it to the caller's Blink wallet. Idempotent per user and campaign. */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/claim', async (req, reply) => {
+    const auth = await requireAuth(req)
+    const parsed = claimRequest.safeParse(req.body ?? {})
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    return claimResponse(await requireClaims().claim(auth, req.params.id, parsed.data))
+  })
+
+  /** The caller's claim for this campaign (null if none), refreshed from the chain while it is being sent. */
+  app.get<{ Params: { id: string } }>('/v1/campaigns/:id/claim', async (req) => {
+    const auth = await requireAuth(req)
+    return claimResponse(await requireClaims().myClaim(auth, req.params.id))
+  })
+
+  app.get('/v1/me/claims', async (req) => {
+    const auth = await requireAuth(req)
+    const claims = deps.claims ? await deps.claims.listForUser(auth.privyUserId, 50) : []
+    const out = []
+    for (const claim of claims) {
+      const campaign = await deps.campaigns.findById(claim.campaignId)
+      if (campaign) out.push(toClaimSummary(claim, campaign))
+    }
+    return { claims: out }
+  })
 
   return app
 }

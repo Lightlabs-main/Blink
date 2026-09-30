@@ -1,5 +1,5 @@
 import { useLoginWithEmail } from '@privy-io/expo'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
@@ -46,6 +46,9 @@ function CodeInput({ value, onChange, onComplete }: { value: string; onChange: (
 
 export default function EmailLogin() {
   const router = useRouter()
+  // Only in-app campaign routes are accepted as a return target (e.g. "Sign in to claim").
+  const { next } = useLocalSearchParams<{ next?: string }>()
+  const returnTo = typeof next === 'string' && /^\/campaign\/[0-9a-f-]{36}$/.test(next) ? next : null
   const { sendCode, loginWithCode } = useLoginWithEmail()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -75,7 +78,12 @@ export default function EmailLogin() {
     try {
       await loginWithCode({ code: value, email: email.trim() })
       haptics.success()
-      router.replace('/home')
+      if (returnTo) {
+        router.replace('/home')
+        router.push(returnTo as `/campaign/${string}`)
+      } else {
+        router.replace('/home')
+      }
     } catch (e) {
       haptics.error()
       setCode('')

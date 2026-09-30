@@ -2,7 +2,7 @@
  * API contract schemas (owner: Claude). Shared by apps/api and apps/mobile.
  * Record every change in docs/HANDOFF.md before Codex depends on it.
  */
-import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES } from '@blink/domain'
+import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, isClaimableType, TAP_RUSH_LIMITS } from '@blink/domain'
 import { z } from 'zod'
 
 /** Base58 Solana address shape. Format check only — onchain existence/ownership is verified server-side. */
@@ -22,14 +22,56 @@ export const rawAmount = z
  * Deliberately has NO creatorWallet, campaignTokenAccount or delegate fields: the creator comes from the
  * verified Privy session (SIWS-linked wallet) and all addresses are derived server-side (MASTER_PROMPT §11, §25).
  */
+const positiveRawAmount = (message: string) => rawAmount.refine((v) => RAW_AMOUNT_RE.test(v) && BigInt(v) > 0n, message)
+
+export const tapRushRules = z
+  .object({
+    goal: z.number().int().min(TAP_RUSH_LIMITS.minGoal).max(TAP_RUSH_LIMITS.maxGoal),
+    seconds: z.number().int().min(TAP_RUSH_LIMITS.minSeconds).max(TAP_RUSH_LIMITS.maxSeconds),
+  })
+  .strict()
+
+/**
+ * Claimable mechanics (DECISIONS D-13) require `rewardPerClaimRaw`: the fixed amount each recipient gets.
+ * `tapRush` is only accepted for TAP_RUSH; the server applies defaults when it is omitted.
+ */
 export const createCampaignRequest = z
   .object({
     type: z.enum(CAMPAIGN_TYPES),
     mint: solanaAddress,
-    allowanceRaw: rawAmount.refine((v) => RAW_AMOUNT_RE.test(v) && BigInt(v) > 0n, 'allowance must be positive'),
+    allowanceRaw: positiveRawAmount('allowance must be positive'),
+    rewardPerClaimRaw: positiveRawAmount('amount per person must be positive').optional(),
+    tapRush: tapRushRules.optional(),
   })
   .strict()
+  .superRefine((v, ctx) => {
+    if (isClaimableType(v.type) && v.rewardPerClaimRaw === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['rewardPerClaimRaw'], message: 'amount per person is required' })
+    }
+    const digits = (s: string | undefined) => s !== undefined && RAW_AMOUNT_RE.test(s)
+    if (digits(v.rewardPerClaimRaw) && digits(v.allowanceRaw) && BigInt(v.rewardPerClaimRaw!) > BigInt(v.allowanceRaw)) {
+      ctx.addIssue({ code: 'custom', path: ['rewardPerClaimRaw'], message: 'amount per person cannot exceed the total' })
+    }
+    if (v.tapRush && v.type !== 'TAP_RUSH') {
+      ctx.addIssue({ code: 'custom', path: ['tapRush'], message: 'tapRush rules only apply to TAP_RUSH campaigns' })
+    }
+  })
 export type CreateCampaignRequest = z.infer<typeof createCampaignRequest>
+
+/** POST /v1/campaigns/:id/tap-rush/finish — the client's tap count for a server-started session. */
+export const finishTapRushRequest = z
+  .object({
+    sessionId: z.uuid(),
+    taps: z
+      .number()
+      .int()
+      .min(0)
+      .max(TAP_RUSH_LIMITS.maxSeconds * TAP_RUSH_LIMITS.maxTapsPerSecond),
+  })
+  .strict()
+
+/** POST /v1/campaigns/:id/claim — Tap Rush claims name their qualifying session. */
+export const claimRequest = z.object({ tapSessionId: z.uuid().optional() }).strict()
 
 /** POST /v1/campaigns/:id/funding/submit — the wallet-signed transaction, base64 wire format. */
 export const submitFundingRequest = z
@@ -54,6 +96,9 @@ export const campaignSummary = z.object({
   campaignTokenAccount: solanaAddress,
   delegateAddress: solanaAddress.nullable(),
   allowanceRaw: rawAmount,
+  rewardPerClaimRaw: rawAmount.nullable(),
+  claimedRaw: rawAmount,
+  tapRush: tapRushRules.nullable(),
   createdAt: z.iso.datetime(),
 })
 

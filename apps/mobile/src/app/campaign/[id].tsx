@@ -8,12 +8,13 @@ import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Badge, Button, Card, Divider, GlowCard, Loading, NavBar, Notice, Row, Screen, Stepper, StockAvatar, T } from '../../design/ui'
+import { ClaimPanel } from '../../features/campaign/claim-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap, useMe } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, campaignLink, networkLabel, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
-import { PRODUCT_COPY } from '../../shared'
+import { maxClaims, PRODUCT_COPY } from '../../shared'
 
 const STEP_OF = { DRAFT: 0, AWAITING_FUNDING: 1, AWAITING_DELEGATION: 1, LIVE: 3, PAUSED: 3, ENDED: 3, CLOSED: 3 } as const
 
@@ -58,6 +59,9 @@ export default function CampaignScreen() {
   const isLive = c.status === 'LIVE'
   const isCreator = Boolean(me.data?.verifiedCreatorWallets.includes(c.creatorWallet))
   const canFund = isCreator && (c.status === 'DRAFT' || c.status === 'AWAITING_FUNDING')
+  const preLive = c.status === 'DRAFT' || c.status === 'AWAITING_FUNDING' || c.status === 'AWAITING_DELEGATION'
+  const reward = c.rewardPerClaimRaw ? BigInt(c.rewardPerClaimRaw) : null
+  const rewardShares = reward ? displayShares(asset, reward) : null
   const net = networkLabel(c.cluster)
   const share = () => {
     haptics.tap()
@@ -87,6 +91,7 @@ export default function CampaignScreen() {
           </Row>
           <T variant="hero">{c.xstockSymbol}</T>
           <T style={{ fontSize: 17 }}>{amount ? `${amount} shares to give away` : (asset?.name ?? 'Stock campaign')}</T>
+          {rewardShares ? <T variant="label">{`${rewardShares} ${c.xstockSymbol} per person`}</T> : null}
         </View>
         <View style={{ marginTop: space.xl }}>
           <Stepper current={STEP_OF[c.status]} steps={['Draft', 'Funded', 'Live']} />
@@ -95,21 +100,23 @@ export default function CampaignScreen() {
 
       {canFund ? <FundCampaign amountLabel={amountLabel} campaign={c} /> : null}
 
-      {!isCreator && !isLive ? (
+      {!isCreator && preLive ? (
         <Card style={{ gap: space.sm }} tone="raised">
           <T variant="heading">Not live yet</T>
           <T variant="label">The creator is still funding this drop. Check back soon — it’ll appear in Drops when it goes live.</T>
         </Card>
       ) : null}
 
-      {isLive ? (
-        <Card style={{ gap: space.sm }} tone="lime">
+      {!isCreator && !preLive ? <ClaimPanel asset={asset} campaign={c} /> : null}
+
+      {isCreator && !preLive && reward ? (
+        <Card style={{ gap: space.sm }} tone={isLive ? 'lime' : 'raised'}>
           <Row>
             <Icon name="bolt" size={20} stroke={color.lime} />
-            <T variant="heading">This drop is live</T>
+            <T variant="heading">{isLive ? 'Your drop is live' : `Your drop is ${CAMPAIGN_STATUS_LABEL[c.status].toLowerCase()}`}</T>
           </Row>
           <T variant="label" color={color.text}>
-            Claiming opens in the next update.
+            {`${(BigInt(c.claimedRaw) / reward).toString()} of ${maxClaims(BigInt(c.allowanceRaw), reward).toString()} people have claimed. Share the QR code to reach more.`}
           </T>
         </Card>
       ) : null}
@@ -147,7 +154,9 @@ export default function CampaignScreen() {
         </T>
       </Card>
 
-      {!user ? <Button onPress={() => router.push('/')}>Sign in to take part</Button> : null}
+      {!user && preLive ? (
+        <Button onPress={() => router.push({ pathname: '/login/email', params: { next: `/campaign/${c.id}` } })}>Sign in to take part</Button>
+      ) : null}
     </Screen>
   )
 }

@@ -1,4 +1,4 @@
-import { type CampaignStatus, type CampaignSummary, type CampaignType, canTransition, type SolanaCluster } from '@blink/domain'
+import { type CampaignStatus, type CampaignSummary, type CampaignType, canTransition, type SolanaCluster, type TapRushRules } from '@blink/domain'
 
 export interface NewCampaign {
   id: string
@@ -11,6 +11,9 @@ export interface NewCampaign {
   campaignSeed: string
   campaignTokenAccount: string
   allowanceRaw: bigint
+  /** D-13: fixed amount per recipient; null = not claimable. */
+  rewardPerClaimRaw: bigint | null
+  tapRush: TapRushRules | null
 }
 
 export interface StoredCampaign extends NewCampaign {
@@ -18,6 +21,9 @@ export interface StoredCampaign extends NewCampaign {
   delegateAddress: string | null
   /** Provider reference for the delegate wallet (e.g. Privy wallet id). Never exposed to clients. */
   delegateWalletRef: string | null
+  /** Reserved + paid; the claim repository keeps it <= allowanceRaw. */
+  claimedRaw: bigint
+  pauseReason: string | null
   createdAt: Date
 }
 
@@ -39,7 +45,7 @@ export interface CampaignRepository {
   /** Sets the delegate once; returns the stored campaign (existing delegate wins on races). */
   setDelegate(id: string, delegate: { address: string; walletRef: string }): Promise<StoredCampaign>
   /** Compare-and-set status along an allowed transition; returns null if the status was not `from`. */
-  transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus): Promise<StoredCampaign | null>
+  transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus, pauseReason?: string): Promise<StoredCampaign | null>
 }
 
 export function toSummary(c: StoredCampaign): CampaignSummary {
@@ -55,6 +61,9 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     campaignTokenAccount: c.campaignTokenAccount,
     delegateAddress: c.delegateAddress,
     allowanceRaw: c.allowanceRaw.toString(),
+    rewardPerClaimRaw: c.rewardPerClaimRaw?.toString() ?? null,
+    claimedRaw: c.claimedRaw.toString(),
+    tapRush: c.tapRush,
     createdAt: c.createdAt.toISOString(),
   }
 }
@@ -74,6 +83,8 @@ export class InMemoryCampaignRepository implements CampaignRepository {
       status: 'DRAFT',
       delegateAddress: null,
       delegateWalletRef: null,
+      claimedRaw: 0n,
+      pauseReason: null,
       createdAt: new Date(),
     }
     this.rows.set(campaign.id, stored)
@@ -104,12 +115,18 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     return row
   }
 
-  async transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus): Promise<StoredCampaign | null> {
+  async transitionStatus(id: string, from: CampaignStatus, to: CampaignStatus, pauseReason?: string): Promise<StoredCampaign | null> {
     assertTransition(from, to)
     const row = this.rows.get(id)
     if (!row || row.status !== from) return null
     row.status = to
+    row.pauseReason = to === 'PAUSED' ? (pauseReason ?? null) : null
     return row
+  }
+
+  /** For InMemoryClaimRepository: the live row, mutated in place like a database row. */
+  row(id: string): StoredCampaign | undefined {
+    return this.rows.get(id)
   }
 
   private newestFirst(): StoredCampaign[] {

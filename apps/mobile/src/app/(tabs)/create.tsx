@@ -12,11 +12,40 @@ import { api, ApiError } from '../../lib/api'
 import { useAssets, useHoldings, useMe } from '../../lib/data'
 import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
-import { CAMPAIGN_TYPES, type CampaignType, PRODUCT_COPY, rawToUiShares, uiSharesToRawFloor } from '../../shared'
+import {
+  CAMPAIGN_TYPES,
+  type CampaignType,
+  isClaimableType,
+  maxClaims,
+  PRODUCT_COPY,
+  rawToUiShares,
+  TAP_RUSH_DEFAULTS,
+  uiSharesToRawFloor,
+} from '../../shared'
 
 type Conversion = { ok: true; raw: bigint; display: string } | { ok: false; error: string }
 
+/** Tap Rush difficulty presets: taps needed within the default round length. */
+const TAP_LEVELS = [
+  { label: 'Easy', goal: 30 },
+  { label: 'Normal', goal: TAP_RUSH_DEFAULTS.goal },
+  { label: 'Hard', goal: 80 },
+] as const
+
 const STEPS = ['Mechanic', 'Stock', 'Amount', 'Review'] as const
+
+/** Share amount → raw base units, rounded down (display multiplier aware). */
+function toRaw(asset: { decimals: number; multiplier: number | null } | null, value: string): Conversion | null {
+  if (!asset || !value) return null
+  if (asset.multiplier === null) return { ok: false, error: 'Live data for this stock is unavailable right now.' }
+  try {
+    const raw = uiSharesToRawFloor(value, asset.decimals, asset.multiplier)
+    if (raw <= 0n) return { ok: false, error: 'Amount is too small.' }
+    return { ok: true, raw, display: rawToUiShares(raw, asset.decimals, asset.multiplier) }
+  } catch {
+    return { ok: false, error: 'Enter a number like 0.5' }
+  }
+}
 
 function StepHeader({ step }: { step: number }) {
   return (
@@ -43,6 +72,8 @@ export default function Create() {
   const [type, setType] = useState<CampaignType>('TAP_RUSH')
   const [mint, setMint] = useState<string | null>(null)
   const [shares, setShares] = useState('')
+  const [perPerson, setPerPerson] = useState('')
+  const [tapGoal, setTapGoal] = useState<number>(TAP_RUSH_DEFAULTS.goal)
 
   const creatorWallet = me.data?.verifiedCreatorWallets[0]
   const selected = assets.data?.xstocks.find((x) => x.mint === mint) ?? null
@@ -59,30 +90,39 @@ export default function Create() {
     return b && a?.multiplier != null ? rawToUiShares(BigInt(b), a.decimals, a.multiplier) : null
   }
 
-  const conversion = useMemo((): Conversion | null => {
-    if (!selected || !shares) return null
-    if (selected.multiplier === null) return { ok: false, error: 'Live data for this stock is unavailable right now.' }
-    try {
-      const raw = uiSharesToRawFloor(shares, selected.decimals, selected.multiplier)
-      if (raw <= 0n) return { ok: false, error: 'Amount is too small.' }
-      return { ok: true, raw, display: rawToUiShares(raw, selected.decimals, selected.multiplier) }
-    } catch {
-      return { ok: false, error: 'Enter a number like 0.5' }
-    }
-  }, [selected, shares])
+  const conversion = useMemo(() => toRaw(selected, shares), [selected, shares])
+  const reward = useMemo(() => toRaw(selected, perPerson), [selected, perPerson])
+  const people = conversion?.ok && reward?.ok ? maxClaims(conversion.raw, reward.raw) : null
+  const rewardError =
+    reward && !reward.ok
+      ? reward.error
+      : conversion?.ok && reward?.ok && reward.raw > conversion.raw
+        ? 'Each person can’t get more than the total.'
+        : null
 
   const overHoldings = conversion?.ok && heldRaw !== null && conversion.raw > heldRaw
 
   const create = useMutation({
     mutationFn: async () => {
-      if (!selected || !conversion?.ok) throw new Error('Complete the form first')
-      return api.createCampaign(getAccessToken, { type, mint: selected.mint, allowanceRaw: conversion.raw.toString() }, creatorWallet)
+      if (!selected || !conversion?.ok || !reward?.ok) throw new Error('Complete the form first')
+      return api.createCampaign(
+        getAccessToken,
+        {
+          type,
+          mint: selected.mint,
+          allowanceRaw: conversion.raw.toString(),
+          rewardPerClaimRaw: reward.raw.toString(),
+          tapRush: type === 'TAP_RUSH' ? { goal: tapGoal, seconds: TAP_RUSH_DEFAULTS.seconds } : undefined,
+        },
+        creatorWallet,
+      )
     },
     onSuccess: ({ campaign }) => {
       haptics.success()
       void queryClient.invalidateQueries({ queryKey: ['my-campaigns'] })
       setStep(0)
       setShares('')
+      setPerPerson('')
       router.push(`/campaign/${campaign.id}`)
     },
     onError: () => haptics.error(),
@@ -122,13 +162,15 @@ export default function Create() {
   }
 
   const canNext =
-    (step === 0 && Boolean(type)) || (step === 1 && Boolean(selected) && !selected?.paused) || (step === 2 && Boolean(conversion?.ok))
+    (step === 0 && isClaimableType(type)) ||
+    (step === 1 && Boolean(selected) && !selected?.paused) ||
+    (step === 2 && Boolean(conversion?.ok) && Boolean(reward?.ok) && !rewardError && (people ?? 0n) > 0n)
 
   return (
     <Screen tabBar>
       <View style={{ gap: space.sm }}>
         <T variant="overline">New campaign</T>
-        <T variant="display">{step === 0 ? 'How do people earn it?' : step === 1 ? 'Pick a stock' : step === 2 ? 'How much in total?' : 'Review'}</T>
+        <T variant="display">{step === 0 ? 'How do people earn it?' : step === 1 ? 'Pick a stock' : step === 2 ? 'How much?' : 'Review'}</T>
       </View>
       <StepHeader step={step} />
 
@@ -136,14 +178,16 @@ export default function Create() {
         <View style={{ gap: space.md }}>
           {CAMPAIGN_TYPES.map((t) => {
             const on = type === t
+            const soon = !isClaimableType(t)
             return (
               <Pressable
+                disabled={soon}
                 key={t}
                 onPress={() => {
                   haptics.tap()
                   setType(t)
                 }}
-                style={[styles.option, on && styles.optionOn]}
+                style={[styles.option, on && styles.optionOn, soon && { opacity: 0.5 }]}
               >
                 <View style={[styles.optionIcon, on && { backgroundColor: color.lime }]}>
                   <Icon name={CAMPAIGN_TYPE_ICON[t]} size={22} stroke={on ? color.onLime : color.lime} strokeWidth={2} />
@@ -152,7 +196,11 @@ export default function Create() {
                   <T variant="bodyStrong">{CAMPAIGN_TYPE_LABEL[t]}</T>
                   <T variant="label">{CAMPAIGN_TYPE_BLURB[t]}</T>
                 </View>
-                <View style={[styles.radio, on && { borderColor: color.lime }]}>{on ? <View style={styles.radioDot} /> : null}</View>
+                {soon ? (
+                  <Badge label="Soon" tone="neutral" />
+                ) : (
+                  <View style={[styles.radio, on && { borderColor: color.lime }]}>{on ? <View style={styles.radioDot} /> : null}</View>
+                )}
               </Pressable>
             )
           })}
@@ -229,6 +277,44 @@ export default function Create() {
         </Card>
       ) : null}
 
+      {step === 2 && selected ? (
+        <Card style={{ gap: space.md }}>
+          <T variant="heading">Each person gets</T>
+          <View style={styles.amountWrap}>
+            <TextInput
+              inputMode="decimal"
+              onChangeText={(v) => setPerPerson(v.replace(',', '.'))}
+              placeholder="0.00"
+              placeholderTextColor={color.textMuted}
+              selectionColor={color.lime}
+              style={[styles.amountInput, font('display'), { fontSize: 34 }]}
+              value={perPerson}
+            />
+            <T variant="heading" color={color.textDim}>
+              {selected.symbol}
+            </T>
+          </View>
+          {people !== null && !rewardError ? (
+            <T variant="label" color={color.text}>
+              {`Enough for ${people.toString()} ${people === 1n ? 'person' : 'people'}. First come, first served.`}
+            </T>
+          ) : null}
+          <Notice message={rewardError} />
+        </Card>
+      ) : null}
+
+      {step === 2 && type === 'TAP_RUSH' ? (
+        <Card style={{ gap: space.md }}>
+          <T variant="heading">Tap goal</T>
+          <T variant="label">{`Players must tap this many times in ${TAP_RUSH_DEFAULTS.seconds} seconds.`}</T>
+          <Row gap={space.sm}>
+            {TAP_LEVELS.map((l) => (
+              <Chip key={l.label} label={`${l.label} · ${l.goal}`} onPress={() => setTapGoal(l.goal)} selected={tapGoal === l.goal} />
+            ))}
+          </Row>
+        </Card>
+      ) : null}
+
       {step === 3 && selected && conversion?.ok ? (
         <Card style={{ gap: space.lg }}>
           <Row>
@@ -243,6 +329,9 @@ export default function Create() {
               ['Mechanic', CAMPAIGN_TYPE_LABEL[type]],
               ['Stock', selected.name],
               ['Total pool', `${conversion.display} ${selected.symbol} (rounded down)`],
+              ...(reward?.ok ? [['Each person gets', `${reward.display} ${selected.symbol}`]] : []),
+              ...(people !== null ? [['People', people.toString()]] : []),
+              ...(type === 'TAP_RUSH' ? [['Tap goal', `${tapGoal} taps in ${TAP_RUSH_DEFAULTS.seconds}s`]] : []),
               ['Funding wallet', shortAddress(creatorWallet)],
             ].map(([k, v]) => (
               <Row key={k} style={{ justifyContent: 'space-between' }}>
