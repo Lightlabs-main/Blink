@@ -133,3 +133,26 @@ unless noted.
 - **Signing:** the certificate SHA-256 `0F:0A:…:D3:6C` matches `apps/web/.well-known/assetlinks.json`.
 - **Hosting:** the build is served at `https://blinksol.site/download/blink-to-stock.apk`.
 - **Not yet verified on a device.**
+
+## External protocol addresses (VERIFIED 2026-10-01)
+
+Each address below comes from the official source listed, and each was checked against mainnet
+with `getAccountInfo` on the same day.
+
+| Item | Value | Source | Onchain check |
+|---|---|---|---|
+| SKR mint | `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3` | docs.solanamobile.com/solana-mobile-stack/skr | SPL Token (Tokenkeg), decimals **6** |
+| SKR staking program | `SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ` | same; `react-native-samples/skr-staking/program/idl.json` `address` | executable (BPF upgradeable) |
+| SKR stake config | `4HQy82s9CHTv1GsYKnANHMiHfhcqesYkK6sB3RDSYyqw` | same | owned by the staking program; StakeConfig discriminator `[238,151,43,3,11,151,63,176]` matches the IDL |
+| SKR guardian pool (sample default) | `DPJ58trLsF9yPrBa2pk6UaRkvqW8hWUYjawe788WBuqr` | same | GuardianDelegationPool discriminator matches |
+| SKR stake vault | `8isViKbwhuhFhsv2t8vaFL74pKCqaFPQXo1KkeQwZbB8` | docs | not yet checked onchain |
+| SKR UserStake | PDA `["user_stake", stake_config, user, guardian_pool]`; layout disc(8) bump(1) stake_config(32) user(32) guardian_pool(32) shares u128 …; staked = shares × share_price / 1e9 | skr-staking sample `src/app/index.tsx` + IDL | — |
+| ORE mint | `oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp` | github.com/regolith-labs/ore-mint `api/src/consts.rs` | SPL Token (Tokenkeg), decimals **11** (matches `TOKEN_DECIMALS`) |
+| ORE stake program | `stakecNP3FpiExZPCgZfqRgumVzi6dNqnfrjwXyTgeH` | github.com/regolith-labs/ore-stake `api/src/lib.rs` | executable |
+| ORE Stake account | PDA `["stake", authority]`; steel account, 8-byte discriminator (108), then `authority: Pubkey`, `balance: u64` | ore-stake `api/src/state/{mod,stake}.rs` | — |
+| Seeker Genesis Token | see D-17 | Solana Mobile docs + solana-mobile-dev-skill | — |
+
+**Known limitations**
+- The official SKR sample comments "SKR uses 9 decimals" but uses 6. The mint says 6.
+- Total SKR stake needs getProgramAccounts across guardian pools, which needs a dedicated RPC
+  (OQ-6).

@@ -230,3 +230,29 @@ when the real sections arrive.
   `XSTOCK_READ_RPC_URL` → the public endpoint. The verifier refuses a non-mainnet RPC.
 - **Claims** store `sgtMint`, unique per campaign, so one device gets one claim. The reward still
   goes to the user's Blink (Privy embedded) wallet.
+
+## D-18 — Product update: programmable social stock campaigns (2026-10-01, Maris)
+
+Source: Maris's product + architecture update of 2026-10-01. The plan is in
+`docs/PRODUCT_UPDATE_2026-10-01.md`.
+
+1. **Positioning:** "Blink turns tokenized stocks into programmable social campaigns." Core loop:
+   ELIGIBILITY → ACTION → VERIFICATION → STOCK REWARD. Never claim Blink invented stock gifting by
+   link, and don't describe it as just a quest platform.
+2. **xStocks remain the primary reward.** SKR is a membership/staking/eligibility primitive, ORE an
+   onchain community/activity primitive, SGT a verified Seeker identity, and USDC at most a
+   funding/accounting primitive. Use legally accurate xStocks wording: holding a token does not make
+   someone the registered shareholder.
+3. **Formats stay recognizable and backward compatible.** VERIFIED_QUEST is added. EARLY_CLAIM is
+   presented as "Flash Drop" while keeping its stored value. QR Event and Squads are deferred.
+4. **Verifiers are reusable server-side modules** with a type, version, config schema, source, chain
+   and evidence. Requirements are groups of ALL or ANY conditions, all groups required, with no
+   deeper nesting. A LIVE campaign's requirements are immutable (version + hash). The server is
+   authoritative and **fails closed**.
+5. **ORE_ACTIVITY is disabled** until deterministic, replay-safe evidence is specified and tested.
+6. **X_QUEST is BLOCKED (policy review).** No like/repost/follow-for-stock, no scraping, and never
+   ask for X credentials.
+7. **Social P0:** a live campaign room (polling, real aggregates only, privacy-safe identities) and
+   share → challenge. Squads, Stock Clubs and Passport are P1/P2, documented and not faked.
+8. **No new compliance bypass.** No jurisdiction controls exist yet, so mainnet distribution stays
+   BLOCKED until Maris defines them.
