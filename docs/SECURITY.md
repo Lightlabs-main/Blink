@@ -7,9 +7,15 @@ require.
 
 ## 1. xStocks compliance
 
-**Status: `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED`.** No Blink eligibility mechanism exists
-yet, so the restriction is in force (update §21). A controlled mainnet smoke test with one eligible
-participant may run only with Maris's explicit approval.
+**Status: `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED`.** The eligibility gate is now implemented
+(D-20: self-declaration + IP-country cross-check, enforced server-side). Public mainnet distribution
+stays blocked until all of the following are done:
+1. the gate is verified on a device;
+2. the restriction list is re-verified against the issuer's current list;
+3. Maris explicitly approves.
+
+A controlled mainnet smoke test with one eligible participant may run only with Maris's explicit
+approval.
 
 ### Policy `XSTOCKS-ELIGIBILITY-2026-10-01` (v1)
 
@@ -20,8 +26,10 @@ Recipients and creators may not take part in xStocks distribution if they are:
 | In the United States, or a U.S. person | docs.xstocks.fi/docs/product-legal-overview; xstocks.fi news disclaimers | VERIFIED 2026-10-01 |
 | In the United Kingdom | xstocks.fi news disclaimer ("not currently available in the United Kingdom") | VERIFIED 2026-10-01 |
 | In any jurisdiction where offer or distribution would be unlawful or would need authorization that hasn't been obtained | same disclaimer | VERIFIED 2026-10-01 |
-| In Canada or Australia | Maris's update (§21); a search summary of xStocks pages. Not yet seen word for word on an official page | ASSUMPTION — blocked conservatively |
-| In a sanctioned jurisdiction | Maris's update (§21) | ASSUMPTION — blocked conservatively |
+| In Iran, North Korea or Syria (sanctions: "prohibited") | assets.backed.fi/legal-documentation/restricted-countries | VERIFIED 2026-10-01 |
+| In a "non-serviceable" country: Afghanistan, Belarus, Central African Republic, DR Congo, Cuba, Ethiopia, Haiti, Iraq, Lebanon, Libya, Mali, Mozambique, Myanmar, Nicaragua, **Nigeria**, Philippines, Russia, Somalia, South Sudan, Sudan, Venezuela, Yemen, Zimbabwe | same | VERIFIED 2026-10-01 |
+| In an occupied region of Ukraine | same | VERIFIED 2026-10-01 (enforced by attestation) |
+| In Canada or Australia | Maris's update (§21). Not on the issuer's page or the xStocks disclaimers checked | ASSUMPTION — blocked conservatively |
 
 The full list of prohibited and restricted countries is published by the issuer at
 `assets.backed.fi/legal-documentation`. **Re-verify it against that list before any release.**

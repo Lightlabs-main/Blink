@@ -7,11 +7,13 @@ import { buildApp } from './app.ts'
 import type { AuthVerifier } from './auth.ts'
 import { InMemoryCampaignRepository, type NewCampaign, type StoredCampaign } from './campaign-repo.ts'
 import { InMemoryClaimRepository, type StoredClaim } from './claim-repo.ts'
+import { EligibilityService } from './eligibility.ts'
 import type { PayoutService } from './payout-service.ts'
 
 const CREATOR_WALLET = '11111111111111111111111111111112'
 const MINT = SUPPORTED_XSTOCKS[0]!.mint
-const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
+// Mechanics tests run with the eligibility gate off; 'xStocks eligibility gate' below turns it on.
+const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', XSTOCK_COMPLIANCE: 'off' })
 const ASSETS = SUPPORTED_XSTOCKS.map(({ symbol, name, mint, decimals, logo }) => ({ symbol, name, mint, decimals, logo, isTest: false }))
 
 /** Token "user-N" authenticates as did:privy:N with embedded wallet "wallet-N". */
@@ -70,7 +72,9 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-function build(opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: boolean; ready?: boolean; env?: typeof env; sgt?: Record<string, string> } = {}) {
+function build(
+  opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: boolean; ready?: boolean; env?: typeof env; sgt?: Record<string, string>; eligibility?: EligibilityService } = {},
+) {
   campaigns = new InMemoryCampaignRepository()
   claims = new InMemoryClaimRepository(campaigns)
   const payouts = opts.noPayouts ? undefined : fakePayouts(claims, { fail: opts.failPayouts, failFor: opts.failFor, ready: opts.ready })
@@ -83,6 +87,7 @@ function build(opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: bo
     claims,
     payouts,
     seeker: opts.sgt ? { findSgt: async (wallet: string) => opts.sgt![wallet] ?? null } : undefined,
+    eligibility: opts.eligibility,
   })
   return payouts
 }
@@ -466,7 +471,11 @@ describe('status', () => {
   it('reports the fee payer and flags a low balance', async () => {
     build()
     const res = await app.inject({ method: 'GET', url: '/v1/status' })
-    expect(res.json()).toEqual({ cluster: 'devnet', payouts: { enabled: true, feePayer: CREATOR_WALLET, balanceLamports: '5000000', low: true } })
+    expect(res.json()).toEqual({
+      cluster: 'devnet',
+      payouts: { enabled: true, feePayer: CREATOR_WALLET, balanceLamports: '5000000', low: true, killSwitch: false },
+      compliance: { xstocks: 'off' },
+    })
   })
 })
 
@@ -481,7 +490,7 @@ describe('rate limits and the per-IP claim cap (D-16)', () => {
   })
 
   it('caps successful claims per IP per drop when configured', async () => {
-    build({ env: loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', CLAIMS_PER_IP_PER_CAMPAIGN: '2' }) })
+    build({ env: loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', CLAIMS_PER_IP_PER_CAMPAIGN: '2', XSTOCK_COMPLIANCE: 'off' }) })
     const c = await liveCampaign({ allowanceRaw: 1000n })
     expect((await claim(c.id, 'a')).statusCode).toBe(200)
     expect((await claim(c.id, 'b')).statusCode).toBe(200)
@@ -523,5 +532,98 @@ describe('Seeker drops (D-17)', () => {
     build()
     const c = await liveCampaign({ type: 'SEEKER' })
     expect((await claim(c.id, 'alice')).json().error.code).toBe('SEEKER_UNAVAILABLE')
+  })
+})
+
+describe('xStocks eligibility gate (D-20) and payout kill switch', () => {
+  const enforced = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
+  /** Every request in these tests comes from 127.0.0.1; the fake resolver says which country that is. */
+  let ipCountry: string | null = 'DE'
+  function gated(extra: { failFor?: string[] } = {}) {
+    campaigns = new InMemoryCampaignRepository()
+    claims = new InMemoryClaimRepository(campaigns)
+    const eligibility = new EligibilityService({ env: enforced, store: claims, ipCountry: { countryOf: () => ipCountry } })
+    const payouts = fakePayouts(claims, { failFor: extra.failFor })
+    app = buildApp({ env: enforced, auth: fakeAuth(), campaigns, rpc: {} as Rpc<GetAccountInfoApi>, assets: ASSETS, claims, payouts, eligibility })
+    return payouts
+  }
+  const declare = (user: string, body: object) => app.inject({ method: 'POST', url: '/v1/me/eligibility', headers: as(user), payload: body })
+  beforeEach(() => {
+    ipCountry = 'DE'
+  })
+
+  it('blocks a claim until the user confirms eligibility, then pays', async () => {
+    const payouts = gated()
+    const c = await liveCampaign()
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('NEEDS_ELIGIBILITY')
+    const res = await declare('alice', { country: 'DE', notUsPerson: true })
+    expect(res.json().eligibility).toMatchObject({ eligible: true, reason: 'ELIGIBLE', declaredCountry: 'DE', current: true })
+    expect((await claim(c.id, 'alice')).json().claim.status).toBe('PAID')
+    expect(payouts.paid).toEqual(['wallet-alice'])
+  })
+
+  it('refuses restricted countries, U.S. persons and a missing region attestation', async () => {
+    gated()
+    expect((await declare('a', { country: 'NG', notUsPerson: true })).json().eligibility.reason).toBe('DECLARED_COUNTRY_RESTRICTED')
+    expect((await declare('b', { country: 'DE', notUsPerson: false })).json().eligibility.reason).toBe('US_PERSON')
+    expect((await declare('c', { country: 'UA', notUsPerson: true })).json().eligibility.reason).toBe('REGION_ATTESTATION_MISSING')
+    expect((await declare('d', { country: 'UA', notUsPerson: true, attestations: ['NOT_IN_OCCUPIED_REGION'] })).json().eligibility.eligible).toBe(true)
+    const c = await liveCampaign()
+    expect((await claim(c.id, 'a')).json().error.code).toBe('NOT_ELIGIBLE')
+  })
+
+  it('checks the IP country again at claim time and fails closed when it is unknown', async () => {
+    gated()
+    const c = await liveCampaign({ allowanceRaw: 1000n })
+    await declare('alice', { country: 'DE', notUsPerson: true })
+    ipCountry = 'US'
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('NOT_ELIGIBLE')
+    ipCountry = null
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('NOT_ELIGIBLE')
+    expect((await campaigns.findById(c.id))!.claimedRaw).toBe(0n)
+  })
+
+  it('a declaration made from a restricted IP is not eligible', async () => {
+    gated()
+    ipCountry = 'GB'
+    expect((await declare('alice', { country: 'DE', notUsPerson: true })).json().eligibility).toMatchObject({ eligible: false, reason: 'IP_COUNTRY_RESTRICTED' })
+  })
+
+  it('an ineligible referrer earns no bonus; the eligible friend is still paid', async () => {
+    const payouts = gated()
+    const c = await liveCampaign({ type: 'REFERRAL', allowanceRaw: 1000n })
+    await declare('alice', { country: 'NG', notUsPerson: true })
+    const code = (await app.inject({ method: 'POST', url: `/v1/campaigns/${c.id}/referral`, headers: as('alice') })).json().referral.code
+    await declare('bob', { country: 'DE', notUsPerson: true })
+    expect((await claim(c.id, 'bob', { ref: code })).json().claim.status).toBe('PAID')
+    expect(payouts.paid).toEqual(['wallet-bob'])
+    expect((await campaigns.findById(c.id))!.claimedRaw).toBe(100n)
+  })
+
+  it('Tap Rush cannot start without eligibility', async () => {
+    gated()
+    const c = await liveCampaign({ type: 'TAP_RUSH', tapRush: { goal: 20, seconds: 10 } })
+    const res = await app.inject({ method: 'POST', url: `/v1/campaigns/${c.id}/tap-rush/start`, headers: as('alice') })
+    expect(res.json().error.code).toBe('NEEDS_ELIGIBILITY')
+  })
+
+  it('fails closed when the gate is enforced but not configured', async () => {
+    campaigns = new InMemoryCampaignRepository()
+    claims = new InMemoryClaimRepository(campaigns)
+    app = buildApp({ env: enforced, auth: fakeAuth(), campaigns, rpc: {} as Rpc<GetAccountInfoApi>, assets: ASSETS, claims, payouts: fakePayouts(claims) })
+    const c = await liveCampaign()
+    const res = await claim(c.id, 'alice')
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe('ELIGIBILITY_UNAVAILABLE')
+  })
+
+  it('the kill switch stops claims before anything is reserved and shows in /v1/status', async () => {
+    build({ env: loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', XSTOCK_COMPLIANCE: 'off', PAYOUTS_ENABLED: 'false' }) })
+    const c = await liveCampaign()
+    const res = await claim(c.id, 'alice')
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe('PAYOUTS_PAUSED')
+    expect((await campaigns.findById(c.id))!.claimedRaw).toBe(0n)
+    expect((await app.inject({ method: 'GET', url: '/v1/status' })).json().payouts.killSwitch).toBe(true)
   })
 })

@@ -18,6 +18,7 @@
     "@privy-io/node": "0.35.0",
     "@solana/kit": "8.4.0",
     "fastify": "5.12.5",
+    "geoip-country": "5.0.202609300220",
     "pg": "8.23.0",
     "zod": "4.6.5"
   }

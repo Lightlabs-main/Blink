@@ -120,3 +120,18 @@ New app builds call `https://api.blinksol.site`. The sslip.io host remains an al
   `rewardPerClaimRaw`.
 - **Migration:** `20261001090000_seeker_claims` (`Claim.sgtMint`).
 - **New env:** `FEE_PAYER_LOW_LAMPORTS`, `CLAIMS_PER_IP_PER_CAMPAIGN`, `SEEKER_RPC_URL`.
+
+## API contract v5: xStocks eligibility and kill switch (owner: Claude, 2026-10-01)
+
+- **`GET /v1/me/eligibility`** (auth) → `{ enforced, eligibility: XStockEligibilitySummary | null }`.
+- **`POST /v1/me/eligibility`** (auth) with `{ country, notUsPerson, attestations? }` → `{ enforced,
+  eligibility }`. The server decides, with the IP-country cross-check.
+- **New errors** on claim, Tap Rush start, bonus retry and funding prepare:
+  - 403 `NEEDS_ELIGIBILITY`: no current-policy decision;
+  - 403 `NOT_ELIGIBLE`: restricted, or an unknown connection country;
+  - 503 `ELIGIBILITY_UNAVAILABLE`: gate enforced but not configured (fails closed);
+  - 503 `PAYOUTS_PAUSED`: kill switch.
+- **`/v1/status`** adds `payouts.killSwitch` and `compliance.xstocks`.
+- **Migration:** `20261001120000_xstock_eligibility`.
+- **New env:** `XSTOCK_COMPLIANCE` (`enforce` | `off`; must be `enforce` on mainnet) and
+  `PAYOUTS_ENABLED`.

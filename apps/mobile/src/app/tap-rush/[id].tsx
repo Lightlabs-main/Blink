@@ -9,7 +9,7 @@ import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, gutter, space } from '../../design/tokens'
 import { Backdrop, Button, Loading, NavBar, Notice, T } from '../../design/ui'
-import { ClaimReceipt, claimQueryKey, sentence, useClaimRefresh, useMyClaim } from '../../features/campaign/claim-panel'
+import { ClaimReceipt, claimQueryKey, needsEligibility, sentence, useClaimRefresh, useMyClaim } from '../../features/campaign/claim-panel'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap } from '../../lib/data'
 import { haptics } from '../../lib/haptics'
@@ -60,6 +60,7 @@ export default function TapRush() {
   const [remainingMs, setRemainingMs] = useState(0)
   const [pressed, setPressed] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [blocked, setBlocked] = useState(false)
   const session = useRef<{ id: string } | null>(null)
   const tapTimes = useRef<number[]>([])
   const roundClock = useRef<{ elapsed: () => number; durationMs: number } | null>(null)
@@ -89,6 +90,7 @@ export default function TapRush() {
 
   function fail(e: unknown) {
     haptics.error()
+    setBlocked(needsEligibility(e))
     setError(e instanceof ApiError || e instanceof Error ? sentence(e.message) : 'Something went wrong')
   }
 
@@ -235,10 +237,15 @@ export default function TapRush() {
               <T style={{ fontSize: 17 }}>
                 {phase.name === 'missed'
                   ? `You tapped ${phase.taps} times — the goal is ${rules.goal}.`
-                  : `Tap ${rules.goal} times in ${rules.seconds} seconds. Hit the goal and the stock is yours.`}
+                  : `Tap ${rules.goal} times in ${rules.seconds} seconds. Hit the goal and the reward is yours.`}
               </T>
             </View>
             <Notice message={error} />
+            {blocked ? (
+              <Button icon="shield" onPress={() => router.push({ pathname: '/eligibility', params: { next: `/tap-rush/${campaignId}` } })}>
+                Confirm eligibility
+              </Button>
+            ) : null}
             {phase.name === 'missed' && phase.attemptsLeft === 0 ? (
               <Notice message="You’ve used all your tries for this drop." tone="warn" />
             ) : (

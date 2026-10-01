@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type { ClaimKind } from '@blink/domain'
 
 import type { ClaimRepository, NewReservation, ReserveResult, ServiceWalletStore, StoredClaim, StoredReferral, StoredTapSession } from './claim-repo.ts'
-import { type Claim, Prisma, type TapRushSession } from './generated/prisma/client.ts'
+import type { EligibilityStore, StoredEligibility } from './eligibility.ts'
+import { type Claim, Prisma, type TapRushSession, type XStockEligibility } from './generated/prisma/client.ts'
 import type { createPrismaClient } from './prisma-campaign-repo.ts'
 
 type Db = ReturnType<typeof createPrismaClient>
@@ -63,7 +64,11 @@ async function whyNotHeld(tx: Tx, campaignId: string) {
  * same transaction that writes the claim rows, and the table's CHECK constraint backs it up; concurrent claims queue
  * on the campaign row lock and re-evaluate the condition.
  */
-export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStore {
+function toEligibility(row: XStockEligibility): StoredEligibility {
+  return { ...row, reason: row.reason as StoredEligibility['reason'] }
+}
+
+export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStore, EligibilityStore {
   constructor(private readonly prisma: Db) {}
 
   async findForUser(campaignId: string, privyUserId: string, kind: ClaimKind = 'CLAIM') {
@@ -240,6 +245,16 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
 
   async findReferralForUser(campaignId: string, privyUserId: string): Promise<StoredReferral | null> {
     return this.prisma.referral.findUnique({ where: { campaignId_privyUserId: { campaignId, privyUserId } } })
+  }
+
+  async getEligibility(privyUserId: string) {
+    const row = await this.prisma.xStockEligibility.findUnique({ where: { privyUserId } })
+    return row ? toEligibility(row) : null
+  }
+
+  async putEligibility(record: Omit<StoredEligibility, 'decidedAt'>) {
+    const row = await this.prisma.xStockEligibility.upsert({ where: { privyUserId: record.privyUserId }, create: record, update: record })
+    return toEligibility(row)
   }
 
   async get(role: string) {

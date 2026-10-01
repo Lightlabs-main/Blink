@@ -104,6 +104,10 @@ export class SolanaPayoutService implements PayoutService {
 
   async pay(campaign: StoredCampaign, claim: StoredClaim): Promise<StoredClaim> {
     const { rpc, claims } = this.deps
+    if (!this.deps.env.PAYOUTS_ENABLED) {
+      await claims.markFailed(claim.id, 'PAYOUTS_PAUSED')
+      throw new ClaimError('PAYOUTS_PAUSED', 'Blink has paused payouts for now. Please try again later.', 503)
+    }
     const asset = this.deps.assets.find((a) => a.mint === campaign.mint)
     if (!asset || !campaign.delegateAddress || !campaign.delegateWalletRef) {
       await claims.markFailed(claim.id, 'CAMPAIGN_NOT_READY')

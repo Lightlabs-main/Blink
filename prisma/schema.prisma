@@ -151,6 +151,23 @@ model TapRushSession {
   @@index([campaignId, privyUserId])
 }
 
+/// D-20: the user's latest xStocks eligibility decision (SECURITY.md §1). Minimum data: country codes, result,
+/// reason, policy version, method, time. Never an IP address, precise location or identity document.
+model XStockEligibility {
+  privyUserId     String   @id
+  declaredCountry String   @db.VarChar(2)
+  notUsPerson     Boolean
+  attestations    String[]
+  /// Country of the request IP at decision time (ISO alpha-2), or null if unknown.
+  ipCountry       String?  @db.VarChar(2)
+  eligible        Boolean
+  reason          String
+  policyId        String
+  policyVersion   String
+  method          String
+  decidedAt       DateTime @updatedAt
+}
+
 /// D-14: a person's invite code for one REFERRAL campaign.
 model Referral {
   code        String   @id

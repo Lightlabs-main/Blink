@@ -270,3 +270,26 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
 - **The eligibility method is NEEDS_OWNER_DECISION** (PRODUCT_UPDATE §6.1).
 - **Gap:** a global payout kill switch (`PAYOUTS_ENABLED`) is required and will be added
   (PRODUCT_UPDATE §6.3).
+
+## D-20 — xStocks eligibility method: self-declaration + IP-country cross-check (2026-10-01, Maris chose option b)
+
+- **Declaration.** The user declares their country of residence and attests "I am not a U.S.
+  person and I am not in the United States". Ukraine adds "not in an occupied region".
+- **Decision.** The server decides with `evaluateXStockEligibility` (`packages/domain`, policy
+  `XSTOCKS-ELIGIBILITY` `2026-10-01.1`), cross-checking the country of the request IP. The lookup
+  is offline (`geoip-country`), so no IP is stored or sent anywhere.
+- **Stored per user:** declared country, attestations, IP country (code only), eligible yes/no,
+  reason, policy id and version, method, and decision time.
+- **Gate.** Before every reward reservation, every Tap Rush start, every bonus retry and creator
+  funding, the stored decision must be current and eligible, **and** the current request's IP
+  country must be allowed. An unknown IP country fails closed.
+- **Referrers** need a stored eligible decision for their bonus; otherwise only the friend is paid.
+- **Config.** `XSTOCK_COMPLIANCE=enforce` is the default and is mandatory on mainnet (refused at
+  startup otherwise). Tests of claim mechanics run with `off`, and the gate has its own tests.
+- **Restriction list** (SECURITY.md §1) comes from the issuer's restricted-countries page
+  (assets.backed.fi, VERIFIED 2026-10-01) and xStocks disclaimers. Canada and Australia are blocked
+  conservatively. **The issuer lists Nigeria as non-serviceable.**
+- **Payout kill switch** `PAYOUTS_ENABLED` (default true): when false, no Tap Rush starts, no
+  reservations and nothing sent. Shown in `/v1/status`.
+- **Copy.** xStocks are described as tokenized tracker certificates giving economic exposure (no
+  registered shares, no voting rights) across the app and website.

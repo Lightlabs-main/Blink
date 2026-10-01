@@ -6,6 +6,7 @@ import { assessTapRound, isClaimableType, TAP_RUSH_LIMITS, type TapRushSessionSu
 import type { AuthContext, AuthVerifier } from './auth.ts'
 import type { CampaignRepository, StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository, StoredClaim, StoredReferral } from './claim-repo.ts'
+import type { EligibilityService } from './eligibility.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { RateLimiter } from './rate-limit.ts'
 
@@ -58,11 +59,16 @@ export class ClaimService {
       limiter?: RateLimiter
       /** D-17: required for SEEKER drops. */
       seeker?: SeekerVerifier
+      /** D-20: xStocks eligibility gate; required before any reward reservation. */
+      eligibility?: EligibilityService
     },
   ) {}
 
-  async startTapRush(auth: AuthContext, campaignId: string): Promise<TapRushSessionSummary> {
+  async startTapRush(auth: AuthContext, campaignId: string, clientIp = ''): Promise<TapRushSessionSummary> {
     const campaign = await this.claimableCampaign(auth, campaignId)
+    // Never let someone play for a reward they could not receive.
+    this.requirePayouts()
+    await this.requireEligible(auth, clientIp)
     if (campaign.type !== 'TAP_RUSH' || !campaign.tapRush) throw new ClaimError('NOT_TAP_RUSH', 'this drop is not a Tap Rush')
     const existing = await this.current(await this.deps.claims.findForUser(campaign.id, auth.privyUserId))
     if (existing && existing.status !== 'FAILED') throw new ClaimError('ALREADY_CLAIMED', 'you already earned stock from this drop')
@@ -110,6 +116,8 @@ export class ClaimService {
     if (existing && existing.status !== 'FAILED') return existing
 
     this.requireLiveWithRoom(campaign)
+    this.requirePayouts()
+    await this.requireEligible(auth, clientIp ?? '')
     const [recipient] = await this.deps.auth.getEmbeddedSolanaWallets(auth.privyUserId)
     if (!recipient) throw new ClaimError('NO_STOCK_WALLET', 'your Blink wallet is still being created — try again in a moment')
     if (recipient === campaign.creatorWallet) throw new ClaimError('OWN_CAMPAIGN', 'you cannot claim your own drop', 403)
@@ -130,8 +138,9 @@ export class ClaimService {
       if (invite.privyUserId === auth.privyUserId) throw new ClaimError('SELF_REFERRAL', 'you cannot use your own invite link', 403)
       const [referrerWallet] = await this.deps.auth.getEmbeddedSolanaWallets(invite.privyUserId)
       if (referrerWallet === recipient) throw new ClaimError('SELF_REFERRAL', 'you cannot use your own invite link', 403)
-      // A referrer without a Blink wallet yet simply earns nothing; the friend is still paid.
-      if (referrerWallet) referral = { code: invite.code, referrerPrivyUserId: invite.privyUserId, referrerWallet }
+      // A referrer without a Blink wallet, or not eligible for xStocks (D-20), earns nothing; the friend is still paid.
+      const referrerEligible = this.deps.eligibility ? await this.deps.eligibility.isEligibleStored(invite.privyUserId) : true
+      if (referrerWallet && referrerEligible) referral = { code: invite.code, referrerPrivyUserId: invite.privyUserId, referrerWallet }
     }
 
     let sgtMint: string | null = null
@@ -210,8 +219,9 @@ export class ClaimService {
   }
 
   /** Re-sends the caller's FAILED referral bonus (e.g. the network dropped it). */
-  async retryBonus(auth: AuthContext, campaignId: string): Promise<StoredClaim> {
+  async retryBonus(auth: AuthContext, campaignId: string, clientIp = ''): Promise<StoredClaim> {
     const campaign = await this.claimableCampaign(auth, campaignId)
+    await this.requireEligible(auth, clientIp)
     const bonus = await this.current(await this.deps.claims.findForUser(campaign.id, auth.privyUserId, 'REFERRAL_BONUS'))
     if (!bonus) throw new ClaimError('NO_BONUS', 'you have not earned a referral bonus yet', 404)
     if (bonus.status !== 'FAILED') return bonus
@@ -264,8 +274,16 @@ export class ClaimService {
   }
 
   private requirePayouts(): PayoutService {
+    if (!this.deps.env.PAYOUTS_ENABLED) throw new ClaimError('PAYOUTS_PAUSED', 'Blink has paused payouts for now. Please try again later.', 503)
     if (!this.deps.payouts) throw new ClaimError('PAYOUTS_UNAVAILABLE', 'payouts are not enabled on this server', 503)
     return this.deps.payouts
+  }
+
+  /** D-20: no xStock reservation without a current, eligible decision (fails closed when the gate is missing). */
+  private async requireEligible(auth: AuthContext, clientIp: string) {
+    if (this.deps.env.XSTOCK_COMPLIANCE === 'off') return
+    if (!this.deps.eligibility) throw new ClaimError('ELIGIBILITY_UNAVAILABLE', 'eligibility checks are not available right now', 503)
+    await this.deps.eligibility.requireEligible(auth.privyUserId, clientIp)
   }
 
   private async current(claim: StoredClaim | null): Promise<StoredClaim | null> {

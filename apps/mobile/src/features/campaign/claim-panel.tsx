@@ -12,6 +12,11 @@ import { campaignLink, campaignRoute, explorerTxUrl } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { type CampaignSummary, type ClaimSummary, maxClaims, PRODUCT_COPY } from '../../shared'
 
+/** D-20: errors the eligibility screen resolves. */
+export function needsEligibility(error: unknown): boolean {
+  return error instanceof ApiError && (error.code === 'NEEDS_ELIGIBILITY' || (error.code === 'NOT_ELIGIBLE' && error.status === 403))
+}
+
 /** Server messages are short lowercase phrases; show them as sentences. */
 export function sentence(message: string) {
   return message ? message[0]!.toUpperCase() + message.slice(1) : message
@@ -232,6 +237,7 @@ function ClaimCard({
   const isSeeker = campaign.type === 'SEEKER'
   const needsInvite = isReferral && !referralCode
   const needsSeeker = claim.error instanceof ApiError && claim.error.code === 'NEEDS_SEEKER'
+  const needsCheck = claim.error instanceof ApiError && claim.error.code === 'NEEDS_ELIGIBILITY'
   const error = claim.error instanceof ApiError || claim.error instanceof Error ? sentence(claim.error.message) : null
 
   return (
@@ -249,7 +255,7 @@ function ClaimCard({
               ? `Got an invite link from a friend? Open it to claim ${rewardLabel}. You both get the reward.`
               : isSeeker
                 ? 'For Solana Seeker owners: Blink checks the Seeker Genesis Token in your Seeker’s wallet. One claim per phone.'
-                : 'Real stock, sent to your Blink wallet. Free — no fees.'}
+                : 'xStocks sent to your Blink wallet. Free — no fees.'}
       </T>
       <View style={styles.meter}>
         <View style={[styles.meterFill, { width: `${total > 0n ? Math.min(100, Number((taken * 100n) / total)) : 0}%` }]} />
@@ -261,6 +267,10 @@ function ClaimCard({
       {soldOut || (needsInvite && user) ? null : !user ? (
         <Button icon="mail" onPress={() => router.push({ pathname: '/login/email', params: { next: campaignRoute(campaign.id, referralCode) } })}>
           Sign in to claim
+        </Button>
+      ) : needsCheck ? (
+        <Button icon="shield" onPress={() => router.push({ pathname: '/eligibility', params: { next: campaignRoute(campaign.id, referralCode) } })}>
+          Confirm eligibility
         </Button>
       ) : needsSeeker ? (
         <Button icon="phone" onPress={() => router.push({ pathname: '/login/wallet', params: { purpose: 'seeker' } })}>

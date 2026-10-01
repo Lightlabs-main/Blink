@@ -1,4 +1,12 @@
-import type { CampaignSummary, CampaignType, ClaimSummary, ReferralSummary, TapRushRules, TapRushSessionSummary } from '../shared'
+import type {
+  CampaignSummary,
+  CampaignType,
+  ClaimSummary,
+  ReferralSummary,
+  TapRushRules,
+  TapRushSessionSummary,
+  XStockEligibilitySummary,
+} from '../shared'
 
 const baseUrl = process.env.EXPO_PUBLIC_BLINK_API_URL
 
@@ -110,6 +118,10 @@ export const api = {
     authed<{ campaign: CampaignSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/resume`, { method: 'POST' }),
   myClaim: (t: GetAccessToken, id: string) => authed<{ claim: ClaimSummary | null }>(t, `/v1/campaigns/${encodeURIComponent(id)}/claim`),
   myClaims: (t: GetAccessToken) => authed<{ claims: ClaimSummary[] }>(t, '/v1/me/claims'),
+  /** D-20: the caller's own xStocks eligibility (never public). */
+  myEligibility: (t: GetAccessToken) => authed<{ enforced: boolean; eligibility: XStockEligibilitySummary | null }>(t, '/v1/me/eligibility'),
+  declareEligibility: (t: GetAccessToken, body: { country: string; notUsPerson: boolean; attestations: string[] }) =>
+    authed<{ enforced: boolean; eligibility: XStockEligibilitySummary }>(t, '/v1/me/eligibility', { method: 'POST', body: JSON.stringify(body) }),
   tapRushStart: (t: GetAccessToken, id: string) =>
     authed<{ session: TapRushSessionSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/start`, { method: 'POST' }),
   tapRushFinish: (t: GetAccessToken, id: string, sessionId: string, tapTimesMs: number[]) =>

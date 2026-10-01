@@ -38,7 +38,7 @@ export default function Drops() {
       <View style={{ gap: space.sm }}>
         <T variant="overline">Live now</T>
         <T variant="display">Drops</T>
-        <T>Real stock you can claim, play for or earn — straight from creators.</T>
+        <T>xStocks you can claim, play for or earn — straight from creators.</T>
       </View>
 
       <ScrollView contentContainerStyle={{ gap: space.sm, paddingRight: space.xl }} horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -20 }}>

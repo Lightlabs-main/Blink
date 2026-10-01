@@ -1,4 +1,4 @@
-import { assessTapRound, canTransition } from '@blink/domain'
+import { assessTapRound, canTransition, evaluateXStockEligibility, XSTOCK_POLICY } from '@blink/domain'
 import { describe, expect, it } from 'vitest'
 
 import { claimRequest, createCampaignRequest, finishTapRushRequest, rawAmount } from './index.ts'
@@ -104,5 +104,28 @@ describe('assessTapRound (D-14)', () => {
   })
   it('rejects metronome-perfect intervals', () => {
     expect(assessTapRound(Array.from({ length: 30 }, (_, i) => 100 + i * 150), 30, 10)).toMatchObject({ reason: 'ROBOTIC' })
+  })
+})
+
+describe('xStocks eligibility policy (D-20)', () => {
+  const ok = { declaredCountry: 'DE', notUsPerson: true, attestations: [], ipCountry: 'DE' }
+  it('allows an attested, non-restricted declaration from a non-restricted IP', () => {
+    expect(evaluateXStockEligibility(ok)).toEqual({ eligible: true, reason: 'ELIGIBLE' })
+  })
+  it('blocks every restricted country, by declaration and by IP', () => {
+    for (const { code } of XSTOCK_POLICY.restrictions) {
+      expect(evaluateXStockEligibility({ ...ok, declaredCountry: code }).eligible).toBe(false)
+      expect(evaluateXStockEligibility({ ...ok, ipCountry: code }).eligible).toBe(false)
+    }
+  })
+  it('includes the issuer-listed jurisdictions', () => {
+    const codes = XSTOCK_POLICY.restrictions.map((r) => r.code)
+    for (const c of ['US', 'GB', 'IR', 'KP', 'SY', 'NG', 'RU', 'CU', 'CA', 'AU']) expect(codes).toContain(c)
+  })
+  it('fails closed on unknown IP country, invalid country and missing attestations', () => {
+    expect(evaluateXStockEligibility({ ...ok, ipCountry: null }).reason).toBe('IP_COUNTRY_UNKNOWN')
+    expect(evaluateXStockEligibility({ ...ok, declaredCountry: 'Germany' }).reason).toBe('INVALID_COUNTRY')
+    expect(evaluateXStockEligibility({ ...ok, notUsPerson: false }).reason).toBe('US_PERSON')
+    expect(evaluateXStockEligibility({ ...ok, declaredCountry: 'UA' }).reason).toBe('REGION_ATTESTATION_MISSING')
   })
 })

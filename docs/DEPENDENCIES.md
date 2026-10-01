@@ -156,3 +156,14 @@ with `getAccountInfo` on the same day.
 - The official SKR sample comments "SKR uses 9 decimals" but uses 6. The mint says 6.
 - Total SKR stake needs getProgramAccounts across guardian pools, which needs a dedicated RPC
   (OQ-6).
+
+## geoip-country (2026-10-01)
+
+| Field | Value |
+|---|---|
+| Package | `geoip-country@5.0.202609300220`, installed in `@blink/api` only |
+| Purpose | Offline IP → country for the D-20 eligibility cross-check; no IP leaves the server |
+| Data | Bundled MaxMind GeoLite2 country data, republished about twice a week; update with `npm update geoip-country` |
+| License | MaxMind GeoLite2 License (EULA in the package). The website shows the required attribution: "This product includes GeoLite2 data created by MaxMind" |
+| Verified | Lookups tested offline: 8.8.8.8 → US, 197.210.0.1 → NG, 81.2.69.142 → GB, loopback → null (fails closed) |
+| Limitation | The README says the code is no longer maintained (the author recommends `ip-location-api`, which downloads data at runtime). Data releases continue. Revisit before production. VPNs defeat IP checks, which is why the declaration + attestation is primary and the IP is a cross-check |
