@@ -10,7 +10,7 @@ import { api, ApiError, type XStockListing } from '../../lib/api'
 import { displayShares } from '../../lib/data'
 import { campaignLink, campaignRoute, explorerTxUrl } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
-import { type CampaignSummary, type ClaimSummary, maxClaims } from '../../shared'
+import { type CampaignSummary, type ClaimSummary, maxClaims, PRODUCT_COPY } from '../../shared'
 
 /** Server messages are short lowercase phrases; show them as sentences. */
 export function sentence(message: string) {
@@ -229,13 +229,15 @@ function ClaimCard({
 
   const isTapRush = campaign.type === 'TAP_RUSH'
   const isReferral = campaign.type === 'REFERRAL'
+  const isSeeker = campaign.type === 'SEEKER'
   const needsInvite = isReferral && !referralCode
+  const needsSeeker = claim.error instanceof ApiError && claim.error.code === 'NEEDS_SEEKER'
   const error = claim.error instanceof ApiError || claim.error instanceof Error ? sentence(claim.error.message) : null
 
   return (
     <Card style={{ gap: space.md }} tone="lime">
       <Row>
-        <Icon name={isTapRush ? 'target' : isReferral ? 'users' : 'gift'} size={20} stroke={color.lime} />
+        <Icon name={isTapRush ? 'target' : isReferral ? 'users' : isSeeker ? 'phone' : 'gift'} size={20} stroke={color.lime} />
         <T variant="heading">{soldOut ? 'All claimed' : isReferral && referralCode ? `A friend invited you — get ${rewardLabel}` : `Get ${rewardLabel}`}</T>
       </Row>
       <T variant="label" color={color.text}>
@@ -245,17 +247,24 @@ function ClaimCard({
             ? `Tap ${campaign.tapRush.goal} times in ${campaign.tapRush.seconds} seconds to earn it. Free — no fees.`
             : needsInvite
               ? `Got an invite link from a friend? Open it to claim ${rewardLabel}. You both get the reward.`
-              : 'Real stock, sent to your Blink wallet. Free — no fees.'}
+              : isSeeker
+                ? 'For Solana Seeker owners: Blink checks the Seeker Genesis Token in your Seeker’s wallet. One claim per phone.'
+                : 'Real stock, sent to your Blink wallet. Free — no fees.'}
       </T>
       <View style={styles.meter}>
         <View style={[styles.meterFill, { width: `${total > 0n ? Math.min(100, Number((taken * 100n) / total)) : 0}%` }]} />
       </View>
       <T variant="caption">{`${taken.toString()} of ${total.toString()} ${isReferral ? 'rewards ' : ''}claimed`}</T>
       {existing?.status === 'FAILED' ? <Notice message="Your last claim didn’t go through. You can try again." tone="warn" /> : null}
+      <T variant="caption">{PRODUCT_COPY.issuerControlStatement}</T>
       <Notice message={error} />
       {soldOut || (needsInvite && user) ? null : !user ? (
         <Button icon="mail" onPress={() => router.push({ pathname: '/login/email', params: { next: campaignRoute(campaign.id, referralCode) } })}>
           Sign in to claim
+        </Button>
+      ) : needsSeeker ? (
+        <Button icon="phone" onPress={() => router.push({ pathname: '/login/wallet', params: { purpose: 'seeker' } })}>
+          Connect my Seeker
         </Button>
       ) : isTapRush ? (
         <Button icon="bolt" onPress={() => router.push(`/tap-rush/${campaign.id}`)}>

@@ -343,6 +343,7 @@ export default function Create() {
             ))}
           </View>
           <Notice message={PRODUCT_COPY.treasuryStatement} tone="info" />
+          <T variant="caption">{PRODUCT_COPY.issuerControlStatement}</T>
           <T variant="caption">Saving creates a draft. Nothing leaves your wallet until you fund it and approve in your wallet app.</T>
           <Notice message={create.error instanceof ApiError || create.error instanceof Error ? create.error.message : null} />
         </Card>

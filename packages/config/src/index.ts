@@ -23,12 +23,21 @@ export const envSchema = z.object({
   SOLANA_RPC_URL: z.url(),
   /** Read-only RPC for mainnet xStock mint data (multiplier, paused). Never used to send transactions. */
   XSTOCK_READ_RPC_URL: z.url().optional(),
+  /** D-17: mainnet RPC for Seeker Genesis Token checks (falls back to XSTOCK_READ_RPC_URL, then the public endpoint). */
+  SEEKER_RPC_URL: z.url().optional(),
   /** Devnet-only test mint from scripts/devnet-test-mint.ts (no real value). Ignored on other clusters. */
   DEVNET_TEST_MINT: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
   MAINNET_ENABLED: boolFlag,
   MAINNET_GO_APPROVED: boolFlag,
   MAINNET_BUDGET_LAMPORTS: lamports.default(MAINNET_TARGET_LAMPORTS),
   DEMO_MODE: boolFlag,
+  /**
+   * D-16 anti-sybil: successful claims allowed per client IP per drop within 24 h. 0 = off (default; a demo room
+   * shares one Wi-Fi IP). Consider 3–5 on mainnet.
+   */
+  CLAIMS_PER_IP_PER_CAMPAIGN: z.coerce.number().int().min(0).default(0),
+  /** §16: warn when the payout fee payer's balance drops below this (default 0.01 SOL). */
+  FEE_PAYER_LOW_LAMPORTS: lamports.default(10_000_000n),
 
   API_HOST: z.string().default('127.0.0.1'),
   /** VPS isolation: Blink-specific, configurable port. 4310 is only a default — check the host first. */

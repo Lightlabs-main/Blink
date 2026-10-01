@@ -108,3 +108,15 @@ Built under the DECISIONS D-14 assumptions. Migration: `20260930120000_referrals
 ## API host (2026-09-30)
 
 New app builds call `https://api.blinksol.site`. The sslip.io host remains an alias (DECISIONS D-15).
+
+## API contract v4 (owner: Claude, 2026-10-01)
+
+- **`GET /v1/status`** (public) → `{ cluster, payouts: { enabled, feePayer?, balanceLamports?,
+  low? } }`.
+- **Rate limits:** 429 `RATE_LIMITED` on mutating recipient routes, and 429 `IP_LIMIT` when
+  `CLAIMS_PER_IP_PER_CAMPAIGN` is set (D-16).
+- **SEEKER drops are claimable** (D-17). `POST …/claim` adds 403 `NEEDS_SEEKER`, 409
+  `DEVICE_ALREADY_CLAIMED` and 503 `SEEKER_UNAVAILABLE`. Creating a SEEKER campaign now requires
+  `rewardPerClaimRaw`.
+- **Migration:** `20261001090000_seeker_claims` (`Claim.sgtMint`).
+- **New env:** `FEE_PAYER_LOW_LAMPORTS`, `CLAIMS_PER_IP_PER_CAMPAIGN`, `SEEKER_RPC_URL`.

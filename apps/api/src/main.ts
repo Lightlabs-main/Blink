@@ -16,6 +16,7 @@ import { ClaimService } from './claim-service.ts'
 import { SolanaPayoutService } from './payout-service.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
 import { PrismaClaimRepository } from './prisma-claim-repo.ts'
+import { MainnetSeekerVerifier } from './seeker.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -87,6 +88,8 @@ const app = buildApp({
   funding,
   claims,
   payouts,
+  // SGTs live on mainnet only, so Seeker checks always read mainnet, even while payouts run on devnet.
+  seeker: new MainnetSeekerVerifier(createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')),
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,
@@ -94,6 +97,7 @@ const app = buildApp({
 
 app.addHook('onClose', async () => {
   clearInterval(sweepTimer)
+  clearInterval(feeCheck)
   await prisma?.$disconnect()
 })
 
@@ -119,6 +123,21 @@ const sweepTimer = setInterval(() => {
     })
 }, 60_000)
 sweepTimer.unref()
+
+// §16: the fee payer holds minimal SOL; say so loudly (at most hourly) when it needs topping up.
+let lastLowWarning = 0
+const feeCheck = setInterval(() => {
+  payouts.feePayerStatus().then(
+    (s) => {
+      if (s.low && Date.now() - lastLowWarning > 3_600_000) {
+        lastLowWarning = Date.now()
+        app.log.warn({ feePayer: s.address, balanceLamports: s.balanceLamports.toString() }, 'FEE PAYER LOW: top it up or claims will fail')
+      }
+    },
+    (err: unknown) => app.log.warn({ err }, 'fee payer balance check failed'),
+  )
+}, 300_000)
+feeCheck.unref()
 
 // Resolve (or create once) the §16 fee payer at boot so its address is in the logs for funding.
 payouts.feePayerAddress().then(

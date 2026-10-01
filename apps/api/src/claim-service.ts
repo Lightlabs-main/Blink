@@ -7,6 +7,12 @@ import type { AuthContext, AuthVerifier } from './auth.ts'
 import type { CampaignRepository, StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository, StoredClaim, StoredReferral } from './claim-repo.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
+import type { RateLimiter } from './rate-limit.ts'
+
+/** D-17: finds a genuine Seeker Genesis Token (mainnet) held by a wallet; returns its mint (the device identity). */
+export interface SeekerVerifier {
+  findSgt(wallet: string): Promise<string | null>
+}
 
 /** A RESERVED claim older than this was abandoned before signing (e.g. a restart) and is released. */
 export const STALE_RESERVATION_MS = 120_000
@@ -48,6 +54,10 @@ export class ClaimService {
       claims: ClaimRepository
       payouts?: PayoutService
       log?: { warn: (o: object, msg: string) => void }
+      /** D-16: shared limiter for the per-IP-per-drop claim cap (env CLAIMS_PER_IP_PER_CAMPAIGN). */
+      limiter?: RateLimiter
+      /** D-17: required for SEEKER drops. */
+      seeker?: SeekerVerifier
     },
   ) {}
 
@@ -92,7 +102,7 @@ export class ClaimService {
     return { qualified, taps: input.taps, goal: session.goal, attemptsLeft: Math.max(0, TAP_RUSH_LIMITS.maxAttempts - used) }
   }
 
-  async claim(auth: AuthContext, campaignId: string, input: { tapSessionId?: string; ref?: string }): Promise<StoredClaim> {
+  async claim(auth: AuthContext, campaignId: string, input: { tapSessionId?: string; ref?: string }, clientIp?: string): Promise<StoredClaim> {
     const campaign = await this.claimableCampaign(auth, campaignId)
 
     // Idempotent: an existing claim is reported (and advanced), never paid twice.
@@ -124,7 +134,23 @@ export class ClaimService {
       if (referrerWallet) referral = { code: invite.code, referrerPrivyUserId: invite.privyUserId, referrerWallet }
     }
 
+    let sgtMint: string | null = null
+    if (campaign.type === 'SEEKER') {
+      if (!this.deps.seeker) throw new ClaimError('SEEKER_UNAVAILABLE', 'Seeker verification is not enabled on this server', 503)
+      // Wallet control is proven by Privy SIWS (the wallet is linked + verified to this user); SGT ownership onchain.
+      for (const wallet of await this.deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)) {
+        sgtMint = await this.deps.seeker.findSgt(wallet)
+        if (sgtMint) break
+      }
+      if (!sgtMint) throw new ClaimError('NEEDS_SEEKER', 'connect the wallet on your Solana Seeker to claim this drop', 403)
+    }
+
     const payouts = this.requirePayouts()
+    const cap = this.deps.env.CLAIMS_PER_IP_PER_CAMPAIGN
+    const ipKey = cap > 0 && clientIp && this.deps.limiter ? `claim-ip:${campaign.id}:${clientIp}` : null
+    if (ipKey && this.deps.limiter!.peek(ipKey) >= cap) {
+      throw new ClaimError('IP_LIMIT', 'too many people have claimed this drop from your network — try again later', 429)
+    }
     const reserved = await this.deps.claims.reserve({
       campaignId: campaign.id,
       privyUserId: auth.privyUserId,
@@ -132,6 +158,7 @@ export class ClaimService {
       amountRaw: campaign.rewardPerClaimRaw!,
       tapSessionId,
       referral,
+      sgtMint,
     })
     if (!reserved.ok) {
       const message = {
@@ -139,10 +166,12 @@ export class ClaimService {
         EXHAUSTED: 'all the stock in this drop has been claimed',
         WALLET_ALREADY_CLAIMED: 'this wallet already received stock from this drop',
         SESSION_ALREADY_USED: 'that round was already used for a claim',
+        DEVICE_ALREADY_CLAIMED: 'this Seeker already claimed this drop',
       }[reserved.reason]
       throw new ClaimError(reserved.reason, message)
     }
     if (!reserved.fresh) return this.current(reserved.claim) as Promise<StoredClaim>
+    if (ipKey) this.deps.limiter!.hit(ipKey, Number.MAX_SAFE_INTEGER, 24 * 3_600_000)
 
     const paid = await payouts.pay(campaign, reserved.claim).catch(async (err: unknown) => {
       // The friend's payout failed before sending: the bonus was reserved with it, so release it too.

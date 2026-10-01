@@ -10,10 +10,11 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './auth.ts'
 import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
 import { type ClaimRepository, type StoredClaim, toClaimSummary } from './claim-repo.ts'
-import { ClaimService } from './claim-service.ts'
+import { ClaimService, type SeekerVerifier } from './claim-service.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
+import { LIMITS, RateLimiter } from './rate-limit.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
 
@@ -30,6 +31,8 @@ export interface AppDeps {
   claims?: ClaimRepository
   /** Reward payouts; claims return 503 PAYOUTS_UNAVAILABLE without it. */
   payouts?: PayoutService
+  /** D-17: Seeker Genesis Token checks for SEEKER drops. */
+  seeker?: SeekerVerifier
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -47,7 +50,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       ? { redact: ['req.headers.authorization', 'req.headers.cookie'] }
       : false,
     bodyLimit: 16 * 1024,
+    // Caddy on the same host sets X-Forwarded-For; trust it from loopback only so req.ip is the real client.
+    trustProxy: '127.0.0.1',
   })
+  const limiter = new RateLimiter()
+
+  /** D-16: throttle mutating recipient routes per client IP and per signed-in user. */
+  function throttle(req: FastifyRequest, auth: AuthContext) {
+    const ok =
+      limiter.hit(`ip:${req.ip}`, LIMITS.perIp.max, LIMITS.perIp.windowMs) &&
+      limiter.hit(`user:${auth.privyUserId}`, LIMITS.perUser.max, LIMITS.perUser.windowMs)
+    if (!ok) throw new ClaimError('RATE_LIMITED', 'too many requests — please slow down', 429)
+  }
 
   async function requireAuth(req: FastifyRequest): Promise<AuthContext> {
     return deps.auth.verifyAccessToken(bearerToken(req.headers.authorization))
@@ -64,6 +78,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   })
 
   app.get('/health', async () => ({ ok: true, cluster: deps.env.SOLANA_CLUSTER, demoMode: deps.env.DEMO_MODE }))
+
+  /** Public operational status. The fee payer's address and balance are public onchain anyway. */
+  app.get('/v1/status', async (req) => {
+    let payouts: { enabled: boolean; feePayer?: string; balanceLamports?: string; low?: boolean } = { enabled: Boolean(deps.payouts) }
+    try {
+      const s = await deps.payouts?.feePayerStatus()
+      if (s) payouts = { enabled: true, feePayer: s.address, balanceLamports: s.balanceLamports.toString(), low: s.low }
+    } catch (err) {
+      req.log.warn({ err }, 'fee payer status unavailable')
+    }
+    return { cluster: deps.env.SOLANA_CLUSTER, payouts }
+  })
 
   app.get('/v1/xstocks', async (req) => {
     let market = new Map<string, { multiplier: number; paused: boolean; asOf: number }>()
@@ -256,7 +282,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker })
   }
 
   async function claimResponse(claim: StoredClaim | null) {
@@ -268,11 +294,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   /** Starts a server-timed Tap Rush round. The client starts its timer when this returns. */
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/start', async (req) => {
     const auth = await requireAuth(req)
+    throttle(req, auth)
     return { session: await requireClaims().startTapRush(auth, req.params.id) }
   })
 
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/finish', async (req, reply) => {
     const auth = await requireAuth(req)
+    throttle(req, auth)
     const parsed = finishTapRushRequest.safeParse(req.body)
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
     return requireClaims().finishTapRush(auth, req.params.id, parsed.data)
@@ -281,9 +309,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   /** Claims the fixed reward and pays it to the caller's Blink wallet. Idempotent per user and campaign. */
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/claim', async (req, reply) => {
     const auth = await requireAuth(req)
+    throttle(req, auth)
     const parsed = claimRequest.safeParse(req.body ?? {})
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
-    return claimResponse(await requireClaims().claim(auth, req.params.id, parsed.data))
+    return claimResponse(await requireClaims().claim(auth, req.params.id, parsed.data, req.ip))
   })
 
   /** The caller's claim for this campaign (null if none), refreshed from the chain while it is being sent. */
@@ -295,6 +324,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   /** Referral drops: the caller's invite code (POST creates it) and the bonus it earned. */
   async function referralResponse(req: FastifyRequest<{ Params: { id: string } }>, create: boolean) {
     const auth = await requireAuth(req)
+    if (create) throttle(req, auth)
     const { referral, bonus } = await requireClaims().referral(auth, req.params.id, create)
     if (!referral) return { referral: null }
     const campaign = await deps.campaigns.findById(referral.campaignId)
@@ -305,6 +335,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/referral/bonus/retry', async (req) => {
     const auth = await requireAuth(req)
+    throttle(req, auth)
     return claimResponse(await requireClaims().retryBonus(auth, req.params.id))
   })
 

@@ -82,10 +82,8 @@ export interface CampaignSummary {
   createdAt: string
 }
 
-/**
- * Mechanics recipients can claim today (D-13, D-14). SEEKER needs Seeker Genesis Token rules that are not specified yet.
- */
-export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH', 'REFERRAL'] as const satisfies readonly CampaignType[]
+/** Mechanics recipients can claim (D-13, D-14, D-17). */
+export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH', 'REFERRAL', 'SEEKER'] as const satisfies readonly CampaignType[]
 
 export function isClaimableType(type: CampaignType): boolean {
   return (CLAIMABLE_TYPES as readonly CampaignType[]).includes(type)
@@ -203,4 +201,7 @@ export const PRODUCT_COPY = {
     'Blink determines campaign eligibility; asset settlement is transparent and verifiable on Solana mainnet.',
   treasuryStatement:
     'Your campaign stock stays in an account you own. Blink can only distribute the amount you approve.',
+  /** OQ-5 DRAFT — wording awaiting Maris's approval. Every supported xStock mint has a PermanentDelegate (the issuer). */
+  issuerControlStatement:
+    'xStocks are tokenized securities issued by a third party, which can freeze or move them in any wallet, as regulated issuers can.',
 } as const

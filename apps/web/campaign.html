@@ -75,7 +75,8 @@
 
         <p class="small-print">
           The creator's stock stays in an account they own. Blink can only distribute the amount they approved. Every
-          reward is a public Solana transaction. This edition runs on Solana devnet with test assets that have no real value.
+          reward is a public Solana transaction. xStocks are issued by a third party, which can freeze or move them in any
+          wallet. This edition runs on Solana devnet with test assets that have no real value.
         </p>
       </div>
     </main>
@@ -132,7 +133,9 @@
                 ? 'Tap ' + campaign.tapRush.goal + ' times in ' + campaign.tapRush.seconds + ' seconds to win it.'
                 : campaign.type === 'REFERRAL'
                   ? 'Invite a friend — when they claim through your link, you both get stock.'
-                  : 'Sent to your wallet, free of charge.'
+                  : campaign.type === 'SEEKER'
+                    ? 'For Solana Seeker owners — one claim per phone, verified by its Seeker Genesis Token.'
+                    : 'Sent to your wallet, free of charge.'
             if (campaign.type === 'TAP_RUSH') $('how-last').textContent = 'Play Tap Rush — hit the goal and the stock is sent to your wallet.'
             if (campaign.type === 'REFERRAL' && !ref) $('how-last').textContent = 'Claim through a friend’s invite link, or share your own — you both get stock.'
             const live = campaign.status === 'LIVE'

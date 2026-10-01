@@ -20,8 +20,8 @@ describe('createCampaignRequest', () => {
     expect(createCampaignRequest.safeParse({ type: 'GIFT', mint, allowanceRaw: '100', rewardPerClaimRaw: '0' }).success).toBe(false)
     expect(createCampaignRequest.safeParse({ type: 'GIFT', mint, allowanceRaw: '100', rewardPerClaimRaw: '101' }).success).toBe(false)
     expect(createCampaignRequest.safeParse({ type: 'GIFT', mint, allowanceRaw: '100', rewardPerClaimRaw: '100' }).success).toBe(true)
-    // Mechanics without claiming yet may omit it.
-    expect(createCampaignRequest.safeParse({ type: 'SEEKER', mint, allowanceRaw: '100' }).success).toBe(true)
+    // Every mechanic is claimable now, so every one needs it.
+    expect(createCampaignRequest.safeParse({ type: 'SEEKER', mint, allowanceRaw: '100' }).success).toBe(false)
     expect(createCampaignRequest.safeParse({ type: 'REFERRAL', mint, allowanceRaw: '100' }).success).toBe(false)
   })
 

@@ -17,7 +17,7 @@ export const CAMPAIGN_TYPE_BLURB: Record<CampaignType, string> = {
   TAP_RUSH: 'People tap fast to earn stock.',
   EARLY_CLAIM: 'First people to claim get stock.',
   REFERRAL: 'People invite friends — both get stock.',
-  SEEKER: 'A drop for Seeker phone owners.',
+  SEEKER: 'Only Solana Seeker owners can claim — one per phone.',
 }
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
