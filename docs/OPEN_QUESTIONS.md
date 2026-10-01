@@ -48,3 +48,14 @@ an existing holder account.
 
 §25 requires a random, short-lived, single-use nonce and exact payload verification. Privy performs
 SIWS verification, but we haven't found documentation of its nonce expiry and single-use semantics.
+
+## OQ-9 — xStocks eligibility method — NEEDS_OWNER_DECISION (2026-10-01)
+
+How should Blink establish that a recipient or creator may receive xStocks? Options include
+self-declaration + attestation, an IP-country cross-check, or a KYC provider. Minimum data applies.
+Public mainnet distribution stays BLOCKED until this is decided (D-19).
+
+## OQ-10 — Product update received incomplete — BLOCKED (2026-10-01)
+
+Part 2 stops inside §37 (Codex ownership). The build-order, testing and demo sections haven't been
+received.

@@ -8,9 +8,10 @@ doesn't change. This document records:
 
 Status words follow MASTER_PROMPT §5.4.
 
-> **Input note.** The update text received in chat is cut off inside §19 ("Add an architecture
-> extension point so a future compli…"). Anything after that point has not been received. Items
-> that may depend on it are marked **AWAITING REST OF UPDATE**.
+> **Input note.** The update arrived in two parts. Part 2 continues §19 but is cut off again inside
+> §37 ("Do not casually rewrite Codex-owned: apps/api; packages/solana; packages/xstocks; Prisma
+> persistence; -"). The rest of §37 and the build-order, testing and demo sections after it have not
+> been received. Items that depend on them are marked **AWAITING REST OF UPDATE**.
 
 ## 1. New positioning
 
@@ -182,3 +183,134 @@ Rules:
   RPC rate-limits heavily (OQ-6), so a dedicated RPC is needed for reliable results. Until then the
   verifier returns ERROR, never a false PASS or FAIL.
 - **Anything after the truncation point:** AWAITING REST OF UPDATE.
+
+## 6. Part 2 (§19–§37): what it changes
+
+### 6.1 Compliance (§21): the main new P0 blocker
+
+- **Status:** `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED` (SECURITY.md §1, D-19).
+- **Restriction list:** re-verified 2026-10-01. US, US persons, the UK and "unlawful or
+  unauthorized" jurisdictions are confirmed word for word on official xStocks pages. Canada,
+  Australia and sanctioned jurisdictions are blocked conservatively but not yet seen word for word;
+  the issuer's full list is at `assets.backed.fi/legal-documentation`.
+- **To build:**
+  - a server-side xStocks eligibility gate before **every** reward reservation and before creator
+    funding;
+  - a minimal eligibility record (normalized country result, eligible yes/no, policy id and
+    version, timestamp, method, reason);
+  - mobile UX to establish eligibility.
+- **NEEDS_OWNER_DECISION:** the method for establishing eligibility. Options: self-declared
+  country + not-a-US-person attestation; IP-country signal as a cross-check (no precise location);
+  a third-party KYC provider. The update requires minimum data, so the method is Maris's call.
+
+### 6.2 Verification timing (§20)
+
+Current onchain state, evaluated immediately before reservation. No locking, no monitoring, and no
+"hold for N days". Recorded in SECURITY.md §2.
+
+### 6.3 Security additions (§22)
+
+Recorded in SECURITY.md §2.
+
+**Gap: there is no global payout kill switch.** The update calls one "existing" and mandatory. Today
+the only off-switches are the mainnet flags (mainnet only) and the per-campaign PAUSED state. To
+add: `PAYOUTS_ENABLED` (env, default true), checked before every reservation and send, reported in
+`/v1/status`.
+
+### 6.4 Payout architecture (§23) and treasury invariants (§24)
+
+Unchanged (creator-owned delegated treasury, no program, same budget). How the invariants map to
+the code:
+
+- `reservedRaw + paidRaw` is stored as `Campaign.claimedRaw`, and the database CHECK keeps it at or
+  below `allowanceRaw` (= the original delegated amount).
+- `availableRaw = allowanceRaw − claimedRaw`. Dust is the leftover below one reward and is never
+  paid.
+- LIVE requires the onchain delegated amount to equal the allowance and the balance to cover it,
+  so the maximum payout is fully funded.
+- Verifiers only decide who may receive a reward; they never add inventory.
+
+### 6.5 State names (§25, §26): preserve, map, don't fork
+
+**Campaign.** Existing: `DRAFT → AWAITING_FUNDING → AWAITING_DELEGATION → LIVE ↔ PAUSED → ENDED →
+CLOSED`. The update's names map like this:
+
+| Update | Existing equivalent |
+|---|---|
+| VERIFYING_FUNDING | `AWAITING_DELEGATION` (the funding verify step) |
+| UNDERFUNDED | `PAUSED` + `INSUFFICIENT_BALANCE` |
+| DELEGATE_REVOKED | `PAUSED` + `DELEGATION_REVOKED` / `DELEGATE_CHANGED` |
+| ASSET_PAUSED | `PAUSED` + `MINT_STATE_CHANGED` |
+| FUNDING_FAILED | stays `AWAITING_FUNDING` with an error |
+| SETTLING | not modelled; nothing to settle under the delegate model until revoke/close flows exist |
+| CANCELLED | `CLOSED` from DRAFT |
+
+Verified Quest uses the same machine.
+
+**Claim.** Existing: `RESERVED → SENDING → PAID`, plus `FAILED` (released, retryable). The update's
+names map like this:
+
+| Update | Existing equivalent |
+|---|---|
+| ELIGIBLE | requirements PASSED (verification layer), before any claim row exists |
+| BUILDING_TX | `RESERVED` |
+| SUBMITTED / CONFIRMING | `SENDING` |
+| CONFIRMED | `PAID` (confirmed commitment) |
+| FINALIZED | not tracked separately |
+| FAILED_RETRYABLE | `FAILED` |
+
+**UI copy follows §26:** "Requirement complete", "Qualified", "Reward reserved", "Sending on
+Solana…", "Received". The current "Sending X…" and "You got X" copy will be aligned.
+
+### 6.6 Authentication (§27)
+
+Unchanged. The UI will distinguish "wallet connected" from "wallet verified" (SIWS).
+
+### 6.7 SKR and ORE notes (§28, §29)
+
+Recorded in VERIFIER_ARCHITECTURE.md with source labels ([official], [onchain], [inference]):
+- SKR decimals are read from the mint, not hardcoded;
+- SKR stake is aggregated across all guardian pools, with the required tests listed;
+- ORE stake checks owner program, PDA, authority, raw balance, decimals and network;
+- ORE activity stays disabled.
+
+### 6.8 UI (§30–§32)
+
+- **Direction:** premium consumer and clean fintech. No neon, no dashboards. This lines up with
+  Maris's earlier wish to restyle the app in the website's broadsheet style; the restyle can follow
+  the same direction.
+- **Home and Discover:** add filters only where backed by working functionality.
+- **Verified Quest participant UX:** every requirement shown separately with its own state and
+  call to action; "Qualified" only after the server says so.
+
+### 6.9 Live room (§33) and share (§34)
+
+Same as §3.5 and §3.6 above.
+
+- **Polling is confirmed acceptable** for P0.
+- **Links:** they use the existing `https://blinksol.site` origin (D-15). The Android App Links
+  fingerprint in `assetlinks.json` was **read from the signed APK**, not fabricated. Custom-scheme
+  links stay supported.
+
+### 6.10 Squads, Clubs, Passport (§35)
+
+Roadmap only until P0 is stable.
+
+### 6.11 Shared domain types (§36)
+
+Existing types are extended rather than duplicated:
+- `CampaignType`, the claim types and `ClaimSummary`;
+- new: `VerifierType`, condition/group/requirements, result + evidence summary, public participant
+  identity, room DTO, campaign timing.
+
+Sensitive evidence stays in backend-only types.
+
+### 6.12 Ownership (§37, partial)
+
+Part 2 says Codex owns `apps/api`, `packages/solana`, `packages/xstocks` and Prisma, and that
+Claude must not casually rewrite them. **The rest of §37 hasn't been received.**
+
+Context: no Codex session has worked in this repository. At Maris's direction (2026-09-30 →
+10-01), Claude built the claims, payouts and Seeker backend in those directories, and each step is
+recorded in HANDOFF.md. **Before more backend work in Codex-owned paths, the rest of §37 decides
+whether Claude continues there or only writes HANDOFF specs.** AWAITING REST OF UPDATE.

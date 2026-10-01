@@ -256,3 +256,17 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
    share → challenge. Squads, Stock Clubs and Passport are P1/P2, documented and not faked.
 8. **No new compliance bypass.** No jurisdiction controls exist yet, so mainnet distribution stays
    BLOCKED until Maris defines them.
+
+## D-19 — xStocks compliance gate; public mainnet distribution BLOCKED (2026-10-01, Maris update §21)
+
+- **`MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED`** until a Blink eligibility mechanism exists and
+  Maris approves it. A controlled mainnet smoke test with one eligible participant still needs
+  Maris's explicit approval.
+- **Policy** `XSTOCKS-ELIGIBILITY-2026-10-01` v1 is in SECURITY.md §1, with each restriction's
+  source and status. Re-verify it against the issuer's list before release.
+- **The gate is separate and mandatory** for every recipient and creator path. No verifier
+  (Seeker, SKR, ORE, Tap Rush) implies it.
+- **Minimum data.** Compliance state never appears publicly.
+- **The eligibility method is NEEDS_OWNER_DECISION** (PRODUCT_UPDATE §6.1).
+- **Gap:** a global payout kill switch (`PAYOUTS_ENABLED`) is required and will be added
+  (PRODUCT_UPDATE §6.3).
