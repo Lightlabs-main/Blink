@@ -43,7 +43,8 @@ function fakeRpc(exists = false): Rpc<GetAccountInfoApi> {
   } as unknown as Rpc<GetAccountInfoApi>
 }
 
-const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
+// Mechanics tests; the xStocks eligibility gate is tested in claims.test.ts.
+const env = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', XSTOCK_COMPLIANCE: 'off' })
 let app: ReturnType<typeof buildApp>
 afterEach(async () => app?.close())
 

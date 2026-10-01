@@ -1,5 +1,5 @@
 import { usePrivy, useUnlinkWallet } from '@privy-io/expo'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
 import { Alert, Pressable, Share, StyleSheet, View } from 'react-native'
@@ -7,6 +7,8 @@ import { Alert, Pressable, Share, StyleSheet, View } from 'react-native'
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
+import { api } from '../../lib/api'
+import { COUNTRIES } from '../../lib/countries'
 import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, networkLabel, shortAddress } from '../../lib/format'
 import { embeddedSolanaAddress, userEmail } from '../../lib/privy-user'
@@ -22,11 +24,16 @@ function RowIcon({ icon, tint = color.lime }: { icon: IconName; tint?: string })
 
 export default function Profile() {
   const router = useRouter()
-  const { user, logout } = usePrivy()
+  const { user, logout, getAccessToken } = usePrivy()
   const { disconnect, account } = useMobileWallet()
   const queryClient = useQueryClient()
   const { unlinkWallet } = useUnlinkWallet()
   const me = useMe()
+  const eligibility = useQuery({ queryKey: ['eligibility'], queryFn: () => api.myEligibility(getAccessToken), enabled: Boolean(user) })
+  const elig = eligibility.data?.eligibility
+  const eligText = !elig || !elig.current
+    ? 'Not confirmed yet'
+    : `${elig.eligible ? 'Eligible' : 'Not available'} · ${COUNTRIES.find((c) => c.code === elig.declaredCountry)?.name ?? elig.declaredCountry}`
   const mine = useMyCampaigns()
   const network = useNetwork()
   const assets = useAssetMap()
@@ -159,6 +166,18 @@ export default function Profile() {
           </Card>
         </View>
       ) : null}
+
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Privacy & eligibility" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow
+            leading={<RowIcon icon="shield" />}
+            onPress={() => router.push('/eligibility')}
+            subtitle={`${eligText} · only you can see this`}
+            title="xStocks eligibility"
+          />
+        </Card>
+      </View>
 
       <View style={{ gap: space.md }}>
         <SectionHeader title="About" />

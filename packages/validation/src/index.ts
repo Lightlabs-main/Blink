@@ -80,6 +80,15 @@ export const finishTapRushRequest = z
   })
   .strict()
 
+/** POST /v1/me/eligibility: self-declared country + attestations (D-20). The server adds the IP-country check. */
+export const declareEligibilityRequest = z
+  .object({
+    country: z.string().regex(/^[A-Za-z]{2}$/, 'choose your country'),
+    notUsPerson: z.boolean(),
+    attestations: z.array(z.enum(['NOT_IN_OCCUPIED_REGION'])).max(5).default([]),
+  })
+  .strict()
+
 export const referralCode = z.string().regex(REFERRAL_CODE_RE, 'invalid invite code')
 
 /** POST /v1/campaigns/:id/claim — Tap Rush claims name their qualifying session; referral claims their invite code. */

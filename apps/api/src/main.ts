@@ -10,6 +10,7 @@ import { PrivyAuthVerifier } from './auth.ts'
 import { type BudgetLedger, InMemoryBudgetLedger, PrismaBudgetLedger } from './budget-ledger.ts'
 import { type CampaignRepository, InMemoryCampaignRepository } from './campaign-repo.ts'
 import { type ClaimRepository, InMemoryClaimRepository, type ServiceWalletStore } from './claim-repo.ts'
+import type { EligibilityStore } from './eligibility.ts'
 import { PrivyDelegateProvider, PrivyServerWalletSigner } from './delegate.ts'
 import { SolanaFundingService } from './funding-service.ts'
 import { ClaimService } from './claim-service.ts'
@@ -17,6 +18,8 @@ import { SolanaPayoutService } from './payout-service.ts'
 import { createPrismaClient, PrismaCampaignRepository } from './prisma-campaign-repo.ts'
 import { PrismaClaimRepository } from './prisma-claim-repo.ts'
 import { MainnetSeekerVerifier } from './seeker.ts'
+import { EligibilityService } from './eligibility.ts'
+import { GeoipCountryResolver } from './ip-country.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -34,7 +37,7 @@ if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) {
 }
 
 let campaigns: CampaignRepository
-let claims: ClaimRepository & ServiceWalletStore
+let claims: ClaimRepository & ServiceWalletStore & EligibilityStore
 let ledger: BudgetLedger
 let prisma: ReturnType<typeof createPrismaClient> | undefined
 if (env.DATABASE_URL) {
@@ -79,6 +82,8 @@ const payouts = new SolanaPayoutService({
 })
 
 const auth = new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
+// D-20: xStocks eligibility (self-declared + offline IP-country cross-check; no IP is stored or sent anywhere).
+const eligibility = new EligibilityService({ env, store: claims, ipCountry: new GeoipCountryResolver() })
 const app = buildApp({
   env,
   auth,
@@ -88,6 +93,7 @@ const app = buildApp({
   funding,
   claims,
   payouts,
+  eligibility,
   // SGTs live on mainnet only, so Seeker checks always read mainnet, even while payouts run on devnet.
   seeker: new MainnetSeekerVerifier(createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')),
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
@@ -110,7 +116,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 await app.listen({ host: env.API_HOST, port: env.API_PORT })
 
 // D-13/D-14: confirm SENDING payouts and release abandoned reservations even when nobody is looking at them.
-const sweeper = new ClaimService({ env, auth, campaigns, claims, payouts, log: app.log })
+const sweeper = new ClaimService({ env, auth, campaigns, claims, payouts, log: app.log, eligibility })
 let sweeping = false
 const sweepTimer = setInterval(() => {
   if (sweeping) return

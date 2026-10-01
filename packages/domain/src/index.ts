@@ -205,3 +205,92 @@ export const PRODUCT_COPY = {
   issuerControlStatement:
     'xStocks are tokenized securities issued by a third party, which can freeze or move them in any wallet, as regulated issuers can.',
 } as const
+
+/* ───────────── xStocks eligibility (SECURITY.md §1, DECISIONS D-19 / D-20) ───────────── */
+
+export type XStockRestrictionCategory = 'PROHIBITED' | 'NON_SERVICEABLE' | 'NOT_AVAILABLE' | 'CONSERVATIVE'
+
+export interface XStockRestriction {
+  /** ISO 3166-1 alpha-2. */
+  code: string
+  category: XStockRestrictionCategory
+  /** Where the restriction comes from; ASSUMPTION entries are conservative blocks not yet seen in issuer text. */
+  source: string
+}
+
+const BACKED = 'assets.backed.fi/legal-documentation/restricted-countries (VERIFIED 2026-10-01)'
+const XSTOCKS = 'docs.xstocks.fi + xstocks.fi disclaimers (VERIFIED 2026-10-01)'
+const UPDATE = 'Maris product update §21 — ASSUMPTION, not yet in issuer text'
+
+/**
+ * Policy XSTOCKS-ELIGIBILITY v1. Re-verify against the issuer's list before every release (SECURITY.md §1).
+ * The method is Maris's decision (b): self-declared country + not-a-U.S.-person attestation, cross-checked with the
+ * request's IP country (country only; no precise location stored).
+ */
+export const XSTOCK_POLICY = {
+  id: 'XSTOCKS-ELIGIBILITY',
+  version: '2026-10-01.1',
+  method: 'SELF_DECLARED_PLUS_IP_COUNTRY',
+  restrictions: [
+    { code: 'US', category: 'PROHIBITED', source: `${BACKED}; ${XSTOCKS}` },
+    { code: 'IR', category: 'PROHIBITED', source: BACKED },
+    { code: 'KP', category: 'PROHIBITED', source: BACKED },
+    { code: 'SY', category: 'PROHIBITED', source: BACKED },
+    { code: 'GB', category: 'NOT_AVAILABLE', source: XSTOCKS },
+    ...['AF', 'BY', 'CF', 'CD', 'CU', 'ET', 'HT', 'IQ', 'LB', 'LY', 'ML', 'MZ', 'MM', 'NI', 'NG', 'PH', 'RU', 'SO', 'SS', 'SD', 'VE', 'YE', 'ZW'].map(
+      (code) => ({ code, category: 'NON_SERVICEABLE' as const, source: BACKED }),
+    ),
+    { code: 'CA', category: 'CONSERVATIVE', source: UPDATE },
+    { code: 'AU', category: 'CONSERVATIVE', source: UPDATE },
+  ] satisfies XStockRestriction[],
+  /** Countries that need an extra attestation instead of a full block (issuer: "Occupied regions of Ukraine"). */
+  regionAttestations: { UA: 'NOT_IN_OCCUPIED_REGION' } as Record<string, string>,
+} as const
+
+export type XStockEligibilityReason =
+  | 'ELIGIBLE'
+  | 'US_PERSON'
+  | 'DECLARED_COUNTRY_RESTRICTED'
+  | 'IP_COUNTRY_RESTRICTED'
+  | 'IP_COUNTRY_UNKNOWN'
+  | 'REGION_ATTESTATION_MISSING'
+  | 'INVALID_COUNTRY'
+
+export interface XStockEligibilityInput {
+  declaredCountry: string
+  /** "I am not a U.S. person" — must be explicitly true. */
+  notUsPerson: boolean
+  /** Extra attestations, e.g. NOT_IN_OCCUPIED_REGION for Ukraine. */
+  attestations: string[]
+  /** Country of the request IP, or null when it cannot be determined. */
+  ipCountry: string | null
+}
+
+export function isRestrictedCountry(code: string): boolean {
+  return XSTOCK_POLICY.restrictions.some((r) => r.code === code)
+}
+
+/** Pure decision; the server is the only caller whose result counts (SECURITY.md §2). Fails closed. */
+export function evaluateXStockEligibility(input: XStockEligibilityInput): { eligible: boolean; reason: XStockEligibilityReason } {
+  const declared = input.declaredCountry.toUpperCase()
+  if (!/^[A-Z]{2}$/.test(declared)) return { eligible: false, reason: 'INVALID_COUNTRY' }
+  if (!input.notUsPerson) return { eligible: false, reason: 'US_PERSON' }
+  if (isRestrictedCountry(declared)) return { eligible: false, reason: 'DECLARED_COUNTRY_RESTRICTED' }
+  const needed = XSTOCK_POLICY.regionAttestations[declared]
+  if (needed && !input.attestations.includes(needed)) return { eligible: false, reason: 'REGION_ATTESTATION_MISSING' }
+  if (!input.ipCountry) return { eligible: false, reason: 'IP_COUNTRY_UNKNOWN' }
+  if (isRestrictedCountry(input.ipCountry.toUpperCase())) return { eligible: false, reason: 'IP_COUNTRY_RESTRICTED' }
+  return { eligible: true, reason: 'ELIGIBLE' }
+}
+
+/** What the user sees about their own eligibility (never public). */
+export interface XStockEligibilitySummary {
+  policyId: string
+  policyVersion: string
+  /** False when the stored decision was made under an older policy version: the user must confirm again. */
+  current: boolean
+  declaredCountry: string
+  eligible: boolean
+  reason: XStockEligibilityReason
+  decidedAt: string
+}

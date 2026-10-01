@@ -90,7 +90,7 @@ export default function Welcome() {
             in a blink.
           </T>
           <T style={{ fontSize: 17, lineHeight: 25 }}>
-            Scan a link, play or claim, and receive a real tokenized stock on Solana. No seed phrase, no exchange.
+            Scan a link, play or claim, and receive xStocks — tokenized stock exposure on Solana. No seed phrase, no exchange.
           </T>
           <TickerStrip />
           <View style={{ gap: space.md }}>

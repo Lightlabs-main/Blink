@@ -31,6 +31,13 @@ export const envSchema = z.object({
   MAINNET_GO_APPROVED: boolFlag,
   MAINNET_BUDGET_LAMPORTS: lamports.default(MAINNET_TARGET_LAMPORTS),
   DEMO_MODE: boolFlag,
+  /** Global payout kill switch (SECURITY.md §2). false = no new reservations and nothing sent. */
+  PAYOUTS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** D-20: xStocks eligibility gate. 'off' is refused on mainnet. */
+  XSTOCK_COMPLIANCE: z.enum(['enforce', 'off']).default('enforce'),
   /**
    * D-16 anti-sybil: successful claims allowed per client IP per drop within 24 h. 0 = off (default; a demo room
    * shares one Wi-Fi IP). Consider 3–5 on mainnet.
@@ -82,6 +89,9 @@ export function assertConsistentCluster(env: BlinkEnv): void {
   }
   if (env.MAINNET_GO_APPROVED && !env.MAINNET_ENABLED) {
     throw new ConfigError('MAINNET_GO_APPROVED=true requires MAINNET_ENABLED=true')
+  }
+  if (env.SOLANA_CLUSTER === 'mainnet-beta' && env.XSTOCK_COMPLIANCE !== 'enforce') {
+    throw new ConfigError('XSTOCK_COMPLIANCE must be enforce on mainnet-beta (D-20)')
   }
   if (env.MAINNET_BUDGET_LAMPORTS > MAINNET_HARD_CEILING_LAMPORTS) {
     throw new ConfigError(

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { BlinkEnv } from '@blink/config'
 import { TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
-import { claimRequest, createCampaignRequest, finishTapRushRequest, submitFundingRequest } from '@blink/validation'
+import { claimRequest, createCampaignRequest, declareEligibilityRequest, finishTapRushRequest, submitFundingRequest } from '@blink/validation'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 
@@ -11,6 +11,7 @@ import { type AuthContext, AuthError, type AuthVerifier, bearerToken } from './a
 import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
 import { type ClaimRepository, type StoredClaim, toClaimSummary } from './claim-repo.ts'
 import { ClaimService, type SeekerVerifier } from './claim-service.ts'
+import type { EligibilityService } from './eligibility.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
@@ -33,6 +34,8 @@ export interface AppDeps {
   payouts?: PayoutService
   /** D-17: Seeker Genesis Token checks for SEEKER drops. */
   seeker?: SeekerVerifier
+  /** D-20: xStocks eligibility gate. Without it, every enforced xStock path fails closed. */
+  eligibility?: EligibilityService
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -88,7 +91,28 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     } catch (err) {
       req.log.warn({ err }, 'fee payer status unavailable')
     }
-    return { cluster: deps.env.SOLANA_CLUSTER, payouts }
+    return {
+      cluster: deps.env.SOLANA_CLUSTER,
+      payouts: { ...payouts, killSwitch: !deps.env.PAYOUTS_ENABLED },
+      compliance: { xstocks: deps.env.XSTOCK_COMPLIANCE },
+    }
+  })
+
+  /** The caller's own xStocks eligibility decision (D-20). Never public. */
+  app.get('/v1/me/eligibility', async (req) => {
+    const auth = await requireAuth(req)
+    if (!deps.eligibility) return { enforced: deps.env.XSTOCK_COMPLIANCE === 'enforce', eligibility: null }
+    return { enforced: deps.eligibility.enforced, eligibility: await deps.eligibility.summary(auth.privyUserId) }
+  })
+
+  /** Self-declared country + attestations; the server decides, cross-checking the request's IP country. */
+  app.post('/v1/me/eligibility', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const parsed = declareEligibilityRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    if (!deps.eligibility) throw new ClaimError('ELIGIBILITY_UNAVAILABLE', 'eligibility checks are not available right now', 503)
+    return { enforced: deps.eligibility.enforced, eligibility: await deps.eligibility.declare(auth.privyUserId, parsed.data, req.ip) }
   })
 
   app.get('/v1/xstocks', async (req) => {
@@ -233,6 +257,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/funding/prepare', async (req) => {
     const funding = requireFunding()
     let c = await requireOwnCampaign(req)
+    // D-20: creators distributing xStocks pass the same gate; owning the campaign account is no exemption.
+    if (deps.env.XSTOCK_COMPLIANCE === 'enforce') {
+      if (!deps.eligibility) throw new ClaimError('ELIGIBILITY_UNAVAILABLE', 'eligibility checks are not available right now', 503)
+      await deps.eligibility.requireEligible(c.creatorPrivyUserId, req.ip)
+    }
     if (c.status !== 'DRAFT' && c.status !== 'AWAITING_FUNDING') {
       throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
     }
@@ -282,7 +311,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility })
   }
 
   async function claimResponse(claim: StoredClaim | null) {
@@ -295,7 +324,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/start', async (req) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    return { session: await requireClaims().startTapRush(auth, req.params.id) }
+    return { session: await requireClaims().startTapRush(auth, req.params.id, req.ip) }
   })
 
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/finish', async (req, reply) => {
@@ -336,7 +365,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/referral/bonus/retry', async (req) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    return claimResponse(await requireClaims().retryBonus(auth, req.params.id))
+    return claimResponse(await requireClaims().retryBonus(auth, req.params.id, req.ip))
   })
 
   /** Creator only: re-check a PAUSED drop onchain and put it back LIVE (or ENDED when too little is left). */

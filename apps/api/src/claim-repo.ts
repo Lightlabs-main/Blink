@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { ClaimKind, ClaimStatus, ClaimSummary } from '@blink/domain'
 
 import type { InMemoryCampaignRepository, StoredCampaign } from './campaign-repo.ts'
+import type { EligibilityStore, StoredEligibility } from './eligibility.ts'
 
 export interface StoredClaim {
   id: string
@@ -133,7 +134,8 @@ export function toClaimSummary(claim: StoredClaim, campaign: StoredCampaign): Cl
 }
 
 /** Test/dev repository. Each method has no await between its checks and writes, so it is atomic. */
-export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletStore {
+export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletStore, EligibilityStore {
+  private readonly eligibility = new Map<string, StoredEligibility>()
   private readonly claims = new Map<string, StoredClaim>()
   private readonly sessions = new Map<string, StoredTapSession>()
   private readonly referrals = new Map<string, StoredReferral>()
@@ -288,6 +290,16 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
 
   async findReferralForUser(campaignId: string, privyUserId: string) {
     return [...this.referrals.values()].find((r) => r.campaignId === campaignId && r.privyUserId === privyUserId) ?? null
+  }
+
+  async getEligibility(privyUserId: string) {
+    return this.eligibility.get(privyUserId) ?? null
+  }
+
+  async putEligibility(record: Omit<StoredEligibility, 'decidedAt'>) {
+    const stored = { ...record, decidedAt: new Date() }
+    this.eligibility.set(record.privyUserId, stored)
+    return stored
   }
 
   async get(role: string) {

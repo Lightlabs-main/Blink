@@ -2,6 +2,7 @@ import { usePrivy } from '@privy-io/expo'
 import { getBase64EncodedWireTransaction, getBase64Encoder, getTransactionDecoder } from '@solana/kit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
+import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -45,6 +46,8 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
   const [step, setStep] = useState<Step>('idle')
   const [plan, setPlan] = useState<PreparedFunding | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [needsCheck, setNeedsCheck] = useState(false)
+  const router = useRouter()
   const [signature, setSignature] = useState<string | null>(null)
 
   const refresh = () =>
@@ -57,6 +60,8 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
 
   function fail(e: unknown, fallback: string) {
     haptics.error()
+    // D-20: creators distributing xStocks must confirm eligibility first.
+    setNeedsCheck(e instanceof ApiError && e.code === 'NEEDS_ELIGIBILITY')
     setError(e instanceof ApiError || e instanceof Error ? e.message : fallback)
   }
 
@@ -176,6 +181,11 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         </View>
       </Row>
       <Notice message={error} />
+      {needsCheck ? (
+        <Button icon="shield" onPress={() => router.push({ pathname: '/eligibility', params: { next: `/campaign/${campaign.id}` } })} variant="secondary">
+          Confirm eligibility
+        </Button>
+      ) : null}
       <Button iconRight="arrowRight" loading={step === 'preparing'} onPress={() => void onPrepare()}>
         Review funding
       </Button>
