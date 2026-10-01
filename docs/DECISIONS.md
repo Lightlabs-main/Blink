@@ -184,3 +184,49 @@ when the real sections arrive.
   scanner still accepts the old `blinktostock://campaign/<id>` codes.
 - **Caddy:** Blink added its own site blocks after backing up the shared Caddyfile, and
   validated the config before reloading.
+
+## D-16 — Mainnet readiness: network from the server, monitoring, throttling, disclosure (2026-10-01)
+
+1. **Network.** The app reads the cluster from `GET /health` and connects wallets to it (D-12). One
+   APK follows the server from devnet to mainnet. If the server can't be reached, the app waits
+   rather than guessing.
+2. **Fee payer monitoring.** `GET /v1/status` shows the fee payer, its balance and a `low` flag
+   (below `FEE_PAYER_LOW_LAMPORTS`, default 0.01 SOL). The API also logs "FEE PAYER LOW" at most
+   once an hour.
+3. **Throttling.** Mutating recipient routes are limited to 30 requests a minute per user and 120 a
+   minute per IP, in memory. The real client IP comes from Caddy's X-Forwarded-For, trusted from
+   loopback only.
+   - **Optional anti-sybil cap:** `CLAIMS_PER_IP_PER_CAMPAIGN` limits successful claims per IP per
+     drop within 24 h. It's off by default because demo rooms share one IP.
+4. **Issuer disclosure (OQ-5, DRAFT wording).** `PRODUCT_COPY.issuerControlStatement` appears on
+   the claim card, the creator review step and the website.
+5. **Payout hardening, from self-review:**
+   - A claim is only sent if it is still RESERVED when the signature is recorded (compare-and-set),
+     so a reservation released as stale during slow signing can never also be paid.
+   - "Never landed" now requires 32 blocks past `lastValidBlockHeight`.
+6. **Smoke test and preflight.** `scripts/smoke-mainnet.ts` is a dry run by default and needs
+   `--execute` plus the MAINNET flags to pay; see `docs/MAINNET_SMOKE_TEST.md`.
+   `scripts/mainnet-preflight.ts` measures real recipient-account rent (OQ-7) but needs a dedicated
+   RPC: the public one returns 429.
+
+## D-17 — Seeker drops (2026-10-01)
+
+- **Rule:** only Solana Seeker owners can claim, and each phone claims once per drop.
+- **Proof of wallet control:** Privy SIWS, the wallet linked and verified to the user (same flow as
+  creators; OQ-8 applies).
+- **Proof of Seeker ownership:** an SGT in one of the user's verified external wallets. These
+  checks were VERIFIED 2026-10-01 against Solana Mobile's official SGT page
+  (docs.solanamobile.com/solana-mobile-stack/seeker-genesis-token) and its `solana-mobile-dev-skill`
+  reference:
+  - mint authority `GT2zuHVaZQYZSyQMgJPLzvkmyztfyXg2NJunqFp4p3A4`;
+  - MetadataPointer authority equals that authority, and the metadata address is
+    `GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te`;
+  - TokenGroupMember group is `GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te`, and its member
+    record names the mint;
+  - empty token accounts are skipped.
+
+  Both GT2z and GT22 were confirmed to exist on mainnet (GT22 is a Token-2022 mint).
+- **Lookups:** standard RPC (§20 option A), always on mainnet via `SEEKER_RPC_URL` →
+  `XSTOCK_READ_RPC_URL` → the public endpoint. The verifier refuses a non-mainnet RPC.
+- **Claims** store `sgtMint`, unique per campaign, so one device gets one claim. The reward still
+  goes to the user's Blink (Privy embedded) wallet.

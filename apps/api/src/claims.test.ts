@@ -20,8 +20,9 @@ function fakeAuth(): AuthVerifier {
     async verifyAccessToken(token) {
       return { privyUserId: `did:privy:${token.replace('user-', '')}`, sessionId: 's' }
     },
-    async getVerifiedExternalSolanaWallets() {
-      return []
+    async getVerifiedExternalSolanaWallets(userId) {
+      // Each test user has one SIWS-verified external wallet: their "Seeker" wallet.
+      return [`seedvault-${userId.replace('did:privy:', '')}`]
     },
     async getEmbeddedSolanaWallets(userId) {
       return [`wallet-${userId.replace('did:privy:', '')}`]
@@ -55,6 +56,9 @@ function fakePayouts(
     async feePayerAddress() {
       return CREATOR_WALLET
     },
+    async feePayerStatus() {
+      return { address: CREATOR_WALLET, balanceLamports: 5_000_000n, low: true }
+    },
   }
 }
 
@@ -66,18 +70,19 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-function build(opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: boolean; ready?: boolean } = {}) {
+function build(opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: boolean; ready?: boolean; env?: typeof env; sgt?: Record<string, string> } = {}) {
   campaigns = new InMemoryCampaignRepository()
   claims = new InMemoryClaimRepository(campaigns)
   const payouts = opts.noPayouts ? undefined : fakePayouts(claims, { fail: opts.failPayouts, failFor: opts.failFor, ready: opts.ready })
   app = buildApp({
-    env,
+    env: opts.env ?? env,
     auth: fakeAuth(),
     campaigns,
     rpc: {} as Rpc<GetAccountInfoApi>,
     assets: ASSETS,
     claims,
     payouts,
+    seeker: opts.sgt ? { findSgt: async (wallet: string) => opts.sgt![wallet] ?? null } : undefined,
   })
   return payouts
 }
@@ -159,8 +164,8 @@ describe('claims (fixed amount per person)', () => {
 
   it('rejects drops that are not live or not claimable', async () => {
     build()
-    const seeker = await liveCampaign({ type: 'SEEKER' })
-    expect((await claim(seeker.id, 'alice')).json().error.code).toBe('NOT_CLAIMABLE')
+    const unknown = await liveCampaign({ type: 'GIFT', rewardPerClaimRaw: null })
+    expect((await claim(unknown.id, 'alice')).json().error.code).toBe('NOT_CLAIMABLE')
     const legacy = await liveCampaign({ rewardPerClaimRaw: null })
     expect((await claim(legacy.id, 'alice')).json().error.code).toBe('NOT_CLAIMABLE')
     const paused = await liveCampaign()
@@ -433,6 +438,16 @@ describe('resuming paused drops', () => {
 })
 
 describe('background sweep', () => {
+  it('a claim released by the sweep can no longer be sent (no double pay)', async () => {
+    build()
+    const c = await liveCampaign()
+    const r = await claims.reserve({ campaignId: c.id, privyUserId: 'did:privy:slow', recipientWallet: 'wallet-slow', amountRaw: 100n, tapSessionId: null })
+    if (!r.ok) throw new Error('reserve failed')
+    await claims.markFailed(r.claim.id, 'STALE_RESERVATION') // the sweep, while signing was slow
+    expect(await claims.markSending(r.claim.id, 'sig-late', 100n)).toBe(false)
+    expect((await campaigns.findById(c.id))!.claimedRaw).toBe(0n)
+  })
+
   it('releases reservations abandoned before signing', async () => {
     build()
     const c = await liveCampaign()
@@ -444,5 +459,69 @@ describe('background sweep', () => {
     const swept = await new ClaimService({ env, auth: fakeAuth(), campaigns, claims, payouts }).sweep()
     expect(swept).toBe(1)
     expect((await campaigns.findById(c.id))!.claimedRaw).toBe(0n)
+  })
+})
+
+describe('status', () => {
+  it('reports the fee payer and flags a low balance', async () => {
+    build()
+    const res = await app.inject({ method: 'GET', url: '/v1/status' })
+    expect(res.json()).toEqual({ cluster: 'devnet', payouts: { enabled: true, feePayer: CREATOR_WALLET, balanceLamports: '5000000', low: true } })
+  })
+})
+
+describe('rate limits and the per-IP claim cap (D-16)', () => {
+  it('throttles a single user who hammers the claim route', async () => {
+    build()
+    const c = await liveCampaign()
+    const codes: number[] = []
+    for (let i = 0; i < 32; i++) codes.push((await claim(c.id, 'alice')).statusCode)
+    expect(codes.slice(0, 30).every((s) => s === 200)).toBe(true)
+    expect(codes.slice(30)).toEqual([429, 429])
+  })
+
+  it('caps successful claims per IP per drop when configured', async () => {
+    build({ env: loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', CLAIMS_PER_IP_PER_CAMPAIGN: '2' }) })
+    const c = await liveCampaign({ allowanceRaw: 1000n })
+    expect((await claim(c.id, 'a')).statusCode).toBe(200)
+    expect((await claim(c.id, 'b')).statusCode).toBe(200)
+    const third = await claim(c.id, 'c')
+    expect(third.statusCode).toBe(429)
+    expect(third.json().error.code).toBe('IP_LIMIT')
+    // Re-asking for an existing claim is not a new claim and is never blocked by the cap.
+    expect((await claim(c.id, 'a')).json().claim.status).toBe('PAID')
+  })
+})
+
+describe('Seeker drops (D-17)', () => {
+  it('pays a user whose verified wallet holds a Seeker Genesis Token', async () => {
+    const payouts = build({ sgt: { 'seedvault-alice': 'SGT-MINT-1' } })!
+    const c = await liveCampaign({ type: 'SEEKER' })
+    const res = await claim(c.id, 'alice')
+    expect(res.json().claim).toMatchObject({ status: 'PAID', recipientWallet: 'wallet-alice' })
+    expect(payouts.paid).toEqual(['wallet-alice'])
+  })
+
+  it('refuses without a Seeker Genesis Token', async () => {
+    build({ sgt: {} })
+    const c = await liveCampaign({ type: 'SEEKER' })
+    const res = await claim(c.id, 'bob')
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('NEEDS_SEEKER')
+  })
+
+  it('one claim per Seeker device, even from another account', async () => {
+    build({ sgt: { 'seedvault-alice': 'SGT-MINT-1', 'seedvault-mallory': 'SGT-MINT-1' } })
+    const c = await liveCampaign({ type: 'SEEKER' })
+    expect((await claim(c.id, 'alice')).statusCode).toBe(200)
+    const again = await claim(c.id, 'mallory')
+    expect(again.statusCode).toBe(409)
+    expect(again.json().error.code).toBe('DEVICE_ALREADY_CLAIMED')
+  })
+
+  it('503 when Seeker verification is not configured', async () => {
+    build()
+    const c = await liveCampaign({ type: 'SEEKER' })
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('SEEKER_UNAVAILABLE')
   })
 })

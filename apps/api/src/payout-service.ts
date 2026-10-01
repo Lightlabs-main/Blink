@@ -56,11 +56,14 @@ export interface PayoutService {
   /** Updates a SENDING claim from the chain: PAID, FAILED once its blockhash expired unseen, or unchanged. */
   reconcile(claim: StoredClaim): Promise<StoredClaim>
   feePayerAddress(): Promise<string>
+  /** §16 monitoring: the fee payer and whether its balance is below FEE_PAYER_LOW_LAMPORTS. */
+  feePayerStatus(): Promise<{ address: string; balanceLamports: bigint; low: boolean }>
   /** §9: can this campaign pay at least one more reward right now? Used to resume a PAUSED drop. */
   checkReady(campaign: StoredCampaign): Promise<{ ok: true } | { ok: false; reason: PauseReason; detail: string[] }>
 }
 
 const CONFIRM_TIMEOUT_MS = 30_000
+const EXPIRY_MARGIN_BLOCKS = 32n
 /** Devnet only: request an airdrop when the fee payer drops below this. */
 const DEVNET_FEE_PAYER_LOW_LAMPORTS = 50_000_000n
 const DEVNET_AIRDROP_LAMPORTS = 1_000_000_000n
@@ -171,7 +174,13 @@ export class SolanaPayoutService implements PayoutService {
       throw new ClaimError('PAYOUT_FAILED', 'Blink could not sign your reward. Please try again.', 502)
     }
 
-    await claims.markSending(claim.id, signature, plan.lastValidBlockHeight)
+    // Compare-and-set: only a claim still RESERVED may be sent. If the sweep released it while we were signing,
+    // sending now could pay a claim whose pool share was already freed — abort instead.
+    if (!(await claims.markSending(claim.id, signature, plan.lastValidBlockHeight))) {
+      await this.deps.ledger.settle(ledgerKey, 'RELEASED')
+      this.deps.log.warn({ claimId: claim.id }, 'claim was no longer reserved after signing; not sent')
+      throw new ClaimError('PAYOUT_FAILED', 'Your claim timed out. Please try again.', 409)
+    }
     try {
       await rpc.sendTransaction(signed as Base64EncodedWireTransaction, { encoding: 'base64', preflightCommitment: 'confirmed' }).send()
     } catch (err) {
@@ -188,6 +197,12 @@ export class SolanaPayoutService implements PayoutService {
     }
     if (current.status === 'PAID') await this.endIfExhausted(campaign.id)
     return current
+  }
+
+  async feePayerStatus() {
+    const { address: feePayer } = await this.getFeePayer()
+    const { value } = await this.deps.rpc.getBalance(address(feePayer), { commitment: 'confirmed' }).send()
+    return { address: feePayer, balanceLamports: value, low: value < this.deps.env.FEE_PAYER_LOW_LAMPORTS }
   }
 
   async checkReady(campaign: StoredCampaign): Promise<{ ok: true } | { ok: false; reason: PauseReason; detail: string[] }> {
@@ -228,7 +243,8 @@ export class SolanaPayoutService implements PayoutService {
     }
     if (!s) {
       const height = await rpc.getBlockHeight({ commitment: 'confirmed' }).send()
-      if (height > claim.lastValidBlockHeight) {
+      // Margin for a lagging RPC node before declaring that the transaction can never land.
+      if (height > claim.lastValidBlockHeight + EXPIRY_MARGIN_BLOCKS) {
         // Not found and its blockhash can no longer be used: it will never land. Safe to release and retry.
         await claims.markFailed(claim.id, 'EXPIRED')
         await ledger.settle(ledgerKey, 'RELEASED')

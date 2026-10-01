@@ -11,8 +11,8 @@
   sessions, first-come ordering, idempotency, payouts and reconciliation. Replace these with the
   real rules when the sections arrive.
 - **Referral, Tap Rush timing checks and resume:** added 2026-09-30 (D-14).
-- **Still not implemented:** Seeker/SGT mechanics, notifications, device attestation for Tap Rush,
-  and the mainnet smoke test.
+- **Seeker drops and the mainnet smoke test:** added 2026-10-01 (D-16, D-17).
+- **Still not implemented:** notifications and device attestation (Play Integrity) for Tap Rush.
 
 ## OQ-3 — Build machine not Android-ready — BLOCKED
 
@@ -27,19 +27,22 @@ See SPIKES.md SPIKE-1, "Security caveat". The recommendation is option A for the
 ## OQ-5 — PermanentDelegate disclosure — NEEDS_OWNER_DECISION
 
 Every supported xStock has a PermanentDelegate (the issuer), so the issuer can move tokens out of
-campaign accounts and recipient accounts. The product copy likely needs a disclosure; wording is
-Maris's call.
+campaign accounts and recipient accounts. A DRAFT disclosure is in place
+(`PRODUCT_COPY.issuerControlStatement`, D-16). The final wording is Maris's call.
 
 ## OQ-6 — Dedicated RPC provider — NEEDS_OWNER_DECISION
 
-The public mainnet RPC is rate-limited (it returned HTTP 429). A reliable provider is required
-(§19); Helius is allowed for Seeker (§20).
+The public mainnet RPC is rate-limited. It returned HTTP 429 again on 2026-10-01, from both the
+dev machine and the VPS, for `getTokenLargestAccounts`. A reliable provider is required (§19);
+Helius is allowed for Seeker (§20). Set it as `SOLANA_RPC_URL` (on mainnet), `XSTOCK_READ_RPC_URL`
+and `SEEKER_RPC_URL`.
 
 ## OQ-7 — Recipient ATA rent vs the 0.02 SOL target — ASSUMPTION pending measurement
 
 The campaign account (175 bytes) costs 1,539,240 lamports. If a recipient ATA is similar,
 0.02 SOL covers only about 12 sponsored recipient ATAs, before transaction fees.
-Measure with a dedicated RPC.
+Measure with `scripts/mainnet-preflight.ts` once a dedicated RPC is set. It reads the real size of
+an existing holder account.
 
 ## OQ-8 — Privy SIWS nonce guarantees (§25) — ASSUMPTION (the flow itself VERIFIED on device 2026-09-29)
 

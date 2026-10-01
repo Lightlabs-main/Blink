@@ -18,6 +18,8 @@ export interface StoredClaim {
   tapSessionId: string | null
   referralCode: string | null
   bonusForClaimId: string | null
+  /** D-17: the Seeker Genesis Token mint (device) behind a Seeker claim. */
+  sgtMint: string | null
   createdAt: Date
   /** Last status change; a reservation's age is measured from here. */
   updatedAt: Date
@@ -48,7 +50,7 @@ export type ReserveResult =
    * `bonus` = the referrer's REFERRAL_BONUS reserved in the same step, or null when the referrer already earned it.
    */
   | { ok: true; claim: StoredClaim; bonus: StoredClaim | null; fresh: boolean }
-  | { ok: false; reason: 'NOT_LIVE' | 'EXHAUSTED' | 'WALLET_ALREADY_CLAIMED' | 'SESSION_ALREADY_USED' }
+  | { ok: false; reason: 'NOT_LIVE' | 'EXHAUSTED' | 'WALLET_ALREADY_CLAIMED' | 'SESSION_ALREADY_USED' | 'DEVICE_ALREADY_CLAIMED' }
 
 export interface NewReservation {
   campaignId: string
@@ -56,6 +58,8 @@ export interface NewReservation {
   recipientWallet: string
   amountRaw: bigint
   tapSessionId: string | null
+  /** D-17: Seeker drops — one claim per SGT mint (device) per campaign. */
+  sgtMint?: string | null
   /** D-14: a friend's claim through an invite also reserves the referrer's bonus (same amount), if still unearned. */
   referral?: { code: string; referrerPrivyUserId: string; referrerWallet: string } | null
 }
@@ -79,8 +83,11 @@ export interface ClaimRepository {
   reserve(input: NewReservation): Promise<ReserveResult>
   /** FAILED → RESERVED for the same claim (e.g. a referrer retrying a failed bonus), holding its amount again. */
   reReserve(id: string): Promise<{ ok: true; claim: StoredClaim } | { ok: false; reason: 'NOT_LIVE' | 'EXHAUSTED' | 'NOT_FAILED' }>
-  /** RESERVED → SENDING, recording the signature before the transaction is sent. */
-  markSending(id: string, txSignature: string, lastValidBlockHeight: bigint): Promise<void>
+  /**
+   * RESERVED → SENDING, recording the signature before the transaction is sent. Returns false if the claim is no
+   * longer RESERVED (e.g. released as stale meanwhile) — the caller must then NOT send.
+   */
+  markSending(id: string, txSignature: string, lastValidBlockHeight: bigint): Promise<boolean>
   /** SENDING → PAID. */
   markPaid(id: string): Promise<StoredClaim | null>
   /** RESERVED/SENDING → FAILED and releases the amount. Only call once the transaction can never land. */
@@ -165,6 +172,9 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
     if (input.tapSessionId && all.some((c) => c.tapSessionId === input.tapSessionId && c.id !== existing?.id)) {
       return { ok: false, reason: 'SESSION_ALREADY_USED' }
     }
+    if (input.sgtMint && all.some((c) => c.campaignId === input.campaignId && c.sgtMint === input.sgtMint && c.id !== existing?.id)) {
+      return { ok: false, reason: 'DEVICE_ALREADY_CLAIMED' }
+    }
     const campaign = this.campaigns.row(input.campaignId)
     if (!campaign || campaign.status !== 'LIVE') return { ok: false, reason: 'NOT_LIVE' }
 
@@ -189,6 +199,7 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
       tapSessionId: input.tapSessionId,
       referralCode: ref?.code ?? null,
       bonusForClaimId: null,
+      sgtMint: input.sgtMint ?? null,
     })
     const bonus =
       withBonus && ref
@@ -202,6 +213,7 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
             tapSessionId: null,
             referralCode: ref.code,
             bonusForClaimId: claim.id,
+            sgtMint: null,
           })
         : null
     return { ok: true, claim, bonus, fresh: true }
@@ -220,7 +232,9 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
 
   async markSending(id: string, txSignature: string, lastValidBlockHeight: bigint) {
     const c = this.claims.get(id)
-    if (c?.status === 'RESERVED') Object.assign(c, { status: 'SENDING', txSignature, lastValidBlockHeight, updatedAt: new Date() })
+    if (c?.status !== 'RESERVED') return false
+    Object.assign(c, { status: 'SENDING', txSignature, lastValidBlockHeight, updatedAt: new Date() })
+    return true
   }
 
   async markPaid(id: string) {

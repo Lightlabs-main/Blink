@@ -120,6 +120,8 @@ model Claim {
   tapSessionId         String?     @unique @db.Uuid
   /// D-14: invite code a friend's CLAIM came through.
   referralCode         String?
+  /// D-17: Seeker drops — the Seeker Genesis Token mint (device identity) that qualified this claim.
+  sgtMint              String?
   /// D-14: a REFERRAL_BONUS names the friend's CLAIM that earned it; one bonus per friend claim.
   bonusForClaimId      String?     @unique @db.Uuid
   createdAt            DateTime    @default(now())
@@ -127,6 +129,8 @@ model Claim {
 
   @@unique([campaignId, privyUserId, kind])
   @@unique([campaignId, recipientWallet, kind])
+  /// D-17: one claim per Seeker device per drop.
+  @@unique([campaignId, sgtMint])
   @@index([privyUserId, createdAt])
   @@index([status])
 }

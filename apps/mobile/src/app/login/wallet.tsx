@@ -2,7 +2,7 @@ import { useLinkWithSiws, useLoginWithSiws, usePrivy } from '@privy-io/expo'
 import { getAddressDecoder, getBase64Encoder } from '@solana/kit'
 import { useQueryClient } from '@tanstack/react-query'
 import { fromUint8Array, transact, useMobileWallet } from '@wallet-ui/react-native-kit'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
@@ -39,6 +39,9 @@ function StepRow({ n, icon, title, body, state }: { n: number; icon: IconName; t
  */
 export default function WalletLogin() {
   const router = useRouter()
+  // D-17: "seeker" when a Seeker drop sends the user here to prove they own a Seeker (SGT in its wallet).
+  const { purpose } = useLocalSearchParams<{ purpose?: string }>()
+  const forSeeker = purpose === 'seeker'
   const { chain, deauthorizeSession, disconnect, identity } = useMobileWallet()
   const queryClient = useQueryClient()
   const { user } = usePrivy()
@@ -107,8 +110,12 @@ export default function WalletLogin() {
         <View style={styles.badgeIcon}>
           <Icon name="wallet" size={24} stroke={color.lime} />
         </View>
-        <T variant="display">{isLinking ? 'Add your creator wallet' : 'Sign in with your wallet'}</T>
-        <T>Campaign stock comes from your own Solana wallet. Your wallet app opens twice — both are free and move no funds.</T>
+        <T variant="display">{forSeeker ? 'Connect your Seeker' : isLinking ? 'Add your creator wallet' : 'Sign in with your wallet'}</T>
+        <T>
+          {forSeeker
+            ? 'Pick the Seed Vault wallet on your Seeker. Blink checks it holds your Seeker Genesis Token. Your wallet app opens twice — both are free and move no funds.'
+            : 'Campaign stock comes from your own Solana wallet. Your wallet app opens twice — both are free and move no funds.'}
+        </T>
       </View>
 
       <Card style={{ gap: space.lg }}>

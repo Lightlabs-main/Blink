@@ -24,6 +24,7 @@ function toClaim(row: Claim): StoredClaim {
     tapSessionId: row.tapSessionId,
     referralCode: row.referralCode,
     bonusForClaimId: row.bonusForClaimId,
+    sgtMint: row.sgtMint,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -126,6 +127,7 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
           amountRaw: input.amountRaw.toString(),
           tapSessionId: input.tapSessionId,
           referralCode: ref?.code ?? null,
+          sgtMint: input.sgtMint ?? null,
         }
         const row = existing
           ? await tx.claim.update({ where: { id: existing.id }, data })
@@ -166,6 +168,9 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
         where: { campaignId: input.campaignId, kind: 'CLAIM', recipientWallet: input.recipientWallet, NOT: { privyUserId: input.privyUserId } },
       })
       if (walletTaken) return { ok: false, reason: 'WALLET_ALREADY_CLAIMED' }
+      if (input.sgtMint && (await this.prisma.claim.findFirst({ where: { campaignId: input.campaignId, sgtMint: input.sgtMint } }))) {
+        return { ok: false, reason: 'DEVICE_ALREADY_CLAIMED' }
+      }
       if (input.tapSessionId) return { ok: false, reason: 'SESSION_ALREADY_USED' }
       throw err
     }
@@ -182,7 +187,8 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
   }
 
   async markSending(id: string, txSignature: string, lastValidBlockHeight: bigint) {
-    await this.prisma.claim.updateMany({ where: { id, status: 'RESERVED' }, data: { status: 'SENDING', txSignature, lastValidBlockHeight } })
+    const { count } = await this.prisma.claim.updateMany({ where: { id, status: 'RESERVED' }, data: { status: 'SENDING', txSignature, lastValidBlockHeight } })
+    return count === 1
   }
 
   async markPaid(id: string) {
