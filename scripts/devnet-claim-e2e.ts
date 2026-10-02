@@ -14,7 +14,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
 import { loadEnv } from '@blink/config'
-import { buildFundingTransaction, campaignSeedFromUuid, checkCampaignDelegation, deriveCampaignTokenAccount } from '@blink/solana'
+import { campaignSeedFromUuid, checkCampaignDelegation, deriveCampaignTokenAccount } from '@blink/solana'
 import { PrivyClient } from '@privy-io/node'
 import {
   address,
@@ -25,12 +25,16 @@ import {
   createNoopSigner,
   createSolanaRpc,
   createTransactionMessage,
+  decompileTransactionMessage,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
   type Instruction,
+  type KeyPairSigner,
   partiallySignTransaction,
   pipe,
+  prependTransactionMessageInstructions,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
 } from '@solana/kit'
@@ -47,6 +51,7 @@ import { InMemoryBudgetLedger } from '../apps/api/src/budget-ledger.ts'
 import { InMemoryCampaignRepository } from '../apps/api/src/campaign-repo.ts'
 import { InMemoryClaimRepository } from '../apps/api/src/claim-repo.ts'
 import { PrivyDelegateProvider, PrivyServerWalletSigner } from '../apps/api/src/delegate.ts'
+import { FundingRequestError, SolanaFundingService } from '../apps/api/src/funding-service.ts'
 import { SolanaPayoutService } from '../apps/api/src/payout-service.ts'
 
 try {
@@ -137,17 +142,29 @@ async function main() {
   await campaigns.setDelegate(id, delegate)
   log('campaign + per-campaign Privy delegate', { id, campaignTokenAccount, delegate: delegate.address })
 
-  const plan = await buildFundingTransaction(rpc, {
-    creator: creator.address,
-    campaignSeed,
-    storedCampaignAccount: campaignTokenAccount,
-    mint,
-    expectedDecimals: DECIMALS,
-    amountRaw: POOL_RAW,
-    delegate: address(delegate.address),
-  })
-  const unsigned = getTransactionDecoder().decode(getBase64Encoder().encode(plan.transaction))
-  log('funding confirmed', await sendWire(getBase64EncodedWireTransaction(await partiallySignTransaction([creator.keyPair], unsigned))))
+  // Funding through the API's own service (prepare -> wallet signs -> submit -> verify), signed the way Phantom
+  // signs: it prepends Compute Budget (priority fee) instructions (D-28). Any other change must be refused.
+  const assets = [{ symbol: 'tNVDAx', name: 'Test NVIDIA', mint, decimals: DECIMALS, logo: null, isTest: true }]
+  const funding = new SolanaFundingService(rpc, assets, new PrivyDelegateProvider(privy), campaigns)
+  const sneaky = await walletSigned(creator, (await funding.prepare((await campaigns.findById(id))!)).transaction, [
+    getTransferSolInstruction({ source: createNoopSigner(creator.address), destination: authority.address, amount: 1_000n }),
+  ])
+  try {
+    await funding.submit((await campaigns.findById(id))!, sneaky)
+    throw new Error('a transaction with an extra transfer was accepted')
+  } catch (err) {
+    if (!(err instanceof FundingRequestError) || err.code !== 'TRANSACTION_MISMATCH') throw err
+    log('wallet-modified funding with an extra transfer refused', { code: err.code })
+  }
+  const prepared = await funding.prepare((await campaigns.findById(id))!)
+  const phantomStyle = await walletSigned(creator, prepared.transaction, [
+    { programAddress: address('ComputeBudget111111111111111111111111111111'), data: Uint8Array.from([2, 0x40, 0x0d, 0x03, 0x00]) },
+    { programAddress: address('ComputeBudget111111111111111111111111111111'), data: Uint8Array.from([3, 0x10, 0x27, 0, 0, 0, 0, 0, 0]) },
+  ])
+  const { signature: fundingSignature } = await funding.submit((await campaigns.findById(id))!, phantomStyle)
+  const verified = await funding.verify((await campaigns.findById(id))!)
+  if (!verified.live) throw new Error(`funding not verified onchain: ${JSON.stringify(verified.status.problems)}`)
+  log('funding (Phantom-style priority fee) accepted, confirmed and verified onchain', fundingSignature)
   await campaigns.transitionStatus(id, 'DRAFT', 'AWAITING_FUNDING')
   await campaigns.transitionStatus(id, 'AWAITING_FUNDING', 'AWAITING_DELEGATION')
   await campaigns.transitionStatus(id, 'AWAITING_DELEGATION', 'LIVE')
@@ -194,6 +211,14 @@ async function main() {
   log('drop ENDED when the pool could not fit another reward; third claim refused before signing', { claimedRaw: final.claimedRaw, status: final.status })
 
   console.log('\nClaims devnet end-to-end test: PASSED')
+}
+
+/** Signs `base64` as a wallet would after prepending `extra` instructions (same blockhash and fee payer). */
+async function walletSigned(signer: KeyPairSigner, base64: string, extra: Instruction[]) {
+  const { messageBytes } = getTransactionDecoder().decode(getBase64Encoder().encode(base64))
+  const message = decompileTransactionMessage(getCompiledTransactionMessageDecoder().decode(messageBytes))
+  const changed = compileTransaction(prependTransactionMessageInstructions(extra, message))
+  return getBase64EncodedWireTransaction(await partiallySignTransaction([signer.keyPair], changed))
 }
 
 main().then(
