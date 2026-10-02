@@ -2,7 +2,8 @@ import { usePrivy, useUnlinkWallet } from '@privy-io/expo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
-import { Alert, Pressable, Share, StyleSheet, View } from 'react-native'
+import { useState } from 'react'
+import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native'
 
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
@@ -12,7 +13,17 @@ import { COUNTRIES } from '../../lib/countries'
 import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, networkLabel, shortAddress } from '../../lib/format'
 import { embeddedSolanaAddress, userEmail } from '../../lib/privy-user'
+import { type PushState, registerForPush, unregisterPush } from '../../lib/push'
 import { PRODUCT_COPY } from '../../shared'
+
+/** Announced, not built yet: shown so people know what is coming, never as working features. */
+const SOON: { title: string; body: string; icon: IconName }[] = [
+  { title: 'Squads', body: 'Team up and complete quests together', icon: 'users' },
+  { title: 'Stock Clubs', body: 'Communities around the stocks you hold', icon: 'sparkle' },
+  { title: 'Stock Passport', body: 'One record of every stock you earned', icon: 'shield' },
+  { title: 'QR Event check-in', body: 'Prove you were at the event', icon: 'scan' },
+  { title: 'ORE mining checks', body: 'Quests for ORE miners', icon: 'target' },
+]
 
 function RowIcon({ icon, tint = color.lime }: { icon: IconName; tint?: string }) {
   return (
@@ -66,7 +77,22 @@ export default function Profile() {
     ])
   }
 
+  const [push, setPush] = useState<PushState | null>(null)
+  async function onNotifications() {
+    if (push === 'denied') return void Linking.openSettings()
+    setPush(await registerForPush(getAccessToken))
+  }
+  const pushText =
+    push === 'enabled'
+      ? 'On · rewards, invite bonuses, your drops going live'
+      : push === 'denied'
+        ? 'Off · tap to allow in system settings'
+        : push === 'unavailable' || push === 'unsupported'
+          ? 'Not available in this build'
+          : 'Rewards, invite bonuses, your drops going live'
+
   async function onLogout() {
+    await unregisterPush(getAccessToken)
     if (account) await disconnect().catch(() => {})
     await logout()
     router.replace('/')
@@ -168,6 +194,20 @@ export default function Profile() {
       ) : null}
 
       <View style={{ gap: space.md }}>
+        <SectionHeader title="SKR" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/skr')} subtitle="Stake, unstake and withdraw · mainnet" title="SKR staking" />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Notifications" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow leading={<RowIcon icon="bolt" />} onPress={() => void onNotifications()} subtitle={pushText} title={push === 'enabled' ? 'Notifications on' : 'Turn on notifications'} />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
         <SectionHeader title="Privacy & eligibility" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           <ListRow
@@ -188,6 +228,18 @@ export default function Profile() {
         </Card>
       </View>
 
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Coming soon" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          {SOON.map((item, i) => (
+            <View key={item.title}>
+              {i > 0 ? <Divider /> : null}
+              <ListRow chevron={false} leading={<RowIcon icon={item.icon} tint={color.textMuted} />} subtitle={item.body} title={item.title} trailing={<Badge label="Soon" tone="neutral" />} />
+            </View>
+          ))}
+        </Card>
+      </View>
+
       <Button icon="logout" onPress={() => void onLogout()} variant="danger">
         Sign out
       </Button>
@@ -196,7 +248,7 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  rowIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: color.surface3, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 36, height: 36, borderRadius: 4, backgroundColor: color.surface3, alignItems: 'center', justifyContent: 'center' },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { width: 1, height: 36, backgroundColor: color.border },
 })

@@ -199,5 +199,5 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
 }
 
 const styles = StyleSheet.create({
-  pointIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  pointIcon: { width: 34, height: 34, borderRadius: 4, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
 })

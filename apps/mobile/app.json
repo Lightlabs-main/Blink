@@ -53,7 +53,14 @@
           "barcodeScannerEnabled": true
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#141210",
+          "defaultChannel": "default"
+        }
+      ]
     ]
   }
 }

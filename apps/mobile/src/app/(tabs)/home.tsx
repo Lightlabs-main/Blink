@@ -100,7 +100,7 @@ export default function Home() {
             </T>
           </View>
         </Row>
-        <View style={[styles.netPill, net.isTest && { borderColor: 'rgba(255,181,71,0.35)' }]}>
+        <View style={[styles.netPill, net.isTest && { borderColor: color.warning }]}>
           <View style={[styles.netDot, { backgroundColor: net.isTest ? color.warning : color.success }]} />
           <T variant="caption" color={net.isTest ? color.warning : color.success}>
             {net.label}
@@ -271,9 +271,9 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: 'rgba(53,227,159,0.35)',
+    borderColor: color.success,
     backgroundColor: color.surface,
   },
   netDot: { width: 6, height: 6, borderRadius: 3 },
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     padding: space.md,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    backgroundColor: color.limeSoft,
     borderWidth: 1,
     borderColor: color.limeLine,
   },
@@ -297,6 +297,6 @@ const styles = StyleSheet.create({
     borderColor: color.borderStrong,
   },
   ticketCut: { height: 1, borderStyle: 'dashed', borderWidth: 1, borderColor: color.border, marginHorizontal: -space.lg },
-  creatorIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: color.violetSoft, alignItems: 'center', justifyContent: 'center' },
+  creatorIcon: { width: 42, height: 42, borderRadius: 4, backgroundColor: color.violetSoft, alignItems: 'center', justifyContent: 'center' },
   inlineLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
 })

@@ -64,7 +64,13 @@ function pubkey(bytes: Uint8Array, offset: number): Address {
 /** StakeConfig layout (IDL): disc 8 · bump 1 · authority · mint · stake_vault · min u64 · cooldown u64 · total_shares u128 · share_price u128 … */
 export function decodeStakeConfig(bytes: Uint8Array) {
   if (bytes.length < 153 || !bytesEqual(bytes.subarray(0, 8), STAKE_CONFIG_DISCRIMINATOR)) throw new ProtocolReadError('not a StakeConfig account')
-  return { mint: pubkey(bytes, 41), stakeVault: pubkey(bytes, 73), sharePrice: u128(bytes, 137) }
+  return {
+    mint: pubkey(bytes, 41),
+    stakeVault: pubkey(bytes, 73),
+    minStakeAmount: u64(bytes, 105),
+    cooldownSeconds: u64(bytes, 113),
+    sharePrice: u128(bytes, 137),
+  }
 }
 
 /** UserStake layout (IDL): disc 8 · bump 1 · stake_config 9 · user 41 · guardian_pool 73 · shares u128 105 · cost_basis · cumulative · unstaking_amount u64 153 · unstake_timestamp i64 161. */
@@ -77,6 +83,7 @@ export function decodeUserStake(bytes: Uint8Array) {
     guardianPool: pubkey(bytes, 73),
     shares: u128(bytes, 105),
     unstakingAmount: u64(bytes, 153),
+    unstakeTimestamp: BigInt.asIntN(64, u64(bytes, 161)),
   }
 }
 

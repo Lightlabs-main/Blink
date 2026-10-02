@@ -155,3 +155,20 @@ New app builds call `https://api.blinksol.site`. The sslip.io host remains an al
 
 **Codex review requested:** `quest-service.ts`, `stake-readers.ts` (layouts and aggregation),
 `roomData` queries.
+
+## API contract v7: SKR staking and push (owner: Claude, 2026-10-02)
+
+- **`GET /v1/skr/position?wallet=`** (auth; the wallet must be one of the caller's SIWS-verified wallets) →
+  `{ position: { wallet, guardianPool, walletRaw, stakedRaw, unstakingRaw, minStakeRaw, cooldownSeconds,
+  withdrawableAt } }`. Raw amounts are strings, 6 decimals. Mainnet reads.
+- **`POST /v1/skr/prepare`** (auth, throttled) `{ wallet, action: 'stake'|'unstake'|'withdraw'|'cancel_unstake',
+  amountRaw?, all? }` → `{ prepared: { transaction (unsigned v0, base64), minContextSlot, lastValidBlockHeight } }`.
+  Simulated on mainnet first. The app signs and sends it with MWA on `solana:mainnet`.
+- **`POST /v1/me/push-token`** (auth, throttled) `{ token: ExponentPushToken[…], platform }`;
+  **`DELETE /v1/me/push-token`** `{ token }` removes only the caller's own token.
+- **New errors:** 403 `WALLET_NOT_LINKED`; 400 `SKR_INVALID`, 422 `SKR_SIMULATION_FAILED` (human message from the
+  program error); 503 `SKR_UNAVAILABLE` / `SKR_READ_FAILED` / `PUSH_UNAVAILABLE`.
+- **Migration:** `20261002090000_push_tokens`. **Env:** optional `EXPO_ACCESS_TOKEN`.
+
+**Codex review requested:** `packages/solana/src/skr-staking.ts` (account order and roles against the IDL),
+`apps/api/src/push.ts`.

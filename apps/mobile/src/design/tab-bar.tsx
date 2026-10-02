@@ -43,8 +43,8 @@ export function BlinkTabBar({ state, navigation }: BottomTabBarProps) {
         }}
         style={styles.tab}
       >
-        <Icon name={meta.icon} size={22} stroke={focused ? color.lime : color.textMuted} strokeWidth={focused ? 2.2 : 1.8} />
-        <T style={{ ...font(focused ? 'bodySemi' : 'bodyMedium'), fontSize: 11, color: focused ? color.text : color.textMuted }}>{meta.label}</T>
+        <Icon name={meta.icon} size={22} stroke={focused ? color.text : color.textMuted} strokeWidth={focused ? 2.2 : 1.8} />
+        <T style={{ ...font('mono'), fontSize: 9.5, letterSpacing: 0.8, textTransform: 'uppercase', color: focused ? color.text : color.textMuted }}>{meta.label}</T>
       </Pressable>
     )
   }
@@ -63,7 +63,7 @@ export function BlinkTabBar({ state, navigation }: BottomTabBarProps) {
             }}
             style={({ pressed }) => [styles.scan, pressed && { transform: [{ scale: 0.94 }] }]}
           >
-            <Icon name="scan" size={26} stroke={color.onLime} strokeWidth={2.2} />
+            <Icon name="scan" size={26} stroke={color.onMarker} strokeWidth={2.2} />
           </Pressable>
         </View>
         {right.map(renderTab)}
@@ -78,16 +78,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 68,
-    borderRadius: radius.xl,
-    backgroundColor: 'rgba(17,20,25,0.97)',
-    borderWidth: 1,
-    borderColor: color.border,
+    borderRadius: radius.sm,
+    backgroundColor: color.surface,
+    borderWidth: 1.5,
+    borderColor: color.text,
     paddingHorizontal: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 16,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, height: '100%' },
   centerSlot: { width: 76, alignItems: 'center' },
@@ -98,13 +93,8 @@ const styles = StyleSheet.create({
     marginTop: -30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: color.lime,
-    borderWidth: 4,
-    borderColor: color.bg,
-    shadowColor: color.lime,
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
+    backgroundColor: color.marker,
+    borderWidth: 1.5,
+    borderColor: color.text,
   },
 })

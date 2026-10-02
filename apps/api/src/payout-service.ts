@@ -25,6 +25,7 @@ import { BudgetExceededError, type BudgetLedger } from './budget-ledger.ts'
 import type { CampaignRepository, StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository, ServiceWalletStore, StoredClaim } from './claim-repo.ts'
 import type { ServerWalletSigner } from './delegate.ts'
+import type { Notifier } from './push.ts'
 
 export type PayoutRpc = Rpc<
   GetAccountInfoApi &
@@ -95,6 +96,8 @@ export class SolanaPayoutService implements PayoutService {
       signer: ServerWalletSigner
       ledger: BudgetLedger
       log: { info: (o: object, msg: string) => void; warn: (o: object, msg: string) => void }
+      /** D-24: tells the recipient their reward arrived. */
+      notifier?: Notifier
     },
   ) {}
 
@@ -243,6 +246,8 @@ export class SolanaPayoutService implements PayoutService {
       const paid = await claims.markPaid(claim.id)
       await ledger.settle(ledgerKey, 'SPENT', signature)
       this.deps.log.info({ claimId: claim.id, signature }, 'payout confirmed')
+      // Only the first confirmation notifies (markPaid is compare-and-set).
+      if (paid) void this.notifyPaid(paid)
       return paid ?? { ...claim, status: 'PAID' }
     }
     if (!s) {
@@ -256,6 +261,18 @@ export class SolanaPayoutService implements PayoutService {
       }
     }
     return claim
+  }
+
+  private async notifyPaid(claim: StoredClaim) {
+    if (!this.deps.notifier) return
+    const campaign = await this.deps.campaigns.findById(claim.campaignId).catch(() => null)
+    const symbol = campaign?.xstockSymbol ?? 'stock'
+    await this.deps.notifier.notify(
+      claim.privyUserId,
+      claim.kind === 'REFERRAL_BONUS'
+        ? { title: 'Invite bonus received', body: `A friend claimed through your link. Your ${symbol} bonus is in your stock wallet.`, url: '/home' }
+        : { title: 'Your stock arrived', body: `Your ${symbol} reward is in your stock wallet.`, url: '/home' },
+    )
   }
 
   private async endIfExhausted(campaignId: string) {

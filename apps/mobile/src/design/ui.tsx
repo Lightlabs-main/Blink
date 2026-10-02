@@ -21,7 +21,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg'
 
 import { haptics } from '../lib/haptics'
 import { font } from './fonts'
@@ -33,15 +32,15 @@ import { color, gutter, radius, space, TAB_BAR_CLEARANCE } from './tokens'
 export type TextVariant = 'hero' | 'display' | 'title' | 'heading' | 'body' | 'bodyStrong' | 'label' | 'caption' | 'overline' | 'numeric'
 
 const VARIANT: Record<TextVariant, () => TextStyle> = {
-  hero: () => ({ ...font('display'), fontSize: 44, lineHeight: 48, letterSpacing: -1.2, color: color.text }),
-  display: () => ({ ...font('display'), fontSize: 32, lineHeight: 38, letterSpacing: -0.8, color: color.text }),
-  title: () => ({ ...font('displayMedium'), fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: color.text }),
-  heading: () => ({ ...font('bodySemi'), fontSize: 17, lineHeight: 22, color: color.text }),
-  body: () => ({ ...font('body'), fontSize: 15, lineHeight: 22, color: color.textDim }),
-  bodyStrong: () => ({ ...font('bodyMedium'), fontSize: 15, lineHeight: 22, color: color.text }),
-  label: () => ({ ...font('bodyMedium'), fontSize: 13, lineHeight: 18, color: color.textDim }),
-  caption: () => ({ ...font('body'), fontSize: 12, lineHeight: 16, color: color.textMuted }),
-  overline: () => ({ ...font('bodySemi'), fontSize: 11, lineHeight: 14, letterSpacing: 1.6, textTransform: 'uppercase', color: color.lime }),
+  hero: () => ({ ...font('display'), fontSize: 50, lineHeight: 52, letterSpacing: -0.5, color: color.text }),
+  display: () => ({ ...font('display'), fontSize: 36, lineHeight: 40, letterSpacing: -0.3, color: color.text }),
+  title: () => ({ ...font('displayMedium'), fontSize: 26, lineHeight: 30, color: color.text }),
+  heading: () => ({ ...font('bodySemi'), fontSize: 18, lineHeight: 23, color: color.text }),
+  body: () => ({ ...font('body'), fontSize: 16, lineHeight: 23, color: color.textDim }),
+  bodyStrong: () => ({ ...font('bodyMedium'), fontSize: 16, lineHeight: 22, color: color.text }),
+  label: () => ({ ...font('body'), fontSize: 14, lineHeight: 19, color: color.textDim }),
+  caption: () => ({ ...font('body'), fontSize: 12.5, lineHeight: 17, color: color.textMuted }),
+  overline: () => ({ ...font('mono'), fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: 'uppercase', color: color.text }),
   numeric: () => ({ ...font('numeric'), fontSize: 15, lineHeight: 20, color: color.text, fontVariant: ['tabular-nums'] }),
 }
 
@@ -69,26 +68,9 @@ export function T({
 
 /* ───────────────────────────── Layout ───────────────────────────── */
 
-/** Decorative glows behind the top of a screen. Pure SVG, no native gradient module. */
-export function Backdrop({ tone = 'mixed', height = 420 }: { tone?: 'mixed' | 'lime' | 'violet'; height?: number }) {
-  return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height }}>
-      <Svg height="100%" width="100%">
-        <Defs>
-          <RadialGradient cx="15%" cy="0%" id="gLime" r="70%">
-            <Stop offset="0" stopColor={color.lime} stopOpacity={tone === 'violet' ? 0 : 0.16} />
-            <Stop offset="1" stopColor={color.lime} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient cx="95%" cy="10%" id="gViolet" r="75%">
-            <Stop offset="0" stopColor={color.violet} stopOpacity={tone === 'lime' ? 0 : 0.22} />
-            <Stop offset="1" stopColor={color.violet} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect fill="url(#gViolet)" height="100%" width="100%" />
-        <Rect fill="url(#gLime)" height="100%" width="100%" />
-      </Svg>
-    </View>
-  )
+/** Plain newsprint: no decorative glows (broadsheet direction). Kept as a component so callers stay unchanged. */
+export function Backdrop(_props: { tone?: 'mixed' | 'lime' | 'violet'; height?: number }) {
+  return null
 }
 
 /** Page container: safe-area aware, gutter padding, optional tab-bar clearance and backdrop glow. */
@@ -149,7 +131,12 @@ export function Spacer({ size = space.md }: { size?: number }) {
 }
 
 export function Divider() {
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: color.border }} />
+  return <View style={{ height: 1, backgroundColor: color.border }} />
+}
+
+/** Double rule, as under a newspaper masthead. */
+export function DoubleRule() {
+  return <View style={{ height: 4, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.text }} />
 }
 
 /* ───────────────────────────── Surfaces ───────────────────────────── */
@@ -157,35 +144,20 @@ export function Divider() {
 export function Card({ children, style, padded = true, tone = 'default' }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean; tone?: 'default' | 'raised' | 'lime' | 'danger' }) {
   const toneStyle =
     tone === 'lime'
-      ? { backgroundColor: color.limeSoft, borderColor: color.limeLine }
+      ? { backgroundColor: color.surface, borderColor: color.text, borderWidth: 1.5 }
       : tone === 'danger'
-        ? { backgroundColor: color.dangerSoft, borderColor: 'rgba(255,92,122,0.35)' }
+        ? { backgroundColor: color.dangerSoft, borderColor: color.danger }
         : tone === 'raised'
           ? { backgroundColor: color.surface2 }
           : null
   return <View style={[styles.card, padded && { padding: space.lg }, toneStyle, style]}>{children}</View>
 }
 
-/** Card with a diagonal violet→ink gradient and a subtle lime glow; used for hero moments. */
+/** The "clipping": a dashed cut-out card for hero moments (same as the website's QR coupon). */
 export function GlowCard({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[styles.card, { overflow: 'hidden', borderColor: color.borderStrong }, style]}>
-      <Svg height="100%" style={StyleSheet.absoluteFill} width="100%">
-        <Defs>
-          <LinearGradient id="gc" x1="0" x2="1" y1="0" y2="1">
-            <Stop offset="0" stopColor="#2A1F5C" stopOpacity={0.95} />
-            <Stop offset="0.55" stopColor={color.surface} stopOpacity={1} />
-            <Stop offset="1" stopColor="#12180A" stopOpacity={1} />
-          </LinearGradient>
-          <RadialGradient cx="100%" cy="100%" id="gcGlow" r="60%">
-            <Stop offset="0" stopColor={color.lime} stopOpacity={0.18} />
-            <Stop offset="1" stopColor={color.lime} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect fill="url(#gc)" height="100%" width="100%" />
-        <Rect fill="url(#gcGlow)" height="100%" width="100%" />
-      </Svg>
-      <View style={{ padding: space.xl }}>{children}</View>
+    <View style={[styles.clipping, style]}>
+      <View style={styles.clippingInner}>{children}</View>
     </View>
   )
 }
@@ -229,39 +201,43 @@ export function Button({
 }) {
   const press = usePressScale()
   const v = BUTTON[variant]
-  const h = size === 'lg' ? 56 : size === 'md' ? 46 : 36
+  const h = size === 'lg' ? 54 : size === 'md' ? 44 : 34
   const inactive = disabled || loading
+  const shadow = variant === 'primary' && !inactive
   return (
-    <AnimatedPressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: inactive, busy: loading }}
-      disabled={inactive}
-      onPress={() => {
-        haptics.tap()
-        onPress()
-      }}
-      onPressIn={press.onPressIn}
-      onPressOut={press.onPressOut}
-      style={[styles.button, { height: h, backgroundColor: v.bg, borderColor: v.border, opacity: inactive ? 0.45 : 1 }, press.style, style]}
-    >
-      {loading ? (
-        <ActivityIndicator color={v.fg} />
-      ) : (
-        <>
-          {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 19} stroke={v.fg} strokeWidth={2} /> : null}
-          <T style={{ ...font('bodySemi'), fontSize: size === 'sm' ? 13 : 16, color: v.fg }}>{children}</T>
-          {iconRight ? <Icon name={iconRight} size={size === 'sm' ? 16 : 19} stroke={v.fg} strokeWidth={2} /> : null}
-        </>
-      )}
-    </AnimatedPressable>
+    <View style={[{ height: h + (shadow ? 4 : 0) }, style]}>
+      {shadow ? <View pointerEvents="none" style={[styles.buttonShadow, { height: h }]} /> : null}
+      <AnimatedPressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: inactive, busy: loading }}
+        disabled={inactive}
+        onPress={() => {
+          haptics.tap()
+          onPress()
+        }}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={[styles.button, { height: h, backgroundColor: v.bg, borderColor: v.border, opacity: inactive ? 0.45 : 1 }, press.style]}
+      >
+        {loading ? (
+          <ActivityIndicator color={v.fg} />
+        ) : (
+          <>
+            {icon ? <Icon name={icon} size={size === 'sm' ? 15 : 17} stroke={v.fg} strokeWidth={2} /> : null}
+            <T style={{ ...font('mono'), fontSize: size === 'sm' ? 11.5 : 13, letterSpacing: 0.8, textTransform: 'uppercase', color: v.fg }}>{children}</T>
+            {iconRight ? <Icon name={iconRight} size={size === 'sm' ? 15 : 17} stroke={v.fg} strokeWidth={2} /> : null}
+          </>
+        )}
+      </AnimatedPressable>
+    </View>
   )
 }
 
 const BUTTON: Record<ButtonVariant, { bg: string; fg: string; border: string }> = {
-  primary: { bg: color.lime, fg: color.onLime, border: color.lime },
-  secondary: { bg: color.surface2, fg: color.text, border: color.border },
+  primary: { bg: color.text, fg: color.bg, border: color.text },
+  secondary: { bg: 'transparent', fg: color.text, border: color.text },
   ghost: { bg: 'transparent', fg: color.textDim, border: 'transparent' },
-  danger: { bg: color.dangerSoft, fg: color.danger, border: 'rgba(255,92,122,0.3)' },
+  danger: { bg: 'transparent', fg: color.danger, border: color.danger },
 }
 
 export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }: { icon: IconName; onPress: () => void; label: string; tone?: 'default' | 'lime'; size?: number }) {
@@ -322,10 +298,10 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
         haptics.tap()
         onPress()
       }}
-      style={[styles.chip, selected && { backgroundColor: color.limeSoft, borderColor: color.limeLine }]}
+      style={[styles.chip, selected && { backgroundColor: color.text, borderColor: color.text }]}
     >
-      {icon ? <Icon name={icon} size={15} stroke={selected ? color.lime : color.textDim} /> : null}
-      <T style={{ ...font('bodyMedium'), fontSize: 14, color: selected ? color.lime : color.textDim }}>{label}</T>
+      {icon ? <Icon name={icon} size={14} stroke={selected ? color.bg : color.textDim} /> : null}
+      <T style={{ ...font('mono'), fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: selected ? color.bg : color.textDim }}>{label}</T>
     </Pressable>
   )
 }
@@ -338,16 +314,16 @@ const BADGE: Record<BadgeTone, { bg: string; fg: string }> = {
   live: { bg: color.successSoft, fg: color.success },
   warn: { bg: color.warningSoft, fg: color.warning },
   neutral: { bg: color.surface3, fg: color.textDim },
-  test: { bg: color.violetSoft, fg: '#B9A6FF' },
+  test: { bg: color.violetSoft, fg: color.violet },
   danger: { bg: color.dangerSoft, fg: color.danger },
 }
 
 export function Badge({ label, tone = 'neutral', dot }: { label: string; tone?: BadgeTone; dot?: boolean }) {
   const b = BADGE[tone]
   return (
-    <View style={[styles.badge, { backgroundColor: b.bg }]}>
+    <View style={[styles.badge, { borderColor: b.fg }]}>
       {dot ? <PulseDot color={b.fg} /> : null}
-      <T style={{ ...font('bodySemi'), fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: b.fg }}>{label}</T>
+      <T style={{ ...font('mono'), fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: b.fg }}>{label}</T>
     </View>
   )
 }
@@ -475,12 +451,12 @@ export function StockAvatar({ symbol, logo, size = 40, isTest }: { symbol: strin
         <Image onError={() => setFailed(true)} source={{ uri: logo! }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color.surface3 }} />
       ) : (
         <View style={[styles.monogram, { width: size, height: size, borderRadius: size / 2 }]}>
-          <T style={{ ...font('display'), fontSize: size * 0.34, color: color.lime }}>{symbol.replace(/^t/, '').slice(0, 2).toUpperCase()}</T>
+          <T style={{ ...font('display'), fontSize: size * 0.42, color: color.text }}>{symbol.replace(/^t/, '').slice(0, 2).toUpperCase()}</T>
         </View>
       )}
       {isTest ? (
         <View style={styles.testTag}>
-          <T style={{ ...font('bodyBold'), fontSize: 8, color: '#fff' }}>TEST</T>
+          <T style={{ ...font('mono'), fontSize: 7.5, color: color.bg }}>TEST</T>
         </View>
       ) : null}
     </View>
@@ -533,21 +509,24 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: color.bg },
   navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  card: { backgroundColor: color.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border },
+  card: { backgroundColor: color.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: color.borderStrong },
+  clipping: { borderRadius: radius.sm, borderWidth: 1.5, borderStyle: 'dashed', borderColor: color.text, backgroundColor: color.surface2, padding: 6 },
+  clippingInner: { padding: space.lg, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
     paddingHorizontal: space.xl,
   },
-  iconButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface2, borderWidth: 1, borderColor: color.border },
+  buttonShadow: { position: 'absolute', left: 4, right: -4, top: 4, borderRadius: radius.sm, backgroundColor: color.marker },
+  iconButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface, borderWidth: 1, borderColor: color.borderStrong },
   quickIcon: {
     width: 58,
     height: 58,
-    borderRadius: 20,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: color.surface2,
@@ -558,18 +537,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.surface2,
+    borderColor: color.borderStrong,
+    backgroundColor: 'transparent',
   },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm, borderWidth: 1 },
   notice: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12 },
-  emptyIcon: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
-  monogram: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface3, borderWidth: 1, borderColor: color.limeLine },
-  testTag: { position: 'absolute', bottom: -3, right: -6, backgroundColor: color.violet, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 },
+  emptyIcon: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
+  monogram: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft, borderWidth: 1, borderColor: color.text },
+  testTag: { position: 'absolute', bottom: -3, right: -6, backgroundColor: color.text, borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 },
   stepLine: { flex: 1, height: 2 },
   stepDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.border, backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center' },
   avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.lime },

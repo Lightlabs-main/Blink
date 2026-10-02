@@ -221,3 +221,14 @@ model AuditLog {
 
   @@index([campaignId, createdAt])
 }
+
+/// D-24: Expo push tokens, one row per device. A device that signs in to another account moves to that account.
+model PushToken {
+  token       String   @id
+  privyUserId String
+  platform    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([privyUserId])
+}

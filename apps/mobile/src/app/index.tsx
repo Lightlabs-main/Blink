@@ -118,7 +118,7 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  logoMark: { width: 32, height: 32, borderRadius: 10, backgroundColor: color.lime, alignItems: 'center', justifyContent: 'center' },
+  logoMark: { width: 32, height: 32, borderRadius: 4, backgroundColor: color.lime, alignItems: 'center', justifyContent: 'center' },
   tickerWrap: { overflow: 'hidden', marginHorizontal: -20 },
   tickerPill: {
     flexDirection: 'row',
@@ -127,10 +127,10 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
     paddingRight: 14,
     paddingVertical: 6,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     backgroundColor: color.surface,
     borderWidth: 1,
     borderColor: color.border,
   },
-  pointIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  pointIcon: { width: 30, height: 30, borderRadius: 4, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
 })

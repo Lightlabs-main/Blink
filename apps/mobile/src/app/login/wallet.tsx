@@ -137,11 +137,11 @@ export default function WalletLogin() {
 }
 
 const styles = StyleSheet.create({
-  badgeIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  badgeIcon: { width: 52, height: 52, borderRadius: 4, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
   stepIcon: {
     width: 34,
     height: 34,
-    borderRadius: 12,
+    borderRadius: 4,
     borderWidth: 1.5,
     borderColor: color.border,
     backgroundColor: color.surface2,

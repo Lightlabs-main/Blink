@@ -41,3 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Firebase client config (D-24): provided to EAS as the GOOGLE_SERVICES_JSON file variable
+google-services.json

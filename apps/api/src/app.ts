@@ -3,7 +3,18 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { BlinkEnv } from '@blink/config'
 import { TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
-import { claimRequest, createCampaignRequest, declareEligibilityRequest, finishTapRushRequest, questHasTapRush, submitFundingRequest } from '@blink/validation'
+import {
+  claimRequest,
+  createCampaignRequest,
+  declareEligibilityRequest,
+  finishTapRushRequest,
+  pushTokenDeleteRequest,
+  pushTokenRequest,
+  questHasTapRush,
+  skrPrepareRequest,
+  submitFundingRequest,
+} from '@blink/validation'
+import { SkrStakeError } from '@blink/solana'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 
@@ -13,6 +24,8 @@ import { type ClaimRepository, type StoredClaim, toClaimSummary } from './claim-
 import { ClaimService, type SeekerVerifier } from './claim-service.ts'
 import type { EligibilityService } from './eligibility.ts'
 import type { QuestService } from './quest-service.ts'
+import { NOOP_NOTIFIER, type Notifier, type PushTokenStore } from './push.ts'
+import type { SkrStaking } from './skr-service.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
@@ -39,6 +52,11 @@ export interface AppDeps {
   eligibility?: EligibilityService
   /** D-21: Verified Quest evaluation (mainnet reads). */
   quests?: QuestService
+  /** D-23: in-app SKR staking (mainnet reads + unsigned transactions for the user's own wallet). */
+  skr?: SkrStaking
+  /** D-24: push notifications. */
+  pushTokens?: PushTokenStore
+  notifier?: Notifier
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -60,6 +78,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     trustProxy: '127.0.0.1',
   })
   const limiter = new RateLimiter()
+  const notifier = deps.notifier ?? NOOP_NOTIFIER
 
   /** D-16: throttle mutating recipient routes per client IP and per signed-in user. */
   function throttle(req: FastifyRequest, auth: AuthContext) {
@@ -77,6 +96,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (err instanceof AuthError) return sendError(reply, 401, 'UNAUTHENTICATED', err.message)
     if (err instanceof FundingRequestError) return sendError(reply, err.httpStatus, err.code, err.message)
     if (err instanceof ClaimError) return sendError(reply, err.httpStatus, err.code, err.message)
+    if (err instanceof SkrStakeError) return sendError(reply, err.code === 'INVALID' ? 400 : 422, `SKR_${err.code}`, err.message)
     const status = typeof (err as { statusCode?: number }).statusCode === 'number' ? (err as { statusCode: number }).statusCode : 500
     if (status < 500) return sendError(reply, status, 'BAD_REQUEST', err instanceof Error ? err.message : 'bad request')
     app.log.error(err)
@@ -116,6 +136,66 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
     if (!deps.eligibility) throw new ClaimError('ELIGIBILITY_UNAVAILABLE', 'eligibility checks are not available right now', 503)
     return { enforced: deps.eligibility.enforced, eligibility: await deps.eligibility.declare(auth.privyUserId, parsed.data, req.ip) }
+  })
+
+  // ---- D-24: push notifications ----
+
+  app.post('/v1/me/push-token', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const parsed = pushTokenRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    if (!deps.pushTokens) throw new ClaimError('PUSH_UNAVAILABLE', 'notifications are not available right now', 503)
+    await deps.pushTokens.save(parsed.data.token, auth.privyUserId, parsed.data.platform)
+    return { ok: true }
+  })
+
+  /** Sign-out: stop notifications for this device (only the caller's own token is removed). */
+  app.delete('/v1/me/push-token', async (req, reply) => {
+    const auth = await requireAuth(req)
+    const parsed = pushTokenDeleteRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    await deps.pushTokens?.remove(parsed.data.token, auth.privyUserId)
+    return { ok: true }
+  })
+
+  // ---- D-23: in-app SKR staking (mainnet; the user's own wallet signs and sends) ----
+
+  /** Only wallets Privy has verified for the caller (SIWS-linked), so Blink never builds for someone else's wallet. */
+  async function requireOwnSkrWallet(req: FastifyRequest, wallet: string) {
+    const auth = await requireAuth(req)
+    const wallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
+    if (!wallets.includes(wallet)) throw new ClaimError('WALLET_NOT_LINKED', 'link this wallet to your Blink account first', 403)
+    if (!deps.skr) throw new ClaimError('SKR_UNAVAILABLE', 'SKR staking is not available right now', 503)
+    return { auth, skr: deps.skr }
+  }
+
+  app.get<{ Querystring: { wallet?: string } }>('/v1/skr/position', async (req, reply) => {
+    const wallet = req.query.wallet ?? ''
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) return sendError(reply, 400, 'INVALID_REQUEST', 'invalid wallet address')
+    const { skr } = await requireOwnSkrWallet(req, wallet)
+    try {
+      return { position: await skr.position(wallet) }
+    } catch (err) {
+      if (err instanceof SkrStakeError) throw err
+      req.log.warn({ err }, 'SKR position read failed')
+      throw new ClaimError('SKR_READ_FAILED', 'could not read SKR on mainnet right now — try again', 503)
+    }
+  })
+
+  app.post('/v1/skr/prepare', async (req, reply) => {
+    const parsed = skrPrepareRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    const { auth, skr } = await requireOwnSkrWallet(req, parsed.data.wallet)
+    throttle(req, auth)
+    const { wallet, action, amountRaw, all } = parsed.data
+    try {
+      return { prepared: await skr.prepare(wallet, action, amountRaw ? BigInt(amountRaw) : undefined, all) }
+    } catch (err) {
+      if (err instanceof SkrStakeError) throw err
+      req.log.warn({ err }, 'SKR prepare failed')
+      throw new ClaimError('SKR_READ_FAILED', 'could not reach mainnet right now — try again', 503)
+    }
   })
 
   app.get('/v1/xstocks', async (req) => {
@@ -308,8 +388,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       return { campaign: c, verified: false }
     }
     const funded = (await deps.campaigns.transitionStatus(c.id, 'AWAITING_FUNDING', 'AWAITING_DELEGATION')) ?? c
-    const liveCampaign = (await deps.campaigns.transitionStatus(funded.id, 'AWAITING_DELEGATION', 'LIVE')) ?? funded
-    return { campaign: liveCampaign, verified: true }
+    const wentLive = await deps.campaigns.transitionStatus(funded.id, 'AWAITING_DELEGATION', 'LIVE')
+    if (wentLive) {
+      void notifier.notify(wentLive.creatorPrivyUserId, {
+        title: 'Your drop is live',
+        body: `Your ${wentLive.xstockSymbol} drop is open. Share the link or QR to start the room.`,
+        url: `/campaign/${wentLive.id}`,
+      })
+    }
+    return { campaign: wentLive ?? funded, verified: true }
   }
 
   function req_log_problems(problems: string[]) {

@@ -197,3 +197,25 @@ export const rentEstimateResponse = z.object({
 export const apiError = z.object({
   error: z.object({ code: z.string(), message: z.string() }),
 })
+
+const base58Address = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'invalid wallet address')
+
+/** D-23: POST /v1/skr/prepare — amounts are raw SKR units (6 decimals) as a decimal string. */
+export const skrPrepareRequest = z
+  .object({
+    wallet: base58Address,
+    action: z.enum(['stake', 'unstake', 'withdraw', 'cancel_unstake']),
+    amountRaw: z.string().regex(/^[1-9]\d{0,19}$/, 'invalid amount').optional(),
+    all: z.boolean().optional(),
+  })
+  .strict()
+
+/** D-24: POST /v1/me/push-token. */
+export const pushTokenRequest = z
+  .object({
+    token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,200}\]$/, 'invalid push token'),
+    platform: z.enum(['android', 'ios']),
+  })
+  .strict()
+
+export const pushTokenDeleteRequest = z.object({ token: z.string().min(1).max(256) }).strict()

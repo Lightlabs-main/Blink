@@ -7,8 +7,9 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { api } from '../../../lib/api'
+import { color } from '../../../design/tokens'
 // D-12: the https origin wallets show and can verify; the icon is resolved relative to it.
-const identity: AppIdentity = { name: 'Blink-to-Stock', uri: 'https://blinksol.site', icon: 'icon.png' }
+export const identity: AppIdentity = { name: 'Blink-to-Stock', uri: 'https://blinksol.site', icon: 'icon.png' }
 const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID
 const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 15_000 } } })
@@ -60,16 +61,16 @@ function NetworkGate({ children }: { children: ReactNode }) {
   if (!cluster) {
     // Rendered before fonts and the design system load, so plain React Native only.
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, backgroundColor: '#07080B' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, backgroundColor: color.bg }}>
         {health.isError ? (
           <>
-            <Text style={{ color: '#F4F6F9', fontSize: 17, textAlign: 'center' }}>Can’t reach Blink right now.</Text>
-            <Pressable accessibilityRole="button" onPress={() => void health.refetch()} style={{ paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#C6FF3D' }}>
-              <Text style={{ color: '#0B0E05', fontWeight: '600' }}>Try again</Text>
+            <Text style={{ color: color.text, fontSize: 17, textAlign: 'center' }}>Can’t reach Blink right now.</Text>
+            <Pressable accessibilityRole="button" onPress={() => void health.refetch()} style={{ paddingVertical: 12, paddingHorizontal: 20, borderRadius: 4, backgroundColor: color.text }}>
+              <Text style={{ color: color.bg, fontWeight: '600' }}>Try again</Text>
             </Pressable>
           </>
         ) : (
-          <ActivityIndicator color="#C6FF3D" />
+          <ActivityIndicator color={color.text} />
         )}
       </View>
     )

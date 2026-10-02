@@ -354,3 +354,40 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
   again.
 - **Devnet.** `XSTOCK_COMPLIANCE=off` on the devnet server only, because the test asset is not an
   xStock. Mainnet refuses to start unless the gate is `enforce` (D-20).
+
+## D-23 — In-app SKR staking (2026-10-02, Maris: "in-app SKR staking (P1) … build this")
+
+- **What:** stake, unstake, cancel unstake and withdraw SKR with Solana Mobile's guardian pool
+  (`DPJ58…buqr`, the official sample's default) from a Blink screen (`/skr`). Entry points: Profile, and a
+  "Stake SKR in Blink" action on a failed SKR_STAKED / SKR_TOTAL quest requirement.
+- **Custody:** none. The server reads mainnet, builds the transaction from the official IDL and **simulates it**;
+  the user's own wallet is fee payer and only signer and sends it through MWA `signAndSendTransactions` on
+  `solana:mainnet`. Blink never holds, moves or sends SKR, and sends no mainnet transaction itself.
+- **Which wallets:** only wallets Privy verified for the caller (SIWS-linked); anything else gets 403
+  `WALLET_NOT_LINKED`. The app also refuses to continue if the wallet app authorizes a different account.
+- **Mainnet always**, whatever cluster the drops run on, because SKR exists only there. The server checks the
+  mainnet genesis hash and that the StakeConfig's mint and vault match before building anything.
+- **Labelling:** the screen says "Mainnet · real SKR"; rewards and the 48 h cooldown are Solana Mobile's.
+- Not built: choosing another guardian pool (there is one official default).
+
+## D-24 — Push notifications (2026-10-02, Maris: "push notifications … build this")
+
+- **Events:** reward received (claim PAID), invite bonus received (REFERRAL_BONUS PAID), the creator's drop
+  went LIVE. Each fires once (on the compare-and-set transition), carries no wallet address or secret, and
+  opens an in-app route only (`/home`, `/campaign/:id`).
+- **Path:** app registers an Expo push token (permission asked once on sign-in) → `POST /v1/me/push-token`
+  → `PushToken` table (one row per device; signing in elsewhere moves it) → server sends through the Expo push
+  service. `DeviceNotRegistered` tokens are deleted. Sign-out deletes the device's token.
+- **Failure never matters to money:** sending is fire-and-forget and swallows errors, so a push outage cannot
+  affect a payout or a go-live.
+- **Owner action needed (Android):** a Firebase project and its `google-services.json` + FCM v1 key in EAS
+  (DEPENDENCIES.md). Without it the build still works; notifications show as unavailable.
+
+## D-25 — The app adopts the broadsheet design (2026-10-02)
+
+The app now uses the website's "financial broadsheet" system (D-18 follow-up): newsprint paper and ink,
+Instrument Serif headlines, Newsreader text, IBM Plex Mono labels, square corners, lime only as a highlighter
+(primary-button offset block, Scan button, Tap Rush target). Day or Night edition follows the system setting at
+launch. Legacy token names were kept (`lime` = ink accent) so every screen follows without rewrites.
+Announced-but-unbuilt features (Squads, Stock Clubs, Stock Passport, QR Event check-in, ORE mining checks) are
+listed under Profile → "Coming soon" with a Soon badge and no actions.

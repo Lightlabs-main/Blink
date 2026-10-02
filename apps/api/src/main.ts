@@ -21,6 +21,8 @@ import { MainnetSeekerVerifier } from './seeker.ts'
 import { EligibilityService } from './eligibility.ts'
 import { GeoipCountryResolver } from './ip-country.ts'
 import { MainnetChainReader, QuestService } from './quest-service.ts'
+import { ExpoPushNotifier, InMemoryPushTokenStore, PrismaPushTokenStore, type PushTokenStore } from './push.ts'
+import { MainnetSkrStaking } from './skr-service.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -41,8 +43,10 @@ let campaigns: CampaignRepository
 let claims: ClaimRepository & ServiceWalletStore & EligibilityStore
 let ledger: BudgetLedger
 let prisma: ReturnType<typeof createPrismaClient> | undefined
+let pushTokens: PushTokenStore
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
+  pushTokens = new PrismaPushTokenStore(prisma)
   campaigns = new PrismaCampaignRepository(prisma)
   claims = new PrismaClaimRepository(prisma)
   ledger = new PrismaBudgetLedger(prisma, env)
@@ -50,6 +54,7 @@ if (env.DATABASE_URL) {
   console.warn('DATABASE_URL not set: using in-memory campaign storage (local only, data lost on restart).')
   const memory = new InMemoryCampaignRepository()
   campaigns = memory
+  pushTokens = new InMemoryPushTokenStore()
   claims = new InMemoryClaimRepository(memory)
   ledger = new InMemoryBudgetLedger(env)
 } else {
@@ -67,6 +72,9 @@ if (env.SOLANA_CLUSTER === 'mainnet-beta') {
   readRpc = clusterRpc
 }
 
+// D-24: push notifications via the Expo push service; failures are logged, never thrown into payouts.
+const notifier = new ExpoPushNotifier({ store: pushTokens, accessToken: env.EXPO_ACCESS_TOKEN, log: { warn: (o, msg) => app.log.warn(o, msg) } })
+
 const privy = new PrivyClient({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
 const funding = new SolanaFundingService(clusterRpc, assets, new PrivyDelegateProvider(privy), campaigns)
 const payouts = new SolanaPayoutService({
@@ -78,6 +86,7 @@ const payouts = new SolanaPayoutService({
   serviceWallets: claims,
   signer: new PrivyServerWalletSigner(privy),
   ledger,
+  notifier,
   // Payout logs go through the app's (redacting) logger once it exists.
   log: { info: (o, msg) => app.log.info(o, msg), warn: (o, msg) => app.log.warn(o, msg) },
 })
@@ -102,6 +111,10 @@ const app = buildApp({
   // SGTs, SKR and ORE live on mainnet only, so these checks always read mainnet, even while payouts run on devnet.
   seeker,
   quests,
+  // D-23: SKR staking reads/builds on mainnet; the user's wallet signs and sends.
+  skr: new MainnetSkrStaking(mainnetRead),
+  pushTokens,
+  notifier,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,
