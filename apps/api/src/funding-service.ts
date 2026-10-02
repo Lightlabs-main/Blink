@@ -1,7 +1,16 @@
-import { buildFundingTransaction, checkCampaignDelegation, type DelegationStatus, FundingError, sameIntentAllowingWalletAdditions } from '@blink/solana'
+import {
+  buildFundingTransaction,
+  checkCampaignDelegation,
+  type DelegationStatus,
+  FundingError,
+  messageLifetimeToken,
+  sameIntentAllowingWalletAdditions,
+} from '@blink/solana'
 import {
   address,
   type Base64EncodedWireTransaction,
+  type Blockhash,
+  type IsBlockhashValidApi,
   type GetAccountInfoApi,
   type GetLatestBlockhashApi,
   type GetMinimumBalanceForRentExemptionApi,
@@ -23,8 +32,12 @@ type ServiceRpc = Rpc<
     GetMinimumBalanceForRentExemptionApi &
     SimulateTransactionApi &
     SendTransactionApi &
-    GetSignatureStatusesApi
+    GetSignatureStatusesApi &
+    IsBlockhashValidApi
 >
+
+const WRONG_NETWORK_MESSAGE =
+  'Your wallet signed this for a different network. Switch your wallet to Devnet (Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet), then try again.'
 
 export interface PreparedFunding {
   transaction: string
@@ -136,12 +149,26 @@ export class SolanaFundingService implements FundingService {
       throw new FundingRequestError('NOT_SIGNED', 'the creator wallet did not sign', 400)
     }
 
-    const signature = await this.rpc
-      .sendTransaction(signedTransactionBase64 as Base64EncodedWireTransaction, {
-        encoding: 'base64',
-        preflightCommitment: 'confirmed',
-      })
-      .send()
+    // Some wallets (Phantom) replace the blockhash with their own. It must exist on THIS cluster; allow a few
+    // seconds for RPC lag, otherwise the wallet signed for another network.
+    const signedBlockhash = messageLifetimeToken(Uint8Array.from(decoded.messageBytes))
+    if (signedBlockhash !== messageLifetimeToken(pending.messageBytes) && !(await this.blockhashKnown(signedBlockhash))) {
+      throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
+    }
+
+    let signature: Signature
+    try {
+      signature = await this.rpc
+        .sendTransaction(signedTransactionBase64 as Base64EncodedWireTransaction, {
+          encoding: 'base64',
+          preflightCommitment: 'confirmed',
+        })
+        .send()
+    } catch (err) {
+      const text = String((err as Error)?.message ?? err)
+      if (text.includes('#7050008')) throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
+      throw new FundingRequestError('SEND_FAILED', 'the network rejected this transaction — please try again', 422)
+    }
     this.pending.delete(campaign.id)
     await this.waitForConfirmation(signature)
     return { signature }
@@ -158,6 +185,15 @@ export class SolanaFundingService implements FundingService {
     // LIVE only when the exact approved allowance is in place and fully funded (§9).
     const live = status.valid && status.delegatedAmount === campaign.allowanceRaw && status.balance >= campaign.allowanceRaw
     return { live, status }
+  }
+
+  private async blockhashKnown(blockhash: string) {
+    for (let i = 0; i < 4; i++) {
+      const { value } = await this.rpc.isBlockhashValid(blockhash as Blockhash, { commitment: 'processed' }).send()
+      if (value) return true
+      await new Promise((r) => setTimeout(r, 1500))
+    }
+    return false
   }
 
   private async waitForConfirmation(signature: Signature) {
