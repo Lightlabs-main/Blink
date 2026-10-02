@@ -1,6 +1,6 @@
 // Blink-to-Stock website: dateline, ticker and live drops from the Blink API (same origin, /api). Real data only.
 ;(function () {
-  const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Early Claim', REFERRAL: 'Referral', SEEKER: 'Seeker Drop' }
+  const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Flash Drop', REFERRAL: 'Referral', SEEKER: 'Seeker Drop', VERIFIED_QUEST: 'Verified Quest' }
 
   const today = document.getElementById('today')
   if (today) {

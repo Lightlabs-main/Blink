@@ -293,3 +293,46 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
   reservations and nothing sent. Shown in `/v1/status`.
 - **Copy.** xStocks are described as tokenized tracker certificates giving economic exposure (no
   registered shares, no voting rights) across the app and website.
+
+## D-21 — Verified Quests, live room, challenge sharing, campaign window (2026-10-02, product update P0)
+
+- **`VERIFIED_QUEST`.**
+  - Requirements are `{ eligibility[], actions[] }` groups of ALL/ANY allowlisted verifiers (registry
+    in `packages/domain`).
+  - Validated at creation: ENABLED verifiers only, kind-correct placement, positive raw minimums.
+  - Frozen with a SHA-256 hash; there is no edit endpoint.
+- **Evaluation** happens server-side in `QuestService`:
+  - only Privy-verified wallets (SIWS-linked + embedded) are read;
+  - SKR/ORE come from mainnet via `MainnetChainReader` (genesis check + mint-decimals check), and
+    amounts are summed across the user's verified wallets;
+  - Seeker uses D-17, Tap Rush uses an unused qualified round.
+  - Any read error → `ERROR`, which never qualifies.
+  - A claim re-evaluates immediately before reservation (update §20) and consumes the qualifying
+    Tap Rush round.
+- **Readers** (`packages/solana/stake-readers.ts`):
+  - **SKR staked** sums every UserStake for the user across guardian pools (getProgramAccounts with
+    a discriminator + config + user filter), checking owner program, user, config and the
+    re-derived PDA for each.
+  - **ORE staked** reads the `["stake", owner]` PDA, checking owner program and authority.
+  - The StakeConfig offsets were validated against live mainnet: mint and vault match the docs.
+- **ORE_ACTIVITY is DISABLED and X_QUEST BLOCKED.** Both are visible in the studio as
+  "Soon"/"Unavailable" and refused by validation.
+- **Campaign window.** `startsAt` / `endsAt` (the studio offers no end, 1 h, 24 h, 3 d, 7 d).
+  Claims and Tap Rush outside the window get `NOT_STARTED` / `CAMPAIGN_OVER`.
+- **Live room.** `GET /v1/campaigns/:id/room`, polled every 4 s, derived only from real rows (tap
+  sessions, quest checks, claims):
+  - joined, qualified, rewards remaining;
+  - a Tap Rush leaderboard (best accepted score per player);
+  - events.
+
+  Identities are truncated Blink wallets; nothing else is public. Quests without a score have no
+  leaderboard.
+- **Challenge a friend.** A native share of an achievement plus the canonical `blinksol.site/c/<id>`
+  link; balances are never shared.
+- **Claim wording follows §26:** "Requirement complete", "Qualified", "Reward reserved", "Sending …
+  on Solana", "Received".
+- **Creator studio.**
+  - Steps: experience → (quest: eligibility, action) → reward → limits → review → fund.
+  - Flash Drop is the label for `EARLY_CLAIM`; QR Event and Squad show "Soon"; the legacy SEEKER
+    type stays claimable but isn't offered for new drops (use a quest with Verified Seeker).
+  - Drops filters list only formats that have live drops.

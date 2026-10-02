@@ -1,5 +1,13 @@
 # Product update — 1 October 2026: programmable social stock campaigns
 
+> **Build status (2026-10-02).** All P0 items are built and tested; device testing is pending:
+> - Verified Quest + verifiers, SKR/ORE readers, campaign window (D-21)
+> - live room, challenge sharing, §26 wording, the new creator studio
+> - xStocks eligibility gate + kill switch (D-19, D-20)
+>
+> Squads, Stock Clubs, Passport, QR Event, ORE activity and X quests remain deferred or blocked, as
+> planned.
+
 This is a delta on `docs/MASTER_PROMPT.md`, which stays authoritative for everything this update
 doesn't change. This document records:
 - what exists today (verified by reading the code at commit `aac11a1`);

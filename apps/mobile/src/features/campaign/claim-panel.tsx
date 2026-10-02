@@ -52,7 +52,21 @@ export function useMyClaim(campaignId: string) {
   })
 }
 
-export function ClaimReceipt({ claim, asset }: { claim: ClaimSummary; asset: XStockListing | undefined }) {
+/** Share an achievement (never balances) with the drop's canonical link (update §15, §34). */
+export function shareChallenge(campaign: CampaignSummary, text: string) {
+  haptics.tap()
+  void Share.share({ message: `${text} ${campaignLink(campaign.id)}` })
+}
+
+export function ClaimReceipt({
+  claim,
+  asset,
+  challenge,
+}: {
+  claim: ClaimSummary
+  asset: XStockListing | undefined
+  challenge?: { campaign: CampaignSummary; text: string }
+}) {
   const amount = displayShares(asset, claim.amountRaw)
   const label = `${amount ?? ''} ${claim.xstockSymbol}`.trim()
   const bonus = claim.kind === 'REFERRAL_BONUS'
@@ -64,9 +78,9 @@ export function ClaimReceipt({ claim, asset }: { claim: ClaimSummary; asset: XSt
             <Icon name="check" size={20} stroke={color.onLime} strokeWidth={2.6} />
           </View>
           <View style={{ flex: 1 }}>
-            <T variant="heading">{bonus ? `You earned ${label} for inviting a friend` : `You got ${label}`}</T>
+            <T variant="heading">{bonus ? `Received ${label} for inviting a friend` : `Received ${label}`}</T>
             <T variant="label" color={color.text}>
-              It’s in your Blink wallet.
+              Confirmed on Solana and in your Blink wallet.
             </T>
           </View>
         </Row>
@@ -80,6 +94,11 @@ export function ClaimReceipt({ claim, asset }: { claim: ClaimSummary; asset: XSt
             View receipt on Solana
           </Button>
         ) : null}
+        {challenge ? (
+          <Button icon="share" onPress={() => shareChallenge(challenge.campaign, challenge.text)} size="md">
+            Challenge a friend
+          </Button>
+        ) : null}
       </Card>
     )
   }
@@ -87,9 +106,13 @@ export function ClaimReceipt({ claim, asset }: { claim: ClaimSummary; asset: XSt
     <Card style={{ gap: space.sm }} tone="raised">
       <Row>
         <Icon name="refresh" size={20} stroke={color.lime} />
-        <T variant="heading">{bonus ? `Your ${label} bonus is on its way…` : `Sending ${label}…`}</T>
+        <T variant="heading">{claim.status === 'RESERVED' ? 'Reward reserved' : bonus ? `Sending your ${label} bonus on Solana…` : `Sending ${label} on Solana…`}</T>
       </Row>
-      <T variant="label">The network is confirming your transfer. This usually takes a few seconds.</T>
+      <T variant="label">
+        {claim.status === 'RESERVED'
+          ? 'Your reward is held for you and will be sent shortly.'
+          : 'Not final yet — Solana is confirming the transfer. This usually takes a few seconds.'}
+      </T>
     </Card>
   )
 }
@@ -220,7 +243,14 @@ function ClaimCard({
   const soldOut = BigInt(campaign.allowanceRaw) - BigInt(campaign.claimedRaw) < reward
 
   const existing = mine.data?.claim
-  if (existing && existing.status !== 'FAILED') return <ClaimReceipt asset={asset} claim={existing} />
+  const challenge = {
+    campaign,
+    text:
+      campaign.type === 'TAP_RUSH'
+        ? `I completed the ${campaign.xstockSymbol} Tap Rush on Blink. Think you can beat me?`
+        : `I just claimed a ${campaign.xstockSymbol} drop on Blink. Get yours before it's gone:`,
+  }
+  if (existing && existing.status !== 'FAILED') return <ClaimReceipt asset={asset} challenge={challenge} claim={existing} />
   if (campaign.status !== 'LIVE') {
     return (
       <Card style={{ gap: space.sm }} tone="raised">

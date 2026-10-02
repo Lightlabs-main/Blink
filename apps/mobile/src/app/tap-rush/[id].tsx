@@ -23,6 +23,7 @@ type Phase =
   | { name: 'missed'; taps: number; attemptsLeft: number }
   | { name: 'claiming' }
   | { name: 'claimed'; claim: ClaimSummary }
+  | { name: 'questDone' }
 
 /**
  * Counts down `durationMs`, reporting the time left every 100 ms, then calls onDone slightly after the end.
@@ -140,6 +141,13 @@ export default function TapRush() {
         setPhase({ name: 'missed', taps: result.taps, attemptsLeft: result.attemptsLeft })
         return
       }
+      if (c?.type === 'VERIFIED_QUEST') {
+        // In a quest the round is one requirement; the quest screen re-checks everything before any reward.
+        haptics.success()
+        void queryClient.invalidateQueries({ queryKey: ['quest', campaignId] })
+        setPhase({ name: 'questDone' })
+        return
+      }
       setPhase({ name: 'claiming' })
       const { claim } = await api.claim(getAccessToken, campaignId, { tapSessionId: s.id })
       queryClient.setQueryData(claimQueryKey(campaignId), { claim })
@@ -221,10 +229,22 @@ export default function TapRush() {
               Please wait
             </Button>
           </View>
+        ) : phase.name === 'questDone' ? (
+          <View style={{ gap: space.lg }}>
+            <T variant="display">Requirement complete</T>
+            <T style={{ fontSize: 17 }}>You hit the Tap Rush goal. Head back to the quest to finish the rest.</T>
+            <Button iconRight="arrowRight" onPress={() => router.replace(`/campaign/${campaignId}`)}>
+              Back to the quest
+            </Button>
+          </View>
         ) : alreadyClaimed && existing ? (
           <View style={{ gap: space.lg }}>
             <T variant="display">{existing.status === 'PAID' ? 'You earned it!' : 'Almost there'}</T>
-            <ClaimReceipt asset={asset} claim={existing} />
+            <ClaimReceipt
+              asset={asset}
+              challenge={{ campaign: c, text: `I completed the ${c.xstockSymbol} Tap Rush on Blink. Think you can beat me?` }}
+              claim={existing}
+            />
             <Button onPress={() => router.replace('/home')} variant="secondary">
               Back to home
             </Button>

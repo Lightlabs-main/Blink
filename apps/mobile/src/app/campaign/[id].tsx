@@ -9,6 +9,8 @@ import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Badge, Button, Card, Divider, GlowCard, Loading, NavBar, Notice, Row, Screen, Stepper, StockAvatar, T } from '../../design/ui'
 import { ClaimPanel, sentence } from '../../features/campaign/claim-panel'
+import { LiveRoom } from '../../features/campaign/live-room'
+import { QuestPanel } from '../../features/campaign/quest-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap, useMe } from '../../lib/data'
@@ -119,7 +121,11 @@ export default function CampaignScreen() {
         </Card>
       ) : null}
 
-      {!isCreator && !preLive ? <ClaimPanel asset={asset} campaign={c} referralCode={referralCode} /> : null}
+      {!preLive ? <LiveRoom campaign={c} /> : null}
+
+      {!isCreator && !preLive ? (
+        c.type === 'VERIFIED_QUEST' ? <QuestPanel asset={asset} campaign={c} /> : <ClaimPanel asset={asset} campaign={c} referralCode={referralCode} />
+      ) : null}
 
       {isCreator && c.status === 'PAUSED' ? (
         <Card style={{ gap: space.md }} tone="danger">
