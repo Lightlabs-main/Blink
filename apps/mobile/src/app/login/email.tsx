@@ -148,7 +148,7 @@ export default function EmailLogin() {
 }
 
 const styles = StyleSheet.create({
-  badgeIcon: { width: 52, height: 52, borderRadius: 4, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  badgeIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',

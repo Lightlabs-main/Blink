@@ -252,7 +252,7 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  rowIcon: { width: 36, height: 36, borderRadius: 4, backgroundColor: color.surface3, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: color.surface3, alignItems: 'center', justifyContent: 'center' },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { width: 1, height: 36, backgroundColor: color.border },
 })

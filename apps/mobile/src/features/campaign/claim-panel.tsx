@@ -320,9 +320,9 @@ function ClaimCard({
 }
 
 const styles = StyleSheet.create({
-  doneIcon: { width: 38, height: 38, borderRadius: 4, backgroundColor: color.lime, alignItems: 'center', justifyContent: 'center' },
+  doneIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: color.lime, alignItems: 'center', justifyContent: 'center' },
   meter: { height: 6, borderRadius: 3, backgroundColor: color.surface3, overflow: 'hidden' },
   meterFill: { height: 6, borderRadius: 3, backgroundColor: color.lime },
-  code: { alignItems: 'center', gap: 2, paddingVertical: space.md, borderRadius: 4, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface },
+  code: { alignItems: 'center', gap: 2, paddingVertical: space.md, borderRadius: 14, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface },
   codeText: { fontSize: 28, lineHeight: 34, letterSpacing: 4, color: color.text, fontVariant: ['tabular-nums'] },
 })

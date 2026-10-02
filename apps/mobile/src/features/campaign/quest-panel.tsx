@@ -194,6 +194,6 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
 
 const styles = StyleSheet.create({
   group: { gap: space.md },
-  anyGroup: { padding: space.md, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: color.borderStrong },
-  dot: { width: 26, height: 26, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  anyGroup: { padding: space.md, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: color.borderStrong },
+  dot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
 })

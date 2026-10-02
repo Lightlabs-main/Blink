@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { haptics } from '../lib/haptics'
 import { font } from './fonts'
 import { Icon, type IconName } from './icons'
-import { color, radius } from './tokens'
+import { color, isNight, radius } from './tokens'
 import { T } from './ui'
 
 const TAB_ICON: Record<string, { icon: IconName; label: string }> = {
@@ -44,7 +44,8 @@ export function BlinkTabBar({ state, navigation }: BottomTabBarProps) {
         style={styles.tab}
       >
         <Icon name={meta.icon} size={22} stroke={focused ? color.text : color.textMuted} strokeWidth={focused ? 2.2 : 1.8} />
-        <T style={{ ...font('mono'), fontSize: 9.5, letterSpacing: 0.8, textTransform: 'uppercase', color: focused ? color.text : color.textMuted }}>{meta.label}</T>
+        <T style={{ ...font(focused ? 'bodySemi' : 'bodyMedium'), fontSize: 11, color: focused ? color.text : color.textMuted }}>{meta.label}</T>
+        <View style={[styles.activeDot, { opacity: focused ? 1 : 0 }]} />
       </Pressable>
     )
   }
@@ -77,14 +78,20 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 68,
-    borderRadius: radius.sm,
+    height: 70,
+    borderRadius: radius.xl,
     backgroundColor: color.surface,
-    borderWidth: 1.5,
-    borderColor: color.text,
+    borderWidth: 1,
+    borderColor: color.border,
     paddingHorizontal: 6,
+    shadowColor: '#000',
+    shadowOpacity: isNight ? 0.4 : 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, height: '100%' },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, height: '100%', paddingTop: 4 },
+  activeDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.marker },
   centerSlot: { width: 76, alignItems: 'center' },
   scan: {
     width: 60,
@@ -94,7 +101,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: color.marker,
-    borderWidth: 1.5,
-    borderColor: color.text,
+    borderWidth: 4,
+    borderColor: color.bg,
   },
 })
