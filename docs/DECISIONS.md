@@ -415,3 +415,12 @@ assertion instructions), so the exact-bytes check refused it every time. The che
 requires the same fee payer, the same signers, no address lookup tables and exactly Blink's instructions in
 order; the only extra instructions allowed are Compute Budget and Lighthouse, which cannot move tokens. The
 funded account is still verified on-chain before a drop goes LIVE.
+
+## D-29 — Build the funding transaction at signing time (2026-10-02)
+
+Root cause of the repeated "Blockhash not found" when funding with Phantom: the app built the transaction when the
+creator tapped Fund and re-used it for every "Open wallet" tap. A Solana blockhash lasts about 60–90 s, so reading
+the summary plus approving in the wallet expired it, and every retry re-sent the same expired transaction. The
+app now prepares a fresh transaction inside the wallet session, after the connection is approved and right before
+`signTransactions`. The server answers an expired Blink blockhash with `EXPIRED` (clear message) and only treats an
+unknown wallet-replaced blockhash as RPC lag (retried) or a wrong network.

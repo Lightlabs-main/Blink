@@ -36,6 +36,9 @@ type ServiceRpc = Rpc<
     IsBlockhashValidApi
 >
 
+const EXPIRED_MESSAGE =
+  'This approval took too long and expired on the network (Solana transactions last about a minute). Please try again and approve straight away.'
+
 const WRONG_NETWORK_MESSAGE =
   'Your wallet signed this for a different network. Switch your wallet to Devnet (Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet), then try again.'
 
@@ -152,7 +155,8 @@ export class SolanaFundingService implements FundingService {
     // Some wallets (Phantom) replace the blockhash with their own. It must exist on THIS cluster; allow a few
     // seconds for RPC lag, otherwise the wallet signed for another network.
     const signedBlockhash = messageLifetimeToken(Uint8Array.from(decoded.messageBytes))
-    if (signedBlockhash !== messageLifetimeToken(pending.messageBytes) && !(await this.blockhashKnown(signedBlockhash))) {
+    const walletReplacedBlockhash = signedBlockhash !== messageLifetimeToken(pending.messageBytes)
+    if (walletReplacedBlockhash && !(await this.blockhashKnown(signedBlockhash))) {
       throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
     }
 
@@ -169,13 +173,21 @@ export class SolanaFundingService implements FundingService {
           .send()
       } catch (err) {
         const text = String((err as Error)?.message ?? err)
-        if (text.includes('#7050008') && attempt < 4) {
-          await new Promise((r) => setTimeout(r, 2000))
-          continue
+        const e = err as { context?: { logs?: string[] }; cause?: { message?: string; context?: { __code?: number } } }
+        const blockhashNotFound = e.cause?.context?.__code === 7050008 || text.includes('#7050008')
+        if (blockhashNotFound) {
+          // Blink's own blockhash: it expired while the user was approving. A wallet's newer one: RPC lag, retry.
+          if (!walletReplacedBlockhash) {
+            this.pending.delete(campaign.id)
+            throw new FundingRequestError('EXPIRED', EXPIRED_MESSAGE, 409)
+          }
+          if (attempt < 4) {
+            await new Promise((r) => setTimeout(r, 2000))
+            continue
+          }
+          throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
         }
-        if (text.includes('#7050008')) throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
         // Public data only: program logs and the error cause, so failures can be diagnosed.
-        const e = err as { context?: { logs?: string[] }; cause?: { message?: string; context?: unknown } }
         const logs = e.context?.logs ?? []
         console.error(JSON.stringify({ msg: 'funding send failed', campaignId: campaign.id, added: intent.added, error: text.slice(0, 300), cause: e.cause?.message, causeContext: e.cause?.context, logs: logs.slice(-12) }, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)))
         const hint = logs.filter((l) => /error|failed|insufficient/i.test(l)).at(-1) ?? e.cause?.message ?? ''
