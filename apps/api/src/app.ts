@@ -138,6 +138,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return { enforced: deps.eligibility.enforced, eligibility: await deps.eligibility.declare(auth.privyUserId, parsed.data, req.ip) }
   })
 
+  /** D-26: remove one of the caller's own linked Solana wallets. Campaigns it already funded are unaffected. */
+  app.delete<{ Params: { address: string } }>('/v1/me/wallets/:address', async (req) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const wallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
+    if (!wallets.includes(req.params.address)) throw new ClaimError('WALLET_NOT_LINKED', 'this wallet is not linked to your account', 404)
+    if (!deps.auth.unlinkExternalSolanaWallet) throw new ClaimError('UNLINK_UNAVAILABLE', 'removing wallets is not available right now', 503)
+    return { verifiedCreatorWallets: await deps.auth.unlinkExternalSolanaWallet(auth.privyUserId, req.params.address) }
+  })
+
   // ---- D-24: push notifications ----
 
   app.post('/v1/me/push-token', async (req, reply) => {

@@ -163,3 +163,21 @@ describe('SKR staking instructions (official IDL)', () => {
     expect(skrSharesForAmount(50_000_000n, 1_000_000_000n, 10_000_000n)).toBe(10_000_000n)
   })
 })
+
+describe('remove a linked Solana wallet (D-26)', () => {
+  it('removes only the caller’s own linked wallet', async () => {
+    const removed: string[] = []
+    app = buildApp({
+      env,
+      auth: { ...fakeAuth(), unlinkExternalSolanaWallet: async (_u, a) => (removed.push(a), []) },
+      campaigns: new InMemoryCampaignRepository(),
+      rpc: {} as Rpc<GetAccountInfoApi>,
+      assets: [],
+    })
+    expect((await app.inject({ method: 'DELETE', url: `/v1/me/wallets/${OTHER}`, headers: auth('a') })).statusCode).toBe(404)
+    const ok = await app.inject({ method: 'DELETE', url: `/v1/me/wallets/${LINKED}`, headers: auth('a') })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json()).toEqual({ verifiedCreatorWallets: [] })
+    expect(removed).toEqual([LINKED])
+  })
+})

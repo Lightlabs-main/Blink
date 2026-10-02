@@ -391,3 +391,11 @@ Instrument Serif headlines, Newsreader text, IBM Plex Mono labels, square corner
 launch. Legacy token names were kept (`lime` = ink accent) so every screen follows without rewrites.
 Announced-but-unbuilt features (Squads, Stock Clubs, Stock Passport, QR Event check-in, ORE mining checks) are
 listed under Profile → "Coming soon" with a Soon badge and no actions.
+
+## D-26 — Removing a linked Solana wallet goes through the server (2026-10-02)
+
+Privy's Expo SDK (`@privy-io/expo` 0.65.5) only has `useUnlinkWallet`, which validates Ethereum addresses, so
+removing a Solana creator wallet in the app failed with "Invalid Ethereum address". New route
+`DELETE /v1/me/wallets/:address` (auth, throttled) unlinks one of the caller's own SIWS-linked wallets through the
+Privy server API (`users().unlinkLinkedAccount`). The app uses it from the next build. Also: the most recently
+linked wallet is now listed first, so Create funds from the newest wallet.
