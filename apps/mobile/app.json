@@ -27,7 +27,12 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#141210",
+        "monochromeImage": "./assets/monochrome-icon.png"
+      }
     },
     "extra": {
       "eas": {
@@ -57,10 +62,21 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/notification-icon.png",
           "color": "#141210",
           "defaultChannel": "default"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#141210"
+        }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png"
   }
 }

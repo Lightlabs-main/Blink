@@ -424,3 +424,12 @@ the summary plus approving in the wallet expired it, and every retry re-sent the
 app now prepares a fresh transaction inside the wallet session, after the connection is approved and right before
 `signTransactions`. The server answers an expired Blink blockhash with `EXPIRED` (clear message) and only treats an
 unknown wallet-replaced blockhash as RPC lag (retried) or a wrong network.
+
+## D-30 — The Blink logo (2026-10-02, from Maris)
+
+Source: `docs/brand/blink-logo-source.jpg`; transparent mark: `docs/brand/blink-mark.png`. Generated (script in
+the session scratchpad, reproducible from the source): app icon (mark on ink `#141210`), Android adaptive icon
+(foreground inside the safe zone, ink background, monochrome themed icon), splash, white notification icon, the
+website icon/favicon (also the icon wallets show for Blink), and `logo-tile.png` for in-app use. The mark is
+cream + lime, so it always sits on an ink tile, in both Day and Night editions. Ships to phones with the next APK;
+the website and wallet pop-ups use it now. The developer-only "Wallet lab" row is hidden in release builds.

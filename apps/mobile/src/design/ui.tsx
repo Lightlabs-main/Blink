@@ -134,6 +134,17 @@ export function Divider() {
   return <View style={{ height: 1, backgroundColor: color.border }} />
 }
 
+/** The Blink mark on its ink tile (the mark is cream + lime, so it always sits on ink, in both editions). */
+export function BlinkLogo({ size = 32 }: { size?: number }) {
+  return (
+    <Image
+      accessibilityLabel="Blink"
+      source={require('../../assets/logo-tile.png')}
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.22) }}
+    />
+  )
+}
+
 /** Double rule, as under a newspaper masthead. */
 export function DoubleRule() {
   return <View style={{ height: 4, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.text }} />

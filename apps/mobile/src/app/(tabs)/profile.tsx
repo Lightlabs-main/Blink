@@ -223,8 +223,12 @@ export default function Profile() {
         <SectionHeader title="About" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           <ListRow chevron={false} leading={<RowIcon icon="shield" />} subtitle={PRODUCT_COPY.trustStatement} title="How Blink works" />
-          <Divider />
-          <ListRow leading={<RowIcon icon="layers" tint={color.textDim} />} onPress={() => router.push('/dev/wallet-lab')} subtitle="Developer wallet tests" title="Wallet lab" />
+          {__DEV__ ? (
+            <>
+              <Divider />
+              <ListRow leading={<RowIcon icon="layers" tint={color.textDim} />} onPress={() => router.push('/dev/wallet-lab')} subtitle="Developer wallet tests" title="Wallet lab" />
+            </>
+          ) : null}
         </Card>
       </View>
 
