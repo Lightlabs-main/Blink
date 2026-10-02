@@ -85,7 +85,7 @@
       ;(function () {
         const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
         const REF = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/
-        const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Early Claim', REFERRAL: 'Referral', SEEKER: 'Seeker Drop' }
+        const LABEL = { GIFT: 'Gift', TAP_RUSH: 'Tap Rush', EARLY_CLAIM: 'Flash Drop', REFERRAL: 'Referral', SEEKER: 'Seeker Drop', VERIFIED_QUEST: 'Verified Quest' }
         const $ = (id) => document.getElementById(id)
         const id = location.pathname.replace(/^\/c\//, '').replace(/\/$/, '')
         const refParam = new URLSearchParams(location.search).get('ref')
@@ -133,7 +133,9 @@
                 ? 'Tap ' + campaign.tapRush.goal + ' times in ' + campaign.tapRush.seconds + ' seconds to win it.'
                 : campaign.type === 'REFERRAL'
                   ? 'Invite a friend — when they claim through your link, you both get stock.'
-                  : campaign.type === 'SEEKER'
+                  : campaign.type === 'VERIFIED_QUEST'
+                    ? 'Meet the requirements and complete the action — Blink verifies everything onchain.'
+                    : campaign.type === 'SEEKER'
                     ? 'For Solana Seeker owners — one claim per phone, verified by its Seeker Genesis Token.'
                     : 'Sent to your wallet, free of charge.'
             if (campaign.type === 'TAP_RUSH') $('how-last').textContent = 'Play Tap Rush — hit the goal and the stock is sent to your wallet.'

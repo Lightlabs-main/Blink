@@ -1,7 +1,10 @@
 import type {
   CampaignSummary,
   CampaignType,
+  CampaignRoom,
   ClaimSummary,
+  QuestEvaluation,
+  QuestRequirements,
   ReferralSummary,
   TapRushRules,
   TapRushSessionSummary,
@@ -95,7 +98,16 @@ export const api = {
     }),
   createCampaign: (
     t: GetAccessToken,
-    body: { type: CampaignType; mint: string; allowanceRaw: string; rewardPerClaimRaw?: string; tapRush?: TapRushRules },
+    body: {
+      type: CampaignType
+      mint: string
+      allowanceRaw: string
+      rewardPerClaimRaw?: string
+      tapRush?: TapRushRules
+      requirements?: QuestRequirements
+      startsAt?: string
+      endsAt?: string
+    },
     creatorWallet?: string,
   ) =>
     authed<{ campaign: CampaignSummary }>(t, '/v1/campaigns', {
@@ -109,6 +121,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(opts),
     }),
+  /** D-21: the server checks every Verified Quest requirement now. */
+  verifyQuest: (t: GetAccessToken, id: string) =>
+    authed<{ evaluation: QuestEvaluation }>(t, `/v1/campaigns/${encodeURIComponent(id)}/verify`, { method: 'POST' }),
+  /** D-21: public live room (real aggregates; truncated wallets only). */
+  room: (id: string) => request<{ room: CampaignRoom }>(`/v1/campaigns/${encodeURIComponent(id)}/room`),
   myReferral: (t: GetAccessToken, id: string) => authed<{ referral: ReferralSummary | null }>(t, `/v1/campaigns/${encodeURIComponent(id)}/referral`),
   createReferral: (t: GetAccessToken, id: string) =>
     authed<{ referral: ReferralSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/referral`, { method: 'POST' }),

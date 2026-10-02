@@ -1,6 +1,7 @@
 # Verifier architecture (product update 2026-10-01)
 
-**Status:** DESIGN. No code yet; implementation waits for the build-order section of the update.
+**Status: IMPLEMENTED** (2026-10-02, D-21). Device testing is pending. The SKR stake path needs a
+dedicated mainnet RPC to return results; with the public one it returns ERROR.
 
 Each fact below is marked by how it is known:
 - **[official]** an official source;
@@ -33,13 +34,13 @@ Each fact below is marked by how it is known:
 | Verifier | Kind | Canonical data | State |
 |---|---|---|---|
 | `SEEKER_SGT` | eligibility, read-only | SGT mint checks (D-17) [official][onchain] | implemented (D-17) |
-| `SKR_BALANCE` | eligibility, read-only | SKR ATA balance (SPL Token) of each verified wallet; mint `SKRbvo…ZhW3`, decimals read from the mint (6) [official][onchain] | planned |
-| `SKR_STAKED` | eligibility, read-only | sum of every `UserStake` for the wallet; see below | planned; **needs a dedicated RPC** |
-| `SKR_TOTAL` | eligibility, read-only | `SKR_BALANCE + SKR_STAKED` (one wallet set, one evaluation) | planned |
-| `ORE_BALANCE` | eligibility, read-only | ORE ATA balance; mint `oreoU2…ybcp`, 11 decimals [official][onchain] | planned |
-| `ORE_STAKED` | eligibility, read-only | ore-stake `Stake.balance` at PDA `["stake", wallet]` | planned |
+| `SKR_BALANCE` | eligibility, read-only | SKR token accounts of each verified wallet; mint `SKRbvo…ZhW3`, decimals re-checked against the mint (6) [official][onchain] | implemented |
+| `SKR_STAKED` | eligibility, read-only | sum of every `UserStake` for the wallet; see below | implemented; **needs a dedicated RPC** |
+| `SKR_TOTAL` | eligibility, read-only | `SKR_BALANCE + SKR_STAKED` (one wallet set, one evaluation) | implemented |
+| `ORE_BALANCE` | eligibility, read-only | ORE token accounts; mint `oreoU2…ybcp`, 11 decimals [official][onchain] | implemented |
+| `ORE_STAKED` | eligibility, read-only | ore-stake `Stake.balance` at PDA `["stake", wallet]` | implemented |
 | `ORE_ACTIVITY` | action | — | **DISABLED**: no deterministic, replay-safe evidence defined (§9, §29) |
-| `TAP_RUSH` | action | server-timed round with tap-timing checks (D-13, D-14) | implemented as a mechanic; becomes a module |
+| `TAP_RUSH` | action | server-timed round with tap-timing checks (D-13, D-14); one unused qualified round | implemented (mechanic + quest action) |
 | `X_QUEST` | action | — | **BLOCKED / POLICY_REVIEW_REQUIRED** (§19); registry slot only |
 
 ## SKR staked aggregation

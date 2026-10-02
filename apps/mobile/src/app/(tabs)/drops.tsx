@@ -10,6 +10,7 @@ import { displayShares, useAssetMap, useLiveCampaigns } from '../../lib/data'
 import { CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL } from '../../lib/format'
 import { CAMPAIGN_TYPES, type CampaignType } from '../../shared'
 
+
 export default function Drops() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -19,6 +20,8 @@ export default function Drops() {
   const [refreshing, setRefreshing] = useState(false)
 
   const drops = useMemo(() => (live.data?.campaigns ?? []).filter((c) => filter === 'ALL' || c.type === filter), [live.data, filter])
+  // Only offer filters backed by drops that are actually live (update §31: no empty categories).
+  const present = useMemo(() => CAMPAIGN_TYPES.filter((t) => (live.data?.campaigns ?? []).some((c) => c.type === t)), [live.data])
 
   return (
     <Screen
@@ -43,7 +46,7 @@ export default function Drops() {
 
       <ScrollView contentContainerStyle={{ gap: space.sm, paddingRight: space.xl }} horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -20 }}>
         <Chip label="All" onPress={() => setFilter('ALL')} selected={filter === 'ALL'} />
-        {CAMPAIGN_TYPES.map((t) => (
+        {present.map((t) => (
           <Chip icon={CAMPAIGN_TYPE_ICON[t]} key={t} label={CAMPAIGN_TYPE_LABEL[t]} onPress={() => setFilter(t)} selected={filter === t} />
         ))}
       </ScrollView>

@@ -7,17 +7,19 @@ export function shortAddress(value: string, head = 4, tail = 4): string {
 export const CAMPAIGN_TYPE_LABEL: Record<CampaignType, string> = {
   GIFT: 'Gift',
   TAP_RUSH: 'Tap Rush',
-  EARLY_CLAIM: 'Early Claim',
+  EARLY_CLAIM: 'Flash Drop',
   REFERRAL: 'Referral',
   SEEKER: 'Seeker Drop',
+  VERIFIED_QUEST: 'Verified Quest',
 }
 
 export const CAMPAIGN_TYPE_BLURB: Record<CampaignType, string> = {
   GIFT: 'Send stock to someone with a link.',
   TAP_RUSH: 'People tap fast to earn stock.',
-  EARLY_CLAIM: 'First people to claim get stock.',
+  EARLY_CLAIM: 'Limited rewards. First people to claim win.',
   REFERRAL: 'People invite friends — both get stock.',
   SEEKER: 'Only Solana Seeker owners can claim — one per phone.',
+  VERIFIED_QUEST: 'Combine verifiable onchain requirements with an action.',
 }
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
@@ -89,6 +91,7 @@ export const CAMPAIGN_TYPE_ICON = {
   EARLY_CLAIM: 'clock',
   REFERRAL: 'users',
   SEEKER: 'phone',
+  VERIFIED_QUEST: 'shield',
 } as const
 
 export function greeting(date = new Date()): string {

@@ -135,3 +135,23 @@ New app builds call `https://api.blinksol.site`. The sslip.io host remains an al
 - **Migration:** `20261001120000_xstock_eligibility`.
 - **New env:** `XSTOCK_COMPLIANCE` (`enforce` | `off`; must be `enforce` on mainnet) and
   `PAYOUTS_ENABLED`.
+
+## API contract v6: Verified Quests, room, window (owner: Claude, 2026-10-02)
+
+- **`POST /v1/campaigns`** accepts:
+  - `requirements` (required for `VERIFIED_QUEST`, refused otherwise; see `questRequirements` in
+    `packages/validation`);
+  - `startsAt` / `endsAt` (ISO).
+
+  `tapRush` is accepted for a quest with a TAP_RUSH action (defaults applied).
+- **`CampaignSummary`** adds `requirements`, `startsAt` and `endsAt`.
+- **`POST /v1/campaigns/:id/verify`** (auth, throttled) → `{ evaluation: QuestEvaluation }`
+  (statuses + raw amounts as strings).
+- **`GET /v1/campaigns/:id/room`** (public) → `{ room: CampaignRoom }`.
+- **Tap Rush start** is allowed for quests with a TAP_RUSH action.
+- **New errors:** 403 `NOT_QUALIFIED` (quest), 409 `NOT_STARTED` / `CAMPAIGN_OVER`, 503
+  `QUESTS_UNAVAILABLE`.
+- **Migration:** `20261001150000_verified_quests`.
+
+**Codex review requested:** `quest-service.ts`, `stake-readers.ts` (layouts and aggregation),
+`roomData` queries.
