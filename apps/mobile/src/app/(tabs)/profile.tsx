@@ -1,4 +1,4 @@
-import { usePrivy, useUnlinkWallet } from '@privy-io/expo'
+import { usePrivy } from '@privy-io/expo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
@@ -38,7 +38,6 @@ export default function Profile() {
   const { user, logout, getAccessToken } = usePrivy()
   const { disconnect, account } = useMobileWallet()
   const queryClient = useQueryClient()
-  const { unlinkWallet } = useUnlinkWallet()
   const me = useMe()
   const eligibility = useQuery({ queryKey: ['eligibility'], queryFn: () => api.myEligibility(getAccessToken), enabled: Boolean(user) })
   const elig = eligibility.data?.eligibility
@@ -66,7 +65,8 @@ export default function Profile() {
         onPress: () =>
           void (async () => {
             try {
-              await unlinkWallet({ address: wallet })
+              // D-26: Privy's Expo unlinkWallet only accepts Ethereum addresses, so the server removes it.
+              await api.unlinkCreatorWallet(getAccessToken, wallet)
               await disconnect().catch(() => {})
               await Promise.all([queryClient.invalidateQueries({ queryKey: ['me'] }), queryClient.invalidateQueries({ queryKey: ['holdings'] })])
             } catch (e) {

@@ -18,6 +18,8 @@ export interface AuthVerifier {
   getVerifiedExternalSolanaWallets(privyUserId: string): Promise<string[]>
   /** Privy embedded Solana wallets (where recipients receive stock). Display/holdings only — never creator auth. */
   getEmbeddedSolanaWallets(privyUserId: string): Promise<string[]>
+  /** D-26: remove one of the user's own SIWS-linked Solana wallets (the Expo SDK can only unlink Ethereum ones). */
+  unlinkExternalSolanaWallet?(privyUserId: string, address: string): Promise<string[]>
 }
 
 export class AuthError extends Error {
@@ -56,6 +58,11 @@ export class PrivyAuthVerifier implements AuthVerifier {
 
   async getVerifiedExternalSolanaWallets(privyUserId: string): Promise<string[]> {
     const user = await this.privy.users()._get(privyUserId)
+    return extractVerifiedExternalSolanaWallets(user.linked_accounts)
+  }
+
+  async unlinkExternalSolanaWallet(privyUserId: string, address: string): Promise<string[]> {
+    const user = await this.privy.users().unlinkLinkedAccount(privyUserId, { type: 'wallet', handle: address })
     return extractVerifiedExternalSolanaWallets(user.linked_accounts)
   }
 

@@ -98,6 +98,9 @@ export const api = {
     }),
   savePushToken: (t: GetAccessToken, token: string, platform: 'android' | 'ios') =>
     authed<{ ok: true }>(t, '/v1/me/push-token', { method: 'POST', body: JSON.stringify({ token, platform }) }),
+  /** D-26: Privy's Expo SDK can only unlink Ethereum wallets, so Solana wallets are removed by the server. */
+  unlinkCreatorWallet: (t: GetAccessToken, wallet: string) =>
+    authed<{ verifiedCreatorWallets: string[] }>(t, `/v1/me/wallets/${encodeURIComponent(wallet)}`, { method: 'DELETE' }),
   deletePushToken: (t: GetAccessToken, token: string) =>
     authed<{ ok: true }>(t, '/v1/me/push-token', { method: 'DELETE', body: JSON.stringify({ token }) }),
   xstocks: () => request<{ xstocks: XStockListing[] }>('/v1/xstocks'),
