@@ -32,15 +32,15 @@ import { color, gutter, radius, space, TAB_BAR_CLEARANCE } from './tokens'
 export type TextVariant = 'hero' | 'display' | 'title' | 'heading' | 'body' | 'bodyStrong' | 'label' | 'caption' | 'overline' | 'numeric'
 
 const VARIANT: Record<TextVariant, () => TextStyle> = {
-  hero: () => ({ ...font('display'), fontSize: 50, lineHeight: 52, letterSpacing: -0.5, color: color.text }),
-  display: () => ({ ...font('display'), fontSize: 36, lineHeight: 40, letterSpacing: -0.3, color: color.text }),
-  title: () => ({ ...font('displayMedium'), fontSize: 26, lineHeight: 30, color: color.text }),
-  heading: () => ({ ...font('bodySemi'), fontSize: 18, lineHeight: 23, color: color.text }),
-  body: () => ({ ...font('body'), fontSize: 16, lineHeight: 23, color: color.textDim }),
-  bodyStrong: () => ({ ...font('bodyMedium'), fontSize: 16, lineHeight: 22, color: color.text }),
-  label: () => ({ ...font('body'), fontSize: 14, lineHeight: 19, color: color.textDim }),
+  hero: () => ({ ...font('display'), fontSize: 42, lineHeight: 46, letterSpacing: -1.2, color: color.text }),
+  display: () => ({ ...font('display'), fontSize: 32, lineHeight: 37, letterSpacing: -0.8, color: color.text }),
+  title: () => ({ ...font('displayMedium'), fontSize: 23, lineHeight: 29, letterSpacing: -0.3, color: color.text }),
+  heading: () => ({ ...font('bodySemi'), fontSize: 17, lineHeight: 22, letterSpacing: -0.1, color: color.text }),
+  body: () => ({ ...font('body'), fontSize: 15.5, lineHeight: 23, color: color.textDim }),
+  bodyStrong: () => ({ ...font('bodyMedium'), fontSize: 15.5, lineHeight: 22, color: color.text }),
+  label: () => ({ ...font('body'), fontSize: 13.5, lineHeight: 19, color: color.textDim }),
   caption: () => ({ ...font('body'), fontSize: 12.5, lineHeight: 17, color: color.textMuted }),
-  overline: () => ({ ...font('mono'), fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: 'uppercase', color: color.text }),
+  overline: () => ({ ...font('bodySemi'), fontSize: 12.5, lineHeight: 16, letterSpacing: 0.2, color: color.textMuted }),
   numeric: () => ({ ...font('numeric'), fontSize: 15, lineHeight: 20, color: color.text, fontVariant: ['tabular-nums'] }),
 }
 
@@ -68,7 +68,7 @@ export function T({
 
 /* ───────────────────────────── Layout ───────────────────────────── */
 
-/** Plain newsprint: no decorative glows (broadsheet direction). Kept as a component so callers stay unchanged. */
+/** No decorative glows (D-31: calm surfaces). Kept as a component so callers stay unchanged. */
 export function Backdrop(_props: { tone?: 'mixed' | 'lime' | 'violet'; height?: number }) {
   return null
 }
@@ -145,9 +145,14 @@ export function BlinkLogo({ size = 32 }: { size?: number }) {
   )
 }
 
-/** Double rule, as under a newspaper masthead. */
+/** The logo's lime dot, used as a small accent (active tab, hero cards, live states). */
+export function LimeDot({ size = 8, style }: { size?: number; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color.marker }, style]} />
+}
+
+/** Section separator (kept for callers of the former masthead rule). */
 export function DoubleRule() {
-  return <View style={{ height: 4, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.text }} />
+  return <View style={{ height: 1, backgroundColor: color.border }} />
 }
 
 /* ───────────────────────────── Surfaces ───────────────────────────── */
@@ -155,7 +160,7 @@ export function DoubleRule() {
 export function Card({ children, style, padded = true, tone = 'default' }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean; tone?: 'default' | 'raised' | 'lime' | 'danger' }) {
   const toneStyle =
     tone === 'lime'
-      ? { backgroundColor: color.surface, borderColor: color.text, borderWidth: 1.5 }
+      ? { backgroundColor: color.limeSoft, borderColor: color.limeLine }
       : tone === 'danger'
         ? { backgroundColor: color.dangerSoft, borderColor: color.danger }
         : tone === 'raised'
@@ -164,11 +169,12 @@ export function Card({ children, style, padded = true, tone = 'default' }: { chi
   return <View style={[styles.card, padded && { padding: space.lg }, toneStyle, style]}>{children}</View>
 }
 
-/** The "clipping": a dashed cut-out card for hero moments (same as the website's QR coupon). */
+/** Hero card: a raised, softly rounded surface marked with the logo's lime dot. */
 export function GlowCard({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[styles.clipping, style]}>
-      <View style={styles.clippingInner}>{children}</View>
+    <View style={[styles.hero, style]}>
+      <LimeDot size={10} style={styles.heroDot} />
+      {children}
     </View>
   )
 }
@@ -214,10 +220,8 @@ export function Button({
   const v = BUTTON[variant]
   const h = size === 'lg' ? 54 : size === 'md' ? 44 : 34
   const inactive = disabled || loading
-  const shadow = variant === 'primary' && !inactive
   return (
-    <View style={[{ height: h + (shadow ? 4 : 0) }, style]}>
-      {shadow ? <View pointerEvents="none" style={[styles.buttonShadow, { height: h }]} /> : null}
+    <View style={[{ height: h }, style]}>
       <AnimatedPressable
         accessibilityRole="button"
         accessibilityState={{ disabled: inactive, busy: loading }}
@@ -234,8 +238,8 @@ export function Button({
           <ActivityIndicator color={v.fg} />
         ) : (
           <>
-            {icon ? <Icon name={icon} size={size === 'sm' ? 15 : 17} stroke={v.fg} strokeWidth={2} /> : null}
-            <T style={{ ...font('mono'), fontSize: size === 'sm' ? 11.5 : 13, letterSpacing: 0.8, textTransform: 'uppercase', color: v.fg }}>{children}</T>
+            {icon ? <Icon name={icon} size={size === 'sm' ? 15 : 18} stroke={v.fg} strokeWidth={2} /> : null}
+            <T style={{ ...font('bodySemi'), fontSize: size === 'sm' ? 13.5 : 15.5, color: v.fg }}>{children}</T>
             {iconRight ? <Icon name={iconRight} size={size === 'sm' ? 15 : 17} stroke={v.fg} strokeWidth={2} /> : null}
           </>
         )}
@@ -245,10 +249,10 @@ export function Button({
 }
 
 const BUTTON: Record<ButtonVariant, { bg: string; fg: string; border: string }> = {
-  primary: { bg: color.text, fg: color.bg, border: color.text },
-  secondary: { bg: 'transparent', fg: color.text, border: color.text },
+  primary: { bg: color.primary, fg: color.onPrimary, border: color.primary },
+  secondary: { bg: color.surface2, fg: color.text, border: color.border },
   ghost: { bg: 'transparent', fg: color.textDim, border: 'transparent' },
-  danger: { bg: 'transparent', fg: color.danger, border: color.danger },
+  danger: { bg: color.dangerSoft, fg: color.danger, border: 'transparent' },
 }
 
 export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }: { icon: IconName; onPress: () => void; label: string; tone?: 'default' | 'lime'; size?: number }) {
@@ -267,11 +271,11 @@ export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }
       style={[
         styles.iconButton,
         { width: size, height: size, borderRadius: size / 2 },
-        tone === 'lime' ? { backgroundColor: color.lime, borderColor: color.lime } : null,
+        tone === 'lime' ? { backgroundColor: color.marker, borderColor: color.marker } : null,
         press.style,
       ]}
     >
-      <Icon name={icon} size={size * 0.48} stroke={tone === 'lime' ? color.onLime : color.text} strokeWidth={2} />
+      <Icon name={icon} size={size * 0.48} stroke={tone === 'lime' ? color.onMarker : color.text} strokeWidth={2} />
     </AnimatedPressable>
   )
 }
@@ -290,8 +294,8 @@ export function QuickAction({ icon, label, onPress, highlight }: { icon: IconNam
       onPressOut={press.onPressOut}
       style={[{ flex: 1, alignItems: 'center', gap: space.sm }, press.style]}
     >
-      <View style={[styles.quickIcon, highlight && { backgroundColor: color.lime, borderColor: color.lime }]}>
-        <Icon name={icon} size={22} stroke={highlight ? color.onLime : color.text} strokeWidth={2} />
+      <View style={[styles.quickIcon, highlight && { backgroundColor: color.marker, borderColor: color.marker }]}>
+        <Icon name={icon} size={22} stroke={highlight ? color.onMarker : color.text} strokeWidth={2} />
       </View>
       <T variant="label" style={{ color: color.text }}>
         {label}
@@ -309,10 +313,10 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
         haptics.tap()
         onPress()
       }}
-      style={[styles.chip, selected && { backgroundColor: color.text, borderColor: color.text }]}
+      style={[styles.chip, selected && { backgroundColor: color.primary, borderColor: color.primary }]}
     >
-      {icon ? <Icon name={icon} size={14} stroke={selected ? color.bg : color.textDim} /> : null}
-      <T style={{ ...font('mono'), fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: selected ? color.bg : color.textDim }}>{label}</T>
+      {icon ? <Icon name={icon} size={15} stroke={selected ? color.onPrimary : color.textDim} /> : null}
+      <T style={{ ...font('bodyMedium'), fontSize: 13.5, color: selected ? color.onPrimary : color.textDim }}>{label}</T>
     </Pressable>
   )
 }
@@ -332,9 +336,9 @@ const BADGE: Record<BadgeTone, { bg: string; fg: string }> = {
 export function Badge({ label, tone = 'neutral', dot }: { label: string; tone?: BadgeTone; dot?: boolean }) {
   const b = BADGE[tone]
   return (
-    <View style={[styles.badge, { borderColor: b.fg }]}>
+    <View style={[styles.badge, { backgroundColor: b.bg }]}>
       {dot ? <PulseDot color={b.fg} /> : null}
-      <T style={{ ...font('mono'), fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: b.fg }}>{label}</T>
+      <T style={{ ...font('bodySemi'), fontSize: 11.5, letterSpacing: 0.1, color: b.fg }}>{label}</T>
     </View>
   )
 }
@@ -462,12 +466,12 @@ export function StockAvatar({ symbol, logo, size = 40, isTest }: { symbol: strin
         <Image onError={() => setFailed(true)} source={{ uri: logo! }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color.surface3 }} />
       ) : (
         <View style={[styles.monogram, { width: size, height: size, borderRadius: size / 2 }]}>
-          <T style={{ ...font('display'), fontSize: size * 0.42, color: color.text }}>{symbol.replace(/^t/, '').slice(0, 2).toUpperCase()}</T>
+          <T style={{ ...font('displayMedium'), fontSize: size * 0.38, color: color.text }}>{symbol.replace(/^t/, '').slice(0, 2).toUpperCase()}</T>
         </View>
       )}
       {isTest ? (
         <View style={styles.testTag}>
-          <T style={{ ...font('mono'), fontSize: 7.5, color: color.bg }}>TEST</T>
+          <T style={{ ...font('bodyBold'), fontSize: 7.5, color: color.bg }}>TEST</T>
         </View>
       ) : null}
     </View>
@@ -484,11 +488,11 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
         return (
           <View key={s} style={{ flex: 1, alignItems: 'center', gap: space.sm }}>
             <Row gap={0} style={{ width: '100%' }}>
-              <View style={[styles.stepLine, { opacity: i === 0 ? 0 : 1, backgroundColor: done || active ? color.lime : color.border }]} />
-              <View style={[styles.stepDot, done && { backgroundColor: color.lime, borderColor: color.lime }, active && { borderColor: color.lime }]}>
-                {done ? <Icon name="check" size={12} stroke={color.onLime} strokeWidth={3} /> : null}
+              <View style={[styles.stepLine, { opacity: i === 0 ? 0 : 1, backgroundColor: done || active ? color.text : color.border }]} />
+              <View style={[styles.stepDot, done && { backgroundColor: color.marker, borderColor: color.marker }, active && { borderColor: color.marker }]}>
+                {done ? <Icon name="check" size={12} stroke={color.onMarker} strokeWidth={3} /> : null}
               </View>
-              <View style={[styles.stepLine, { opacity: i === steps.length - 1 ? 0 : 1, backgroundColor: done ? color.lime : color.border }]} />
+              <View style={[styles.stepLine, { opacity: i === steps.length - 1 ? 0 : 1, backgroundColor: done ? color.text : color.border }]} />
             </Row>
             <T variant="caption" color={done || active ? color.text : color.textMuted}>
               {s}
@@ -503,7 +507,7 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
 export function Avatar({ label, size = 40 }: { label: string; size?: number }) {
   return (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      <T style={{ ...font('display'), fontSize: size * 0.4, color: color.onLime }}>{label.slice(0, 1).toUpperCase()}</T>
+      <T style={{ ...font('displayMedium'), fontSize: size * 0.42, color: color.text }}>{label.slice(0, 1).toUpperCase()}</T>
     </View>
   )
 }
@@ -511,7 +515,7 @@ export function Avatar({ label, size = 40 }: { label: string; size?: number }) {
 export function Loading({ label = 'Loading…' }: { label?: string }) {
   return (
     <View style={[styles.page, { alignItems: 'center', justifyContent: 'center', gap: space.md }]}>
-      <ActivityIndicator color={color.lime} />
+      <ActivityIndicator color={color.text} />
       <T variant="label">{label}</T>
     </View>
   )
@@ -520,24 +524,23 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: color.bg },
   navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  card: { backgroundColor: color.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: color.borderStrong },
-  clipping: { borderRadius: radius.sm, borderWidth: 1.5, borderStyle: 'dashed', borderColor: color.text, backgroundColor: color.surface2, padding: 6 },
-  clippingInner: { padding: space.lg, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface },
+  card: { backgroundColor: color.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border },
+  hero: { backgroundColor: color.surface2, borderRadius: radius.xl, padding: space.xl, borderWidth: 1, borderColor: color.border, overflow: 'hidden' },
+  heroDot: { position: 'absolute', top: space.lg, right: space.lg },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1.5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
     paddingHorizontal: space.xl,
   },
-  buttonShadow: { position: 'absolute', left: 4, right: -4, top: 4, borderRadius: radius.sm, backgroundColor: color.marker },
-  iconButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface, borderWidth: 1, borderColor: color.borderStrong },
+  iconButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface2, borderWidth: 1, borderColor: color.border },
   quickIcon: {
     width: 58,
     height: 58,
-    borderRadius: radius.md,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: color.surface2,
@@ -548,19 +551,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.borderStrong,
-    backgroundColor: 'transparent',
+    borderColor: color.border,
+    backgroundColor: color.surface2,
   },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm, borderWidth: 1 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   notice: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12 },
-  emptyIcon: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
-  monogram: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft, borderWidth: 1, borderColor: color.text },
-  testTag: { position: 'absolute', bottom: -3, right: -6, backgroundColor: color.text, borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 },
+  emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
+  monogram: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface3 },
+  testTag: { position: 'absolute', bottom: -3, right: -6, backgroundColor: color.text, borderRadius: radius.pill, paddingHorizontal: 4, paddingVertical: 1 },
   stepLine: { flex: 1, height: 2 },
   stepDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.border, backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center' },
-  avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.lime },
+  avatar: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface3, borderWidth: 1, borderColor: color.border },
 })

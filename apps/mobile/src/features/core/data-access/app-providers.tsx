@@ -65,7 +65,7 @@ function NetworkGate({ children }: { children: ReactNode }) {
         {health.isError ? (
           <>
             <Text style={{ color: color.text, fontSize: 17, textAlign: 'center' }}>Can’t reach Blink right now.</Text>
-            <Pressable accessibilityRole="button" onPress={() => void health.refetch()} style={{ paddingVertical: 12, paddingHorizontal: 20, borderRadius: 4, backgroundColor: color.text }}>
+            <Pressable accessibilityRole="button" onPress={() => void health.refetch()} style={{ paddingVertical: 12, paddingHorizontal: 20, borderRadius: 999, backgroundColor: color.text }}>
               <Text style={{ color: color.bg, fontWeight: '600' }}>Try again</Text>
             </Pressable>
           </>

@@ -433,3 +433,13 @@ the session scratchpad, reproducible from the source): app icon (mark on ink `#1
 website icon/favicon (also the icon wallets show for Blink), and `logo-tile.png` for in-app use. The mark is
 cream + lime, so it always sits on an ink tile, in both Day and Night editions. Ships to phones with the next APK;
 the website and wallet pop-ups use it now. The developer-only "Wallet lab" row is hidden in release builds.
+
+## D-31 — The app's look is built from the logo (2026-10-02, Maris: "Match the logo")
+
+Replaces the broadsheet look in the app (D-25). Ink black `#0D0D0B`, cream `#F4F0E6` and the logo's lime
+`#ABFF1A`; Night (ink) is the default and Day (cream, white cards) follows the system setting. Bricolage
+Grotesque headlines, DM Sans text, DM Mono numbers (only the used weights are bundled). Soft rounded cards
+(20 px), pill buttons and chips, round icon containers, sentence-case labels, no dashed boxes or offset shadows.
+Lime is an accent only: the logo's dot on hero cards, the active-tab dot, the Scan button, completed steps and the
+Tap Rush target. Primary buttons are cream on ink (ink on cream in Day). The website keeps the broadsheet design
+for now.

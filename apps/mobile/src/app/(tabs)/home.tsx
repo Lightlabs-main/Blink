@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: color.success,
     backgroundColor: color.surface,
@@ -297,6 +297,6 @@ const styles = StyleSheet.create({
     borderColor: color.borderStrong,
   },
   ticketCut: { height: 1, borderStyle: 'dashed', borderWidth: 1, borderColor: color.border, marginHorizontal: -space.lg },
-  creatorIcon: { width: 42, height: 42, borderRadius: 4, backgroundColor: color.violetSoft, alignItems: 'center', justifyContent: 'center' },
+  creatorIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: color.violetSoft, alignItems: 'center', justifyContent: 'center' },
   inlineLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
 })

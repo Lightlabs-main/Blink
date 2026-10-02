@@ -138,7 +138,7 @@ export default function SkrStaking() {
       <NavBar onBack={() => router.back()} />
       <View style={{ gap: space.sm }}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <T variant="overline">Staking desk</T>
+          <T variant="overline">Solana Mobile staking</T>
           <Badge label="Mainnet · real SKR" tone="warn" />
         </Row>
         <T variant="display">Stake SKR</T>
@@ -280,9 +280,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.sm,
     paddingHorizontal: space.md,
-    borderWidth: 1.5,
-    borderColor: color.text,
-    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    borderRadius: radius.lg,
     backgroundColor: color.surface,
   },
   amountInput: { flex: 1, fontSize: 32, paddingVertical: space.md, color: color.text },

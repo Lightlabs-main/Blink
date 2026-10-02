@@ -1,82 +1,89 @@
 import { Appearance } from 'react-native'
 
 /**
- * Blink-to-Stock design tokens — "financial broadsheet" (same system as blinksol.site).
- * Newsprint paper and ink; lime is only a highlighter (`marker`). The legacy key names stay so every screen
- * follows: `lime` is now the ink accent and `onLime` the paper text on ink.
+ * Blink design tokens — built from the Blink logo (D-31): ink black, cream and the logo's lime dot.
+ * Soft, rounded shapes like the mark; lime is an accent (dots, the Scan button, highlights), never a wash.
+ * Legacy key names stay so every screen follows: `lime` is the accent for icons/text (darkened in Day so it
+ * stays readable), `marker` is the pure brand lime for fills, `primary` is the main button.
  *
- * Day or Night edition is chosen at launch from the system setting, like the website.
+ * Night (ink) or Day (cream) is chosen at launch from the system setting.
  */
-export const isNight = Appearance.getColorScheme() === 'dark'
+export const isNight = Appearance.getColorScheme() !== 'light'
 
-const day = {
-  bg: '#F3EEE3',
-  bgRaised: '#EFE9DC',
-  surface: '#F7F3EA',
-  surface2: '#EBE4D5',
-  surface3: '#E0D7C5',
-  border: 'rgba(20,18,16,0.16)',
-  borderStrong: 'rgba(20,18,16,0.6)',
+const night = {
+  bg: '#0D0D0B',
+  bgRaised: '#121210',
+  surface: '#171714',
+  surface2: '#1F1F1B',
+  surface3: '#2A2A25',
+  border: 'rgba(244,240,230,0.08)',
+  borderStrong: 'rgba(244,240,230,0.2)',
 
-  text: '#141210',
-  textDim: '#3A352E',
-  textMuted: '#6F675B',
+  text: '#F4F0E6',
+  textDim: '#C3BEB2',
+  textMuted: '#8C887E',
 
-  lime: '#141210',
-  limeSoft: 'rgba(198,255,61,0.55)',
-  limeLine: '#141210',
-  onLime: '#F3EEE3',
+  lime: '#B5F23A',
+  limeSoft: 'rgba(171,255,26,0.12)',
+  limeLine: 'rgba(171,255,26,0.38)',
+  onLime: '#0D0D0B',
 
-  marker: '#C6FF3D',
-  onMarker: '#141210',
+  marker: '#ABFF1A',
+  onMarker: '#0D0D0B',
 
-  violet: '#4B3C8C',
-  violetSoft: 'rgba(75,60,140,0.12)',
+  primary: '#F4F0E6',
+  onPrimary: '#0D0D0B',
 
-  success: '#1F7A4D',
-  successSoft: 'rgba(31,122,77,0.12)',
-  warning: '#8A5A00',
-  warningSoft: 'rgba(138,90,0,0.12)',
-  danger: '#B3261E',
-  dangerSoft: 'rgba(179,38,30,0.10)',
+  violet: '#B9A6FF',
+  violetSoft: 'rgba(185,166,255,0.14)',
+
+  success: '#5FD39B',
+  successSoft: 'rgba(95,211,155,0.14)',
+  warning: '#F2B655',
+  warningSoft: 'rgba(242,182,85,0.14)',
+  danger: '#FF7A6B',
+  dangerSoft: 'rgba(255,122,107,0.13)',
 } as const
 
-const night: { [K in keyof typeof day]: string } = {
-  bg: '#151412',
-  bgRaised: '#1A1916',
-  surface: '#1D1B18',
-  surface2: '#24221E',
-  surface3: '#2E2B26',
-  border: 'rgba(236,230,216,0.14)',
-  borderStrong: 'rgba(236,230,216,0.55)',
+const day: { [K in keyof typeof night]: string } = {
+  bg: '#F5F2EA',
+  bgRaised: '#FAF8F3',
+  surface: '#FFFFFF',
+  surface2: '#EFEBE1',
+  surface3: '#E5E0D4',
+  border: 'rgba(13,13,11,0.08)',
+  borderStrong: 'rgba(13,13,11,0.2)',
 
-  text: '#ECE6D8',
-  textDim: '#BDB5A6',
-  textMuted: '#8B8375',
+  text: '#0D0D0B',
+  textDim: '#47443D',
+  textMuted: '#7B776D',
 
-  lime: '#ECE6D8',
-  limeSoft: 'rgba(198,255,61,0.18)',
-  limeLine: '#ECE6D8',
-  onLime: '#151412',
+  lime: '#4D7C00',
+  limeSoft: 'rgba(171,255,26,0.28)',
+  limeLine: 'rgba(77,124,0,0.4)',
+  onLime: '#FFFFFF',
 
-  marker: '#C6FF3D',
-  onMarker: '#141210',
+  marker: '#ABFF1A',
+  onMarker: '#0D0D0B',
 
-  violet: '#A99BE6',
-  violetSoft: 'rgba(169,155,230,0.14)',
+  primary: '#0D0D0B',
+  onPrimary: '#F5F2EA',
 
-  success: '#5FCF97',
-  successSoft: 'rgba(95,207,151,0.14)',
-  warning: '#E0B45A',
-  warningSoft: 'rgba(224,180,90,0.14)',
-  danger: '#FF7A6B',
-  dangerSoft: 'rgba(255,122,107,0.14)',
+  violet: '#5B48B0',
+  violetSoft: 'rgba(91,72,176,0.12)',
+
+  success: '#1D7F50',
+  successSoft: 'rgba(29,127,80,0.12)',
+  warning: '#9A6200',
+  warningSoft: 'rgba(154,98,0,0.12)',
+  danger: '#C23A2C',
+  dangerSoft: 'rgba(194,58,44,0.1)',
 }
 
-export const color: { readonly [K in keyof typeof day]: string } = isNight ? night : day
+export const color: { readonly [K in keyof typeof night]: string } = isNight ? night : day
 
-/** Printed, not pill-shaped. */
-export const radius = { sm: 4, md: 6, lg: 8, xl: 12, pill: 999 } as const
+/** Soft and rounded, like the mark. */
+export const radius = { sm: 10, md: 14, lg: 20, xl: 28, pill: 999 } as const
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, huge: 40 } as const
 

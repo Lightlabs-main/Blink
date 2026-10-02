@@ -175,7 +175,7 @@ export default function Eligibility() {
 }
 
 const styles = StyleSheet.create({
-  badge: { width: 52, height: 52, borderRadius: 4, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
+  badge: { width: 52, height: 52, borderRadius: 26, backgroundColor: color.limeSoft, alignItems: 'center', justifyContent: 'center' },
   input: {
     height: 50,
     paddingHorizontal: space.lg,
