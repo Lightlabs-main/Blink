@@ -6,7 +6,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTim
 
 import { Icon } from '../design/icons'
 import { color, radius, space } from '../design/tokens'
-import { Button, Loading, Notice, Row, Screen, StockAvatar, T } from '../design/ui'
+import { BlinkLogo, Button, Loading, Notice, Row, Screen, StockAvatar, T } from '../design/ui'
 import { useAssets } from '../lib/data'
 import { PRODUCT_COPY } from '../shared'
 
@@ -74,10 +74,8 @@ export default function Welcome() {
     <Screen scroll={false}>
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
         <Row gap={space.sm}>
-          <View style={styles.logoMark}>
-            <Icon name="bolt" size={18} stroke={color.onLime} strokeWidth={2.4} />
-          </View>
-          <T variant="heading">Blink</T>
+          <BlinkLogo size={34} />
+          <T variant="title">Blink</T>
         </Row>
 
         <View style={{ gap: space.xl }}>
@@ -118,7 +116,6 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  logoMark: { width: 32, height: 32, borderRadius: 4, backgroundColor: color.lime, alignItems: 'center', justifyContent: 'center' },
   tickerWrap: { overflow: 'hidden', marginHorizontal: -20 },
   tickerPill: {
     flexDirection: 'row',
