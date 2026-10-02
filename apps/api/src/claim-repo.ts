@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { ClaimKind, ClaimStatus, ClaimSummary } from '@blink/domain'
+import type { ClaimKind, ClaimStatus, ClaimSummary, LiveEventType, QuestEvaluation } from '@blink/domain'
 
 import type { InMemoryCampaignRepository, StoredCampaign } from './campaign-repo.ts'
 import type { EligibilityStore, StoredEligibility } from './eligibility.ts'
@@ -37,6 +37,17 @@ export interface StoredTapSession {
   taps: number | null
   qualified: boolean
   rejectReason: string | null
+  /** D-21: the player's Blink wallet, used only to build a truncated public label. */
+  publicWallet: string | null
+}
+
+/** D-21: raw facts for the live room; the API turns wallets into truncated public labels. */
+export interface RoomData {
+  joined: number
+  qualified: number
+  /** Best accepted Tap Rush score per player (finished, not rejected), highest first. */
+  leaderboard: { wallet: string | null; score: number }[]
+  events: { type: LiveEventType; wallet: string | null; at: Date }[]
 }
 
 export interface StoredReferral {
@@ -94,7 +105,12 @@ export interface ClaimRepository {
   /** RESERVED/SENDING → FAILED and releases the amount. Only call once the transaction can never land. */
   markFailed(id: string, reason: string): Promise<void>
 
-  startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number }): Promise<StoredTapSession>
+  startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number; publicWallet?: string | null }): Promise<StoredTapSession>
+  /** D-21: the user's newest qualified round for this campaign that no claim has used yet. */
+  findUnusedQualifiedSession(campaignId: string, privyUserId: string): Promise<StoredTapSession | null>
+  /** D-21: latest Verified Quest evaluation per user (public-safe summary). */
+  putQuestVerification(input: { campaignId: string; privyUserId: string; evaluation: QuestEvaluation; publicWallet: string | null }): Promise<void>
+  roomData(campaignId: string, limits: { leaderboard: number; events: number }): Promise<RoomData>
   countTapSessions(campaignId: string, privyUserId: string): Promise<number>
   findTapSession(id: string): Promise<StoredTapSession | null>
   /** Records the result once; returns null if the session was already finished. */
@@ -139,6 +155,7 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
   private readonly claims = new Map<string, StoredClaim>()
   private readonly sessions = new Map<string, StoredTapSession>()
   private readonly referrals = new Map<string, StoredReferral>()
+  private readonly questChecks = new Map<string, { campaignId: string; privyUserId: string; qualified: boolean; publicWallet: string | null; checkedAt: Date }>()
   private readonly serviceWallets = new Map<string, { address: string; walletRef: string }>()
 
   constructor(private readonly campaigns: InMemoryCampaignRepository) {}
@@ -254,8 +271,17 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
     Object.assign(c, { status: 'FAILED', failureReason: reason, txSignature: null, lastValidBlockHeight: null, updatedAt: new Date() })
   }
 
-  async startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number }) {
-    const s: StoredTapSession = { id: randomUUID(), ...input, startedAt: new Date(), finishedAt: null, taps: null, qualified: false, rejectReason: null }
+  async startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number; publicWallet?: string | null }) {
+    const s: StoredTapSession = {
+      id: randomUUID(),
+      ...input,
+      publicWallet: input.publicWallet ?? null,
+      startedAt: new Date(),
+      finishedAt: null,
+      taps: null,
+      qualified: false,
+      rejectReason: null,
+    }
     this.sessions.set(s.id, s)
     return s
   }
@@ -273,6 +299,55 @@ export class InMemoryClaimRepository implements ClaimRepository, ServiceWalletSt
     if (!s || s.finishedAt) return null
     Object.assign(s, result)
     return s
+  }
+
+  async findUnusedQualifiedSession(campaignId: string, privyUserId: string) {
+    const used = new Set([...this.claims.values()].map((c) => c.tapSessionId).filter(Boolean))
+    return (
+      [...this.sessions.values()]
+        .filter((s) => s.campaignId === campaignId && s.privyUserId === privyUserId && s.qualified && !used.has(s.id))
+        .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null
+    )
+  }
+
+  async putQuestVerification(input: { campaignId: string; privyUserId: string; evaluation: QuestEvaluation; publicWallet: string | null }) {
+    this.questChecks.set(`${input.campaignId}:${input.privyUserId}`, {
+      campaignId: input.campaignId,
+      privyUserId: input.privyUserId,
+      qualified: input.evaluation.qualified,
+      publicWallet: input.publicWallet,
+      checkedAt: new Date(),
+    })
+  }
+
+  async roomData(campaignId: string, limits: { leaderboard: number; events: number }): Promise<RoomData> {
+    const sessions = [...this.sessions.values()].filter((s) => s.campaignId === campaignId)
+    const checks = [...this.questChecks.values()].filter((q) => q.campaignId === campaignId)
+    const claims = [...this.claims.values()].filter((c) => c.campaignId === campaignId && c.kind === 'CLAIM')
+    const joined = new Set([...sessions.map((s) => s.privyUserId), ...checks.map((q) => q.privyUserId), ...claims.map((c) => c.privyUserId)])
+    const qualified = new Set([
+      ...sessions.filter((s) => s.qualified).map((s) => s.privyUserId),
+      ...checks.filter((q) => q.qualified).map((q) => q.privyUserId),
+      ...claims.filter((c) => c.status !== 'FAILED').map((c) => c.privyUserId),
+    ])
+    const best = new Map<string, { wallet: string | null; score: number }>()
+    for (const s of sessions) {
+      if (!s.finishedAt || s.rejectReason || s.taps === null) continue
+      const prev = best.get(s.privyUserId)
+      if (!prev || s.taps > prev.score) best.set(s.privyUserId, { wallet: s.publicWallet, score: s.taps })
+    }
+    const events: RoomData['events'] = [
+      ...sessions.map((s) => ({ type: 'PARTICIPANT_JOINED' as const, wallet: s.publicWallet, at: s.startedAt })),
+      ...sessions.filter((s) => s.qualified && s.finishedAt).map((s) => ({ type: 'PARTICIPANT_QUALIFIED' as const, wallet: s.publicWallet, at: s.finishedAt! })),
+      ...checks.filter((q) => q.qualified).map((q) => ({ type: 'REQUIREMENT_VERIFIED' as const, wallet: q.publicWallet, at: q.checkedAt })),
+      ...claims.filter((c) => c.status === 'PAID').map((c) => ({ type: 'PAYOUT_CONFIRMED' as const, wallet: c.recipientWallet, at: c.updatedAt })),
+    ]
+    return {
+      joined: joined.size,
+      qualified: qualified.size,
+      leaderboard: [...best.values()].sort((a, b) => b.score - a.score).slice(0, limits.leaderboard),
+      events: events.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limits.events),
+    }
   }
 
   async getOrCreateReferral(campaignId: string, privyUserId: string, newCode: string) {

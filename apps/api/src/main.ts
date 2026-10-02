@@ -20,6 +20,7 @@ import { PrismaClaimRepository } from './prisma-claim-repo.ts'
 import { MainnetSeekerVerifier } from './seeker.ts'
 import { EligibilityService } from './eligibility.ts'
 import { GeoipCountryResolver } from './ip-country.ts'
+import { MainnetChainReader, QuestService } from './quest-service.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -82,6 +83,10 @@ const payouts = new SolanaPayoutService({
 })
 
 const auth = new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRIVY_APP_SECRET })
+// D-21: Verified Quest reads SKR/ORE from mainnet (the protocols exist only there), whatever cluster payouts use.
+const mainnetRead = createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')
+const seeker = new MainnetSeekerVerifier(mainnetRead)
+const quests = new QuestService({ auth, claims, chain: new MainnetChainReader(mainnetRead), seeker, log: { warn: (o, msg) => app.log.warn(o, msg) } })
 // D-20: xStocks eligibility (self-declared + offline IP-country cross-check; no IP is stored or sent anywhere).
 const eligibility = new EligibilityService({ env, store: claims, ipCountry: new GeoipCountryResolver() })
 const app = buildApp({
@@ -94,8 +99,9 @@ const app = buildApp({
   claims,
   payouts,
   eligibility,
-  // SGTs live on mainnet only, so Seeker checks always read mainnet, even while payouts run on devnet.
-  seeker: new MainnetSeekerVerifier(createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')),
+  // SGTs, SKR and ORE live on mainnet only, so these checks always read mainnet, even while payouts run on devnet.
+  seeker,
+  quests,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,
@@ -116,7 +122,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 await app.listen({ host: env.API_HOST, port: env.API_PORT })
 
 // D-13/D-14: confirm SENDING payouts and release abandoned reservations even when nobody is looking at them.
-const sweeper = new ClaimService({ env, auth, campaigns, claims, payouts, log: app.log, eligibility })
+const sweeper = new ClaimService({ env, auth, campaigns, claims, payouts, log: app.log, eligibility, quests })
 let sweeping = false
 const sweepTimer = setInterval(() => {
   if (sweeping) return

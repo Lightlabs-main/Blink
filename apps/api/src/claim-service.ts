@@ -1,12 +1,23 @@
 import { randomInt } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
-import { assessTapRound, isClaimableType, TAP_RUSH_LIMITS, type TapRushSessionSummary } from '@blink/domain'
+import {
+  assessTapRound,
+  type CampaignRoom,
+  isClaimableType,
+  maxClaims,
+  publicLabel,
+  type QuestEvaluation,
+  TAP_RUSH_LIMITS,
+  type TapRushSessionSummary,
+} from '@blink/domain'
+import { questHasTapRush } from '@blink/validation'
 
 import type { AuthContext, AuthVerifier } from './auth.ts'
 import type { CampaignRepository, StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository, StoredClaim, StoredReferral } from './claim-repo.ts'
 import type { EligibilityService } from './eligibility.ts'
+import type { QuestService } from './quest-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { RateLimiter } from './rate-limit.ts'
 
@@ -61,6 +72,8 @@ export class ClaimService {
       seeker?: SeekerVerifier
       /** D-20: xStocks eligibility gate; required before any reward reservation. */
       eligibility?: EligibilityService
+      /** D-21: Verified Quest evaluation; required for VERIFIED_QUEST claims. */
+      quests?: QuestService
     },
   ) {}
 
@@ -69,13 +82,16 @@ export class ClaimService {
     // Never let someone play for a reward they could not receive.
     this.requirePayouts()
     await this.requireEligible(auth, clientIp)
-    if (campaign.type !== 'TAP_RUSH' || !campaign.tapRush) throw new ClaimError('NOT_TAP_RUSH', 'this drop is not a Tap Rush')
+    const questTap = campaign.type === 'VERIFIED_QUEST' && campaign.requirements !== null && campaign.requirements !== undefined && questHasTapRush(campaign.requirements)
+    if ((campaign.type !== 'TAP_RUSH' && !questTap) || !campaign.tapRush) throw new ClaimError('NOT_TAP_RUSH', 'this drop has no Tap Rush')
     const existing = await this.current(await this.deps.claims.findForUser(campaign.id, auth.privyUserId))
     if (existing && existing.status !== 'FAILED') throw new ClaimError('ALREADY_CLAIMED', 'you already earned stock from this drop')
     this.requireLiveWithRoom(campaign)
     const used = await this.deps.claims.countTapSessions(campaign.id, auth.privyUserId)
     if (used >= TAP_RUSH_LIMITS.maxAttempts) throw new ClaimError('NO_ATTEMPTS_LEFT', 'you have used all your tries for this drop', 429)
-    const s = await this.deps.claims.startTapSession({ campaignId: campaign.id, privyUserId: auth.privyUserId, ...campaign.tapRush })
+    // D-21: the player's Blink wallet becomes a truncated public label on the live leaderboard (nothing else).
+    const [publicWallet] = await this.deps.auth.getEmbeddedSolanaWallets(auth.privyUserId)
+    const s = await this.deps.claims.startTapSession({ campaignId: campaign.id, privyUserId: auth.privyUserId, ...campaign.tapRush, publicWallet: publicWallet ?? null })
     return {
       id: s.id,
       campaignId: s.campaignId,
@@ -129,6 +145,14 @@ export class ClaimService {
         throw new ClaimError('NOT_QUALIFIED', 'reach the tap goal in Tap Rush to earn this stock', 403)
       }
       tapSessionId = session.id
+    }
+
+    if (campaign.type === 'VERIFIED_QUEST') {
+      // Current onchain state immediately before reservation (update §20); the client's view never counts.
+      if (!this.deps.quests) throw new ClaimError('QUESTS_UNAVAILABLE', 'quest checks are not available right now', 503)
+      const outcome = await this.deps.quests.evaluate(campaign, auth.privyUserId)
+      if (!outcome.evaluation.qualified) throw new ClaimError('NOT_QUALIFIED', 'complete every requirement first', 403)
+      tapSessionId = outcome.tapSessionId
     }
 
     let referral: { code: string; referrerPrivyUserId: string; referrerWallet: string } | null = null
@@ -197,6 +221,35 @@ export class ClaimService {
       // Friend still SENDING: the bonus stays reserved; the sweep releases it and the referrer can retry once the friend is paid.
     }
     return paid
+  }
+
+  /** D-21: evaluate the caller's Verified Quest requirements now (server-side). Shows progress; never reserves. */
+  async verify(auth: AuthContext, campaignId: string): Promise<QuestEvaluation> {
+    const campaign = await this.claimableCampaign(auth, campaignId)
+    if (campaign.type !== 'VERIFIED_QUEST') throw new ClaimError('NOT_QUEST', 'this drop is not a Verified Quest')
+    if (campaign.status !== 'LIVE') throw new ClaimError('NOT_LIVE', 'this drop is not live')
+    if (!this.deps.quests) throw new ClaimError('QUESTS_UNAVAILABLE', 'quest checks are not available right now', 503)
+    return (await this.deps.quests.evaluate(campaign, auth.privyUserId)).evaluation
+  }
+
+  /** D-21: the public live room. Real aggregates only; identities are truncated wallets. */
+  async room(campaignId: string): Promise<CampaignRoom> {
+    const campaign = /^[0-9a-f-]{36}$/.test(campaignId) ? await this.deps.campaigns.findById(campaignId) : null
+    if (!campaign) throw new ClaimError('NOT_FOUND', 'campaign not found', 404)
+    const data = await this.deps.claims.roomData(campaign.id, { leaderboard: 10, events: 15 })
+    const reward = campaign.rewardPerClaimRaw
+    const scored = campaign.type === 'TAP_RUSH' || (campaign.type === 'VERIFIED_QUEST' && Boolean(campaign.requirements && questHasTapRush(campaign.requirements)))
+    return {
+      campaignId: campaign.id,
+      status: campaign.status,
+      joined: data.joined,
+      qualified: data.qualified,
+      rewardsRemaining: reward ? Number(maxClaims(campaign.allowanceRaw - campaign.claimedRaw, reward)) : 0,
+      endsAt: campaign.endsAt?.toISOString() ?? null,
+      leaderboard: scored ? data.leaderboard.map((e) => ({ who: publicLabel(e.wallet), score: e.score })) : null,
+      events: data.events.map((e) => ({ type: e.type, who: publicLabel(e.wallet), at: e.at.toISOString() })),
+      serverTime: new Date().toISOString(),
+    }
   }
 
   /** The caller's claim for a campaign, brought up to date from the chain. */
@@ -309,6 +362,9 @@ export class ClaimService {
 
   private requireLiveWithRoom(campaign: StoredCampaign) {
     if (campaign.status !== 'LIVE') throw new ClaimError('NOT_LIVE', campaign.status === 'ENDED' ? 'this drop has ended' : 'this drop is not live')
+    const now = Date.now()
+    if (campaign.startsAt && campaign.startsAt.getTime() > now) throw new ClaimError('NOT_STARTED', 'this drop has not started yet')
+    if (campaign.endsAt && campaign.endsAt.getTime() <= now) throw new ClaimError('CAMPAIGN_OVER', 'this drop has ended')
     if (campaign.allowanceRaw - campaign.claimedRaw < campaign.rewardPerClaimRaw!) {
       throw new ClaimError('EXHAUSTED', 'all the stock in this drop has been claimed')
     }

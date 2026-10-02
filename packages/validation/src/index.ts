@@ -2,7 +2,17 @@
  * API contract schemas (owner: Claude). Shared by apps/api and apps/mobile.
  * Record every change in docs/HANDOFF.md before Codex depends on it.
  */
-import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, isClaimableType, REFERRAL_CODE_RE, TAP_RUSH_LIMITS } from '@blink/domain'
+import {
+  CAMPAIGN_STATUSES,
+  CAMPAIGN_TYPES,
+  isClaimableType,
+  QUEST_LIMITS,
+  type QuestRequirements,
+  REFERRAL_CODE_RE,
+  TAP_RUSH_LIMITS,
+  VERIFIER_TYPES,
+  VERIFIERS,
+} from '@blink/domain'
 import { z } from 'zod'
 
 /** Base58 Solana address shape. Format check only — onchain existence/ownership is verified server-side. */
@@ -31,6 +41,45 @@ export const tapRushRules = z
   })
   .strict()
 
+/** D-21: one requirement. Only ENABLED registry verifiers; amount verifiers need a positive raw minimum. */
+const questCondition = z
+  .object({ verifier: z.enum(VERIFIER_TYPES), minRaw: rawAmount.optional() })
+  .strict()
+  .superRefine((c, ctx) => {
+    const def = VERIFIERS[c.verifier]
+    if (def.availability !== 'ENABLED') ctx.addIssue({ code: 'custom', message: `${def.label} is not available yet` })
+    if (def.amount && !(c.minRaw && RAW_AMOUNT_RE.test(c.minRaw) && BigInt(c.minRaw) > 0n)) {
+      ctx.addIssue({ code: 'custom', path: ['minRaw'], message: `${def.label} needs a minimum amount` })
+    }
+    if (!def.amount && c.minRaw !== undefined) ctx.addIssue({ code: 'custom', path: ['minRaw'], message: `${def.label} takes no amount` })
+  })
+
+const questGroup = z
+  .object({ mode: z.enum(['ALL', 'ANY']), conditions: z.array(questCondition).min(1).max(QUEST_LIMITS.maxConditionsPerGroup) })
+  .strict()
+
+/** D-21: groups of ALL/ANY conditions; every group must pass. Eligibility and action verifiers stay in their place. */
+export const questRequirements = z
+  .object({
+    eligibility: z.array(questGroup).max(QUEST_LIMITS.maxGroups),
+    actions: z.array(questGroup).max(QUEST_LIMITS.maxGroups),
+  })
+  .strict()
+  .superRefine((r, ctx) => {
+    if (r.eligibility.length + r.actions.length === 0) ctx.addIssue({ code: 'custom', message: 'add at least one requirement' })
+    for (const [side, kind] of [['eligibility', 'ELIGIBILITY'], ['actions', 'ACTION']] as const) {
+      for (const g of r[side]) {
+        for (const c of g.conditions) {
+          if (VERIFIERS[c.verifier].kind !== kind) ctx.addIssue({ code: 'custom', path: [side], message: `${VERIFIERS[c.verifier].label} does not belong in ${side}` })
+        }
+      }
+    }
+  })
+
+export function questHasTapRush(r: QuestRequirements): boolean {
+  return r.actions.some((g) => g.conditions.some((c) => c.verifier === 'TAP_RUSH'))
+}
+
 /**
  * Claimable mechanics (DECISIONS D-13) require `rewardPerClaimRaw`: the fixed amount each recipient gets.
  * `tapRush` is only accepted for TAP_RUSH; the server applies defaults when it is omitted.
@@ -42,6 +91,11 @@ export const createCampaignRequest = z
     allowanceRaw: positiveRawAmount('allowance must be positive'),
     rewardPerClaimRaw: positiveRawAmount('amount per person must be positive').optional(),
     tapRush: tapRushRules.optional(),
+    /** D-21: required for VERIFIED_QUEST, refused otherwise. Frozen at creation. */
+    requirements: questRequirements.optional(),
+    /** D-21: optional campaign window. */
+    startsAt: z.iso.datetime().optional(),
+    endsAt: z.iso.datetime().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
@@ -52,8 +106,14 @@ export const createCampaignRequest = z
     if (digits(v.rewardPerClaimRaw) && digits(v.allowanceRaw) && BigInt(v.rewardPerClaimRaw!) > BigInt(v.allowanceRaw)) {
       ctx.addIssue({ code: 'custom', path: ['rewardPerClaimRaw'], message: 'amount per person cannot exceed the total' })
     }
-    if (v.tapRush && v.type !== 'TAP_RUSH') {
-      ctx.addIssue({ code: 'custom', path: ['tapRush'], message: 'tapRush rules only apply to TAP_RUSH campaigns' })
+    const questTap = v.type === 'VERIFIED_QUEST' && v.requirements !== undefined && questHasTapRush(v.requirements)
+    if (v.tapRush && v.type !== 'TAP_RUSH' && !questTap) {
+      ctx.addIssue({ code: 'custom', path: ['tapRush'], message: 'tapRush rules only apply to Tap Rush (or a quest with a Tap Rush action)' })
+    }
+    if (v.type === 'VERIFIED_QUEST' && !v.requirements) ctx.addIssue({ code: 'custom', path: ['requirements'], message: 'a Verified Quest needs requirements' })
+    if (v.type !== 'VERIFIED_QUEST' && v.requirements) ctx.addIssue({ code: 'custom', path: ['requirements'], message: 'requirements only apply to Verified Quests' })
+    if (v.startsAt && v.endsAt && Date.parse(v.endsAt) <= Date.parse(v.startsAt)) {
+      ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'the end must be after the start' })
     }
   })
 export type CreateCampaignRequest = z.infer<typeof createCampaignRequest>
@@ -121,6 +181,9 @@ export const campaignSummary = z.object({
   claimedRaw: rawAmount,
   tapRush: tapRushRules.nullable(),
   pauseReason: z.string().nullable(),
+  requirements: questRequirements.nullable(),
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
 })
 

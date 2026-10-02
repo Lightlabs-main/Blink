@@ -1,4 +1,4 @@
-import { type CampaignStatus, type CampaignSummary, type CampaignType, canTransition, type SolanaCluster, type TapRushRules } from '@blink/domain'
+import { type CampaignStatus, type CampaignSummary, type CampaignType, canTransition, type QuestRequirements, type SolanaCluster, type TapRushRules } from '@blink/domain'
 
 export interface NewCampaign {
   id: string
@@ -14,6 +14,12 @@ export interface NewCampaign {
   /** D-13: fixed amount per recipient; null = not claimable. */
   rewardPerClaimRaw: bigint | null
   tapRush: TapRushRules | null
+  /** D-21: Verified Quest requirements + SHA-256 of their canonical JSON; frozen at creation. */
+  requirements?: QuestRequirements | null
+  requirementsHash?: string | null
+  /** D-21: optional campaign window. */
+  startsAt?: Date | null
+  endsAt?: Date | null
 }
 
 export interface StoredCampaign extends NewCampaign {
@@ -65,6 +71,9 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     claimedRaw: c.claimedRaw.toString(),
     tapRush: c.tapRush,
     pauseReason: c.pauseReason,
+    requirements: c.requirements ?? null,
+    startsAt: c.startsAt?.toISOString() ?? null,
+    endsAt: c.endsAt?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
   }
 }

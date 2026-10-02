@@ -20,6 +20,7 @@ enum CampaignType {
   EARLY_CLAIM
   REFERRAL
   SEEKER
+  VERIFIED_QUEST
 }
 
 enum CampaignStatus {
@@ -64,6 +65,12 @@ model Campaign {
   claimedRaw           Decimal        @default(0) @db.Decimal(20, 0)
   tapGoal              Int?
   tapSeconds           Int?
+  /// D-21: Verified Quest requirements, frozen at creation (never edited once LIVE) + SHA-256 of their canonical JSON.
+  requirementsJson     Json?
+  requirementsHash     String?
+  /// D-21: optional campaign window, enforced server-side.
+  startsAt             DateTime?
+  endsAt               DateTime?
   pauseReason          String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
@@ -147,6 +154,8 @@ model TapRushSession {
   qualified    Boolean   @default(false)
   /// D-14: why a finished round did not count (timing or tap-pattern check).
   rejectReason String?
+  /// D-21: privacy-safe public label source (the player's Blink wallet) for the live leaderboard.
+  publicWallet String?
 
   @@index([campaignId, privyUserId])
 }
@@ -166,6 +175,21 @@ model XStockEligibility {
   policyVersion   String
   method          String
   decidedAt       DateTime @updatedAt
+}
+
+/// D-21: the latest server-side evaluation of a Verified Quest for one user. Public-safe summary only.
+model QuestVerification {
+  campaignId   String   @db.Uuid
+  privyUserId  String
+  qualified    Boolean
+  /// QuestEvaluation (statuses + raw amounts as strings); no wallets or other identifiers.
+  summary      Json
+  /// Privacy-safe public label source for live events.
+  publicWallet String?
+  checkedAt    DateTime @updatedAt
+
+  @@id([campaignId, privyUserId])
+  @@index([campaignId, checkedAt])
 }
 
 /// D-14: a person's invite code for one REFERRAL campaign.

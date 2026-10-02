@@ -129,3 +129,27 @@ describe('xStocks eligibility policy (D-20)', () => {
     expect(evaluateXStockEligibility({ ...ok, declaredCountry: 'UA' }).reason).toBe('REGION_ATTESTATION_MISSING')
   })
 })
+
+describe('quest combination (D-21)', () => {
+  it('ALL needs every condition, ANY needs one, every group must pass, and only PASSED counts', async () => {
+    const { combineQuest } = await import('@blink/domain')
+    const req = {
+      eligibility: [{ mode: 'ANY' as const, conditions: [{ verifier: 'SKR_BALANCE' as const, minRaw: '1' }, { verifier: 'SKR_STAKED' as const, minRaw: '1' }] }],
+      actions: [{ mode: 'ALL' as const, conditions: [{ verifier: 'TAP_RUSH' as const }] }],
+    }
+    const run = (s: Record<string, string>) => combineQuest(req, (c) => ({ verifier: c.verifier, status: s[c.verifier] as never }), 'now').qualified
+    expect(run({ SKR_BALANCE: 'FAILED', SKR_STAKED: 'PASSED', TAP_RUSH: 'PASSED' })).toBe(true)
+    expect(run({ SKR_BALANCE: 'ERROR', SKR_STAKED: 'STALE', TAP_RUSH: 'PASSED' })).toBe(false)
+    expect(run({ SKR_BALANCE: 'PASSED', SKR_STAKED: 'PASSED', TAP_RUSH: 'PENDING' })).toBe(false)
+    expect(combineQuest({ eligibility: [], actions: [] }, () => ({ verifier: 'TAP_RUSH', status: 'PASSED' }), 'now').qualified).toBe(false)
+  })
+
+  it('formats and parses raw amounts without floating point', async () => {
+    const { formatRaw, parseAmountToRaw } = await import('@blink/domain')
+    expect(parseAmountToRaw('500', 6)).toBe(500_000_000n)
+    expect(parseAmountToRaw('12.3456789', 6)).toBe(12_345_678n)
+    expect(formatRaw(784_310_000n, 6)).toBe('784.31')
+    expect(formatRaw(250_000_000_000n, 11)).toBe('2.5')
+    expect(() => parseAmountToRaw('1e9', 6)).toThrow()
+  })
+})
