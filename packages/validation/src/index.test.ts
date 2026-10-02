@@ -120,7 +120,9 @@ describe('xStocks eligibility policy (D-20)', () => {
   })
   it('includes the issuer-listed jurisdictions', () => {
     const codes = XSTOCK_POLICY.restrictions.map((r) => r.code)
-    for (const c of ['US', 'GB', 'IR', 'KP', 'SY', 'NG', 'RU', 'CU', 'CA', 'AU']) expect(codes).toContain(c)
+    for (const c of ['US', 'GB', 'IR', 'KP', 'SY', 'RU', 'CU', 'CA', 'AU']) expect(codes).toContain(c)
+    // D-22: Nigeria allowed by owner decision.
+    expect(codes).not.toContain('NG')
   })
   it('fails closed on unknown IP country, invalid country and missing attestations', () => {
     expect(evaluateXStockEligibility({ ...ok, ipCountry: null }).reason).toBe('IP_COUNTRY_UNKNOWN')

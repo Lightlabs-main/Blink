@@ -17,7 +17,10 @@ stays blocked until all of the following are done:
 A controlled mainnet smoke test with one eligible participant may run only with Maris's explicit
 approval.
 
-### Policy `XSTOCKS-ELIGIBILITY-2026-10-01` (v1)
+### Policy `XSTOCKS-ELIGIBILITY`, version `2026-10-02.1`
+
+v1 (`2026-10-01.1`) also blocked Nigeria. v2 removes it by owner decision (D-22), and every user
+re-confirms under the new version.
 
 Recipients and creators may not take part in xStocks distribution if they are:
 
@@ -27,7 +30,8 @@ Recipients and creators may not take part in xStocks distribution if they are:
 | In the United Kingdom | xstocks.fi news disclaimer ("not currently available in the United Kingdom") | VERIFIED 2026-10-01 |
 | In any jurisdiction where offer or distribution would be unlawful or would need authorization that hasn't been obtained | same disclaimer | VERIFIED 2026-10-01 |
 | In Iran, North Korea or Syria (sanctions: "prohibited") | assets.backed.fi/legal-documentation/restricted-countries | VERIFIED 2026-10-01 |
-| In a "non-serviceable" country: Afghanistan, Belarus, Central African Republic, DR Congo, Cuba, Ethiopia, Haiti, Iraq, Lebanon, Libya, Mali, Mozambique, Myanmar, Nicaragua, **Nigeria**, Philippines, Russia, Somalia, South Sudan, Sudan, Venezuela, Yemen, Zimbabwe | same | VERIFIED 2026-10-01 |
+| In a "non-serviceable" country: Afghanistan, Belarus, Central African Republic, DR Congo, Cuba, Ethiopia, Haiti, Iraq, Lebanon, Libya, Mali, Mozambique, Myanmar, Nicaragua, Philippines, Russia, Somalia, South Sudan, Sudan, Venezuela, Yemen, Zimbabwe | same | VERIFIED 2026-10-01 |
+| ~~Nigeria~~: on the issuer's "non-serviceable" list (re-checked 2026-10-02), **allowed by owner decision D-22** | same | OWNER OVERRIDE — risk accepted by Maris |
 | In an occupied region of Ukraine | same | VERIFIED 2026-10-01 (enforced by attestation) |
 | In Canada or Australia | Maris's update (§21). Not on the issuer's page or the xStocks disclaimers checked | ASSUMPTION — blocked conservatively |
 

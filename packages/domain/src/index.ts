@@ -235,7 +235,7 @@ const UPDATE = 'Maris product update §21 — ASSUMPTION, not yet in issuer text
  */
 export const XSTOCK_POLICY = {
   id: 'XSTOCKS-ELIGIBILITY',
-  version: '2026-10-01.1',
+  version: '2026-10-02.1',
   method: 'SELF_DECLARED_PLUS_IP_COUNTRY',
   restrictions: [
     { code: 'US', category: 'PROHIBITED', source: `${BACKED}; ${XSTOCKS}` },
@@ -243,7 +243,8 @@ export const XSTOCK_POLICY = {
     { code: 'KP', category: 'PROHIBITED', source: BACKED },
     { code: 'SY', category: 'PROHIBITED', source: BACKED },
     { code: 'GB', category: 'NOT_AVAILABLE', source: XSTOCKS },
-    ...['AF', 'BY', 'CF', 'CD', 'CU', 'ET', 'HT', 'IQ', 'LB', 'LY', 'ML', 'MZ', 'MM', 'NI', 'NG', 'PH', 'RU', 'SO', 'SS', 'SD', 'VE', 'YE', 'ZW'].map(
+    // NG is on the issuer's "non-serviceable" list but is allowed by owner decision D-22 (2026-10-02).
+    ...['AF', 'BY', 'CF', 'CD', 'CU', 'ET', 'HT', 'IQ', 'LB', 'LY', 'ML', 'MZ', 'MM', 'NI', 'PH', 'RU', 'SO', 'SS', 'SD', 'VE', 'YE', 'ZW'].map(
       (code) => ({ code, category: 'NON_SERVICEABLE' as const, source: BACKED }),
     ),
     { code: 'CA', category: 'CONSERVATIVE', source: UPDATE },
