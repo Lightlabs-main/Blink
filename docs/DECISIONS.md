@@ -399,3 +399,11 @@ removing a Solana creator wallet in the app failed with "Invalid Ethereum addres
 `DELETE /v1/me/wallets/:address` (auth, throttled) unlinks one of the caller's own SIWS-linked wallets through the
 Privy server API (`users().unlinkLinkedAccount`). The app uses it from the next build. Also: the most recently
 linked wallet is now listed first, so Create funds from the newest wallet.
+
+## D-27 — Funding always opens a fresh, network-named wallet session (2026-10-02)
+
+Found on device: Solflare (also the Seeker wallet) showed "Network mismatch … this transaction is for mainnet" when
+funding a devnet drop. With a saved auth token, the MWA library sends an older-protocol wallet a `reauthorize`
+that carries no network, so the wallet assumes mainnet. Funding now runs `authorize({ chain, identity })` without
+the saved token in the same session as `signTransactions`, and checks the authorized account is the campaign's
+creator wallet. Ships with the next APK.

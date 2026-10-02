@@ -1,7 +1,7 @@
 import { usePrivy } from '@privy-io/expo'
-import { getBase64EncodedWireTransaction, getBase64Encoder, getTransactionDecoder } from '@solana/kit'
+import { address, getAddressEncoder, getBase64Decoder, getBase64EncodedWireTransaction, getBase64Encoder, getTransactionDecoder } from '@solana/kit'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMobileWallet } from '@wallet-ui/react-native-kit'
+import { transact, useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -41,7 +41,7 @@ function Point({ icon, title, body }: { icon: IconName; title: string; body: str
  */
 export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSummary; amountLabel: string }) {
   const { getAccessToken } = usePrivy()
-  const { connect, signTransactions, account } = useMobileWallet()
+  const { chain, identity } = useMobileWallet()
   const queryClient = useQueryClient()
   const [step, setStep] = useState<Step>('idle')
   const [plan, setPlan] = useState<PreparedFunding | null>(null)
@@ -81,14 +81,21 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
     if (!plan) return
     setError(null)
     try {
-      // The wallet must be the campaign's creator wallet.
-      const active = account ?? (await connect())
-      if (active.address.toString() !== campaign.creatorWallet) {
-        throw new Error(`Switch to wallet ${shortAddress(campaign.creatorWallet)} in your wallet app, then try again.`)
-      }
       setStep('signing')
       const unsigned = getTransactionDecoder().decode(getBase64Encoder().encode(plan.transaction))
-      const signed = await signTransactions(unsigned)
+      // A fresh authorization that always names the network. Re-using a saved session made older-protocol wallets
+      // (Solflare / Seeker) reauthorize without a network and treat this devnet transaction as mainnet.
+      const signed = await transact(async (wallet) => {
+        const auth = await wallet.authorize({ chain, identity })
+        // MWA reports accounts as base64 public keys; the wallet must be the campaign's creator wallet.
+        const wanted = getBase64Decoder().decode(getAddressEncoder().encode(address(campaign.creatorWallet)))
+        if (!auth.accounts.some((a) => a.address === wanted)) {
+          throw new Error(`Switch to wallet ${shortAddress(campaign.creatorWallet)} in your wallet app, then try again.`)
+        }
+        const [tx] = await wallet.signTransactions({ transactions: [unsigned] })
+        if (!tx) throw new Error('Your wallet app did not return a signed transaction')
+        return tx
+      })
       setStep('submitting')
       const result = await api.fundingSubmit(getAccessToken, campaign.id, getBase64EncodedWireTransaction(signed))
       setSignature(result.signature)
