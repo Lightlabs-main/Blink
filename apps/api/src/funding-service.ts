@@ -1,4 +1,4 @@
-import { buildFundingTransaction, checkCampaignDelegation, type DelegationStatus, FundingError } from '@blink/solana'
+import { buildFundingTransaction, checkCampaignDelegation, type DelegationStatus, FundingError, sameIntentAllowingWalletAdditions } from '@blink/solana'
 import {
   address,
   type Base64EncodedWireTransaction,
@@ -127,8 +127,10 @@ export class SolanaFundingService implements FundingService {
     } catch {
       throw new FundingRequestError('INVALID_TRANSACTION', 'could not read the signed transaction', 400)
     }
-    if (!bytesEqual(Uint8Array.from(decoded.messageBytes), pending.messageBytes)) {
-      throw new FundingRequestError('TRANSACTION_MISMATCH', 'the signed transaction differs from the one Blink prepared', 400)
+    // D-28: wallets such as Phantom add priority-fee / Lighthouse instructions; anything else is refused.
+    const intent = sameIntentAllowingWalletAdditions(pending.messageBytes, Uint8Array.from(decoded.messageBytes))
+    if (!intent.ok) {
+      throw new FundingRequestError('TRANSACTION_MISMATCH', `the signed transaction differs from the one Blink prepared (${intent.reason})`, 400)
     }
     if (!decoded.signatures[address(campaign.creatorWallet)]) {
       throw new FundingRequestError('NOT_SIGNED', 'the creator wallet did not sign', 400)
@@ -169,10 +171,4 @@ export class SolanaFundingService implements FundingService {
     }
     throw new FundingRequestError('CONFIRMATION_TIMEOUT', 'the network has not confirmed the transaction yet', 504)
   }
-}
-
-function bytesEqual(a: Uint8Array, b: Uint8Array) {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
 }
