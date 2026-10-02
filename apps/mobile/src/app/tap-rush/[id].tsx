@@ -205,7 +205,7 @@ export default function TapRush() {
               onPressOut={() => setPressed(false)}
               style={[styles.tapTarget, reached && styles.tapTargetDone, { transform: [{ scale: pressed ? 0.94 : 1 }] }]}
             >
-              <Icon name={reached ? 'check' : 'bolt'} size={72} stroke={color.onLime} strokeWidth={2.4} />
+              <Icon name={reached ? 'check' : 'bolt'} size={72} stroke={color.onMarker} strokeWidth={2.4} />
               <T style={styles.tapLabel}>{reached ? 'Goal! Keep going' : 'TAP!'}</T>
             </Pressable>
           )}
@@ -292,15 +292,13 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: color.lime,
+    backgroundColor: color.marker,
+    borderWidth: 2,
+    borderColor: color.text,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    shadowColor: color.lime,
-    shadowOpacity: 0.6,
-    shadowRadius: 40,
-    elevation: 12,
   },
   tapTargetDone: { backgroundColor: color.success },
-  tapLabel: { ...font('display'), fontSize: 26, color: color.onLime },
+  tapLabel: { ...font('display'), fontSize: 30, color: color.onMarker },
 })

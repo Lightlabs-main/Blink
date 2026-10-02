@@ -75,7 +75,31 @@ export interface PreparedFunding {
   summary: { campaignAccount: string; delegate: string; amountRaw: string; rentLamports: string; accountSpace: string }
 }
 
+/** D-23: wallet SKR and the position with Blink's guardian pool (mainnet). Raw amounts, 6 decimals. */
+export interface SkrPosition {
+  wallet: string
+  guardianPool: string
+  walletRaw: string
+  stakedRaw: string
+  unstakingRaw: string
+  minStakeRaw: string
+  cooldownSeconds: number
+  withdrawableAt: string | null
+}
+
+export type SkrAction = 'stake' | 'unstake' | 'withdraw' | 'cancel_unstake'
+
 export const api = {
+  skrPosition: (t: GetAccessToken, wallet: string) => authed<{ position: SkrPosition }>(t, `/v1/skr/position?wallet=${encodeURIComponent(wallet)}`),
+  skrPrepare: (t: GetAccessToken, body: { wallet: string; action: SkrAction; amountRaw?: string; all?: boolean }) =>
+    authed<{ prepared: { transaction: string; minContextSlot: string; lastValidBlockHeight: string } }>(t, '/v1/skr/prepare', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  savePushToken: (t: GetAccessToken, token: string, platform: 'android' | 'ios') =>
+    authed<{ ok: true }>(t, '/v1/me/push-token', { method: 'POST', body: JSON.stringify({ token, platform }) }),
+  deletePushToken: (t: GetAccessToken, token: string) =>
+    authed<{ ok: true }>(t, '/v1/me/push-token', { method: 'DELETE', body: JSON.stringify({ token }) }),
   xstocks: () => request<{ xstocks: XStockListing[] }>('/v1/xstocks'),
   liveCampaigns: () => request<{ campaigns: CampaignSummary[] }>('/v1/campaigns'),
   campaign: (id: string) => request<{ campaign: CampaignSummary }>(`/v1/campaigns/${encodeURIComponent(id)}`),

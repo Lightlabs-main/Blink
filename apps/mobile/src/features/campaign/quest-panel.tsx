@@ -94,6 +94,10 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
     if (!user || r?.status === 'PASSED') return null
     if (c.verifier === 'TAP_RUSH') return { label: 'Play Tap Rush', icon: 'bolt' as const, go: () => router.push(`/tap-rush/${campaign.id}`) }
     if (c.verifier === 'SEEKER_SGT') return { label: 'Connect my Seeker', icon: 'phone' as const, go: () => router.push({ pathname: '/login/wallet', params: { purpose: 'seeker' } }) }
+    // D-23: a verified wallet that is short on staked SKR can stake right here (mainnet; the wallet signs).
+    if ((c.verifier === 'SKR_STAKED' || c.verifier === 'SKR_TOTAL') && r?.status === 'FAILED' && r.actualRaw !== undefined) {
+      return { label: 'Stake SKR in Blink', icon: 'layers' as const, go: () => router.push('/skr') }
+    }
     return { label: 'Verify a wallet', icon: 'wallet' as const, go: () => router.push('/login/wallet') }
   }
 
@@ -190,6 +194,6 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
 
 const styles = StyleSheet.create({
   group: { gap: space.md },
-  anyGroup: { padding: space.md, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: color.borderStrong },
+  anyGroup: { padding: space.md, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: color.borderStrong },
   dot: { width: 26, height: 26, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
 })

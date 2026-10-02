@@ -145,7 +145,7 @@ with `getAccountInfo` on the same day.
 | SKR staking program | `SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ` | same; `react-native-samples/skr-staking/program/idl.json` `address` | executable (BPF upgradeable) |
 | SKR stake config | `4HQy82s9CHTv1GsYKnANHMiHfhcqesYkK6sB3RDSYyqw` | same | owned by the staking program; StakeConfig discriminator `[238,151,43,3,11,151,63,176]` matches the IDL |
 | SKR guardian pool (sample default) | `DPJ58trLsF9yPrBa2pk6UaRkvqW8hWUYjawe788WBuqr` | same | GuardianDelegationPool discriminator matches |
-| SKR stake vault | `8isViKbwhuhFhsv2t8vaFL74pKCqaFPQXo1KkeQwZbB8` | docs | not yet checked onchain |
+| SKR stake vault | `8isViKbwhuhFhsv2t8vaFL74pKCqaFPQXo1KkeQwZbB8` | docs | equals `stake_vault` in the StakeConfig account (checked 2026-10-02; `readSkrPosition` refuses a mismatch) |
 | SKR UserStake | PDA `["user_stake", stake_config, user, guardian_pool]`; layout disc(8) bump(1) stake_config(32) user(32) guardian_pool(32) shares u128 …; staked = shares × share_price / 1e9 | skr-staking sample `src/app/index.tsx` + IDL | — |
 | ORE mint | `oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp` | github.com/regolith-labs/ore-mint `api/src/consts.rs` | SPL Token (Tokenkeg), decimals **11** (matches `TOKEN_DECIMALS`) |
 | ORE stake program | `stakecNP3FpiExZPCgZfqRgumVzi6dNqnfrjwXyTgeH` | github.com/regolith-labs/ore-stake `api/src/lib.rs` | executable |
@@ -167,3 +167,36 @@ with `getAccountInfo` on the same day.
 | License | MaxMind GeoLite2 License (EULA in the package). The website shows the required attribution: "This product includes GeoLite2 data created by MaxMind" |
 | Verified | Lookups tested offline: 8.8.8.8 → US, 197.210.0.1 → NG, 81.2.69.142 → GB, loopback → null (fails closed) |
 | Limitation | The README says the code is no longer maintained (the author recommends `ip-location-api`, which downloads data at runtime). Data releases continue. Revisit before production. VPNs defeat IP checks, which is why the declaration + attestation is primary and the IP is a cross-check |
+
+## SKR staking instructions (D-23, checked 2026-10-02)
+
+Built by hand from the official IDL (`skr-staking/program/idl.json`); no generated client is vendored.
+
+| Instruction | Discriminator | Args | Signer |
+|---|---|---|---|
+| `stake` | `[206,176,202,18,200,209,179,108]` | `amount: u64` | payer (= the user) |
+| `unstake` | `[90,95,107,42,205,124,50,225]` | `shares: u128` | user |
+| `cancel_unstake` | `[64,65,53,227,125,153,3,167]` | — | user |
+| `withdraw` | `[183,18,70,156,148,109,161,34]` | — | none (preceded by an idempotent ATA create the user pays for) |
+
+- `event_authority` = PDA `["__event_authority"]`.
+- StakeConfig adds `min_stake_amount` u64 @105 (1 SKR) and `cooldown_seconds` u64 @113 (172 800 s = 48 h).
+- UserStake adds `unstake_timestamp` i64 @161; the unstake can be withdrawn at `unstake_timestamp + cooldown_seconds`.
+- **Verified by simulation on mainnet** with `scripts/skr-stake-simulate.ts` (read-only, nothing signed or sent):
+  stake 1 SKR, unstake 1 SKR and cancel_unstake simulate OK for real staker wallets, and withdraw reaches the
+  program and fails with `CooldownNotCompleted` (6004) for a wallet still in cooldown, so every account list passes
+  the program's checks.
+
+## expo-notifications (2026-10-02)
+
+| Field | Value |
+|---|---|
+| Package | `expo-notifications ~57.0.21` (mobile), installed with `npx expo install` |
+| Delivery | Server → Expo push service (`https://exp.host/--/api/v2/push/send`) → FCM v1 on Android |
+| Needs | Firebase project for `com.blinktostock.app`: `google-services.json` (given to EAS as the `GOOGLE_SERVICES_JSON` file variable; read by `app.config.js`) and the FCM v1 service-account key uploaded to EAS credentials. Without them the app runs and notifications show "Not available in this build" |
+| Optional | `EXPO_ACCESS_TOKEN` in the backend `.env` (enhanced push security) |
+
+## Broadsheet fonts (2026-10-02)
+
+`@expo-google-fonts/instrument-serif`, `@expo-google-fonts/newsreader`, `@expo-google-fonts/ibm-plex-mono`
+(`^0.4.1`, SIL Open Font License), the same faces as blinksol.site.
