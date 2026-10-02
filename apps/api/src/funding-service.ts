@@ -174,7 +174,12 @@ export class SolanaFundingService implements FundingService {
           continue
         }
         if (text.includes('#7050008')) throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
-        throw new FundingRequestError('SEND_FAILED', 'the network rejected this transaction — please try again', 422)
+        // Public data only: program logs and the error cause, so failures can be diagnosed.
+        const e = err as { context?: { logs?: string[] }; cause?: { message?: string; context?: unknown } }
+        const logs = e.context?.logs ?? []
+        console.error(JSON.stringify({ msg: 'funding send failed', campaignId: campaign.id, added: intent.added, error: text.slice(0, 300), cause: e.cause?.message, causeContext: e.cause?.context, logs: logs.slice(-12) }, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)))
+        const hint = logs.filter((l) => /error|failed|insufficient/i.test(l)).at(-1) ?? e.cause?.message ?? ''
+        throw new FundingRequestError('SEND_FAILED', `the network rejected this transaction${hint ? `: ${hint.slice(0, 160)}` : ''}`, 422)
       }
     }
     this.pending.delete(campaign.id)
