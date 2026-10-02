@@ -83,8 +83,9 @@ export function extractEmbeddedSolanaWallets(linkedAccounts: readonly unknown[])
   return out
 }
 
+/** Newest first: the app funds drops from the first wallet, so the wallet linked most recently is the one used. */
 export function extractVerifiedExternalSolanaWallets(linkedAccounts: readonly unknown[]): string[] {
-  const wallets: string[] = []
+  const wallets: { address: string; verifiedAt: number }[] = []
   for (const account of linkedAccounts) {
     if (!account || typeof account !== 'object') continue
     const a = account as Record<string, unknown>
@@ -97,8 +98,8 @@ export function extractVerifiedExternalSolanaWallets(linkedAccounts: readonly un
       typeof a.verified_at === 'number' &&
       a.verified_at > 0
     ) {
-      wallets.push(a.address)
+      wallets.push({ address: a.address, verifiedAt: a.verified_at })
     }
   }
-  return wallets
+  return wallets.sort((x, y) => y.verifiedAt - x.verifiedAt).map((w) => w.address)
 }

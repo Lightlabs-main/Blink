@@ -152,6 +152,15 @@ describe('extractVerifiedExternalSolanaWallets', () => {
       ]),
     ).toEqual(['A'])
   })
+
+  it('lists the most recently linked wallet first (the app funds from the first one)', () => {
+    expect(
+      extractVerifiedExternalSolanaWallets([
+        { type: 'wallet', chain_type: 'solana', wallet_client: 'unknown', address: 'OLD', verified_at: 100 },
+        { type: 'wallet', chain_type: 'solana', wallet_client: 'unknown', address: 'NEW', verified_at: 200 },
+      ]),
+    ).toEqual(['NEW', 'OLD'])
+  })
 })
 
 describe('read endpoints', () => {
