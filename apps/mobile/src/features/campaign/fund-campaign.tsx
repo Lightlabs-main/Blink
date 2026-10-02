@@ -82,7 +82,6 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
     setError(null)
     try {
       setStep('signing')
-      const unsigned = getTransactionDecoder().decode(getBase64Encoder().encode(plan.transaction))
       // A fresh authorization that always names the network. Re-using a saved session made older-protocol wallets
       // (Solflare / Seeker) reauthorize without a network and treat this devnet transaction as mainnet.
       const signed = await transact(async (wallet) => {
@@ -92,6 +91,11 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         if (!auth.accounts.some((a) => a.address === wanted)) {
           throw new Error(`Switch to wallet ${shortAddress(campaign.creatorWallet)} in your wallet app, then try again.`)
         }
+        // Solana transactions expire about a minute after they are built, so build it now, after the wallet
+        // connection was approved and right before signing, never from the plan shown earlier (D-29).
+        const fresh = await api.fundingPrepare(getAccessToken, campaign.id)
+        setPlan(fresh)
+        const unsigned = getTransactionDecoder().decode(getBase64Encoder().encode(fresh.transaction))
         const [tx] = await wallet.signTransactions({ transactions: [unsigned] })
         if (!tx) throw new Error('Your wallet app did not return a signed transaction')
         return tx
