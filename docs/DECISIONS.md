@@ -336,3 +336,21 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
   - Flash Drop is the label for `EARLY_CLAIM`; QR Event and Squad show "Soon"; the legacy SEEKER
     type stays claimable but isn't offered for new drops (use a quest with Verified Seeker).
   - Drops filters list only formats that have live drops.
+
+## D-22 — Nigeria allowed in the xStocks eligibility policy (2026-10-02, Maris — owner override)
+
+- **The fact.** Backed's restricted-countries page lists Nigeria under "Non-Serviceable Countries"
+  ("Backed does not service individuals or entities from these countries"). This was re-checked on
+  2026-10-02.
+- **Maris's decision:** allow Nigeria. His reasoning:
+  - he is in Nigeria and holds xStocks on Solana without restriction;
+  - onchain holding and trading is permissionless;
+  - the update's own restriction list (§21) names the US, UK, Canada, Australia and sanctioned
+    jurisdictions, not Nigeria;
+  - Backed's list is read as applying to Backed's own services.
+- **Risk.** Official docs make distributors responsible for compliance, and Maris accepts that risk.
+  **Recommended before public mainnet launch:** written confirmation from xStocks or Backed.
+- **Policy** version bumped to `2026-10-02.1`, so earlier decisions are outdated and users confirm
+  again.
+- **Devnet.** `XSTOCK_COMPLIANCE=off` on the devnet server only, because the test asset is not an
+  xStock. Mainnet refuses to start unless the gate is `enforce` (D-20).

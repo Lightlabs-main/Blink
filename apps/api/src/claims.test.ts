@@ -580,7 +580,8 @@ describe('xStocks eligibility gate (D-20) and payout kill switch', () => {
 
   it('refuses restricted countries, U.S. persons and a missing region attestation', async () => {
     gated()
-    expect((await declare('a', { country: 'NG', notUsPerson: true })).json().eligibility.reason).toBe('DECLARED_COUNTRY_RESTRICTED')
+    expect((await declare('a', { country: 'RU', notUsPerson: true })).json().eligibility.reason).toBe('DECLARED_COUNTRY_RESTRICTED')
+    expect((await declare('n', { country: 'NG', notUsPerson: true })).json().eligibility.eligible).toBe(true)
     expect((await declare('b', { country: 'DE', notUsPerson: false })).json().eligibility.reason).toBe('US_PERSON')
     expect((await declare('c', { country: 'UA', notUsPerson: true })).json().eligibility.reason).toBe('REGION_ATTESTATION_MISSING')
     expect((await declare('d', { country: 'UA', notUsPerson: true, attestations: ['NOT_IN_OCCUPIED_REGION'] })).json().eligibility.eligible).toBe(true)
@@ -608,7 +609,7 @@ describe('xStocks eligibility gate (D-20) and payout kill switch', () => {
   it('an ineligible referrer earns no bonus; the eligible friend is still paid', async () => {
     const payouts = gated()
     const c = await liveCampaign({ type: 'REFERRAL', allowanceRaw: 1000n })
-    await declare('alice', { country: 'NG', notUsPerson: true })
+    await declare('alice', { country: 'RU', notUsPerson: true })
     const code = (await app.inject({ method: 'POST', url: `/v1/campaigns/${c.id}/referral`, headers: as('alice') })).json().referral.code
     await declare('bob', { country: 'DE', notUsPerson: true })
     expect((await claim(c.id, 'bob', { ref: code })).json().claim.status).toBe('PAID')
