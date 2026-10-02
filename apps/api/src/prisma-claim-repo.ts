@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
-import type { ClaimKind } from '@blink/domain'
+import type { ClaimKind, QuestEvaluation } from '@blink/domain'
 
-import type { ClaimRepository, NewReservation, ReserveResult, ServiceWalletStore, StoredClaim, StoredReferral, StoredTapSession } from './claim-repo.ts'
+import type { ClaimRepository, NewReservation, ReserveResult, RoomData, ServiceWalletStore, StoredClaim, StoredReferral, StoredTapSession } from './claim-repo.ts'
 import type { EligibilityStore, StoredEligibility } from './eligibility.ts'
 import { type Claim, Prisma, type TapRushSession, type XStockEligibility } from './generated/prisma/client.ts'
 import type { createPrismaClient } from './prisma-campaign-repo.ts'
@@ -215,8 +215,58 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
     })
   }
 
-  async startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number }) {
-    return toSession(await this.prisma.tapRushSession.create({ data: { id: randomUUID(), ...input } }))
+  async startTapSession(input: { campaignId: string; privyUserId: string; goal: number; seconds: number; publicWallet?: string | null }) {
+    return toSession(await this.prisma.tapRushSession.create({ data: { id: randomUUID(), ...input, publicWallet: input.publicWallet ?? null } }))
+  }
+
+  async findUnusedQualifiedSession(campaignId: string, privyUserId: string) {
+    const used = await this.prisma.claim.findMany({ where: { campaignId, tapSessionId: { not: null } }, select: { tapSessionId: true } })
+    const row = await this.prisma.tapRushSession.findFirst({
+      where: { campaignId, privyUserId, qualified: true, id: { notIn: used.map((u) => u.tapSessionId!) } },
+      orderBy: { startedAt: 'desc' },
+    })
+    return row ? toSession(row) : null
+  }
+
+  async putQuestVerification(input: { campaignId: string; privyUserId: string; evaluation: QuestEvaluation; publicWallet: string | null }) {
+    const data = { qualified: input.evaluation.qualified, summary: input.evaluation as object, publicWallet: input.publicWallet }
+    await this.prisma.questVerification.upsert({
+      where: { campaignId_privyUserId: { campaignId: input.campaignId, privyUserId: input.privyUserId } },
+      create: { campaignId: input.campaignId, privyUserId: input.privyUserId, ...data },
+      update: data,
+    })
+  }
+
+  async roomData(campaignId: string, limits: { leaderboard: number; events: number }): Promise<RoomData> {
+    const [sessions, checks, claims] = await Promise.all([
+      this.prisma.tapRushSession.findMany({ where: { campaignId }, orderBy: { startedAt: 'desc' }, take: 2000 }),
+      this.prisma.questVerification.findMany({ where: { campaignId }, orderBy: { checkedAt: 'desc' }, take: 2000 }),
+      this.prisma.claim.findMany({ where: { campaignId, kind: 'CLAIM' }, orderBy: { updatedAt: 'desc' }, take: 2000 }),
+    ])
+    const joined = new Set([...sessions.map((s) => s.privyUserId), ...checks.map((q) => q.privyUserId), ...claims.map((c) => c.privyUserId)])
+    const qualified = new Set([
+      ...sessions.filter((s) => s.qualified).map((s) => s.privyUserId),
+      ...checks.filter((q) => q.qualified).map((q) => q.privyUserId),
+      ...claims.filter((c) => c.status !== 'FAILED').map((c) => c.privyUserId),
+    ])
+    const best = new Map<string, { wallet: string | null; score: number }>()
+    for (const s of sessions) {
+      if (!s.finishedAt || s.rejectReason || s.taps === null) continue
+      const prev = best.get(s.privyUserId)
+      if (!prev || s.taps > prev.score) best.set(s.privyUserId, { wallet: s.publicWallet, score: s.taps })
+    }
+    const events: RoomData['events'] = [
+      ...sessions.map((s) => ({ type: 'PARTICIPANT_JOINED' as const, wallet: s.publicWallet, at: s.startedAt })),
+      ...sessions.filter((s) => s.qualified && s.finishedAt).map((s) => ({ type: 'PARTICIPANT_QUALIFIED' as const, wallet: s.publicWallet, at: s.finishedAt! })),
+      ...checks.filter((q) => q.qualified).map((q) => ({ type: 'REQUIREMENT_VERIFIED' as const, wallet: q.publicWallet, at: q.checkedAt })),
+      ...claims.filter((c) => c.status === 'PAID').map((c) => ({ type: 'PAYOUT_CONFIRMED' as const, wallet: c.recipientWallet, at: c.updatedAt })),
+    ]
+    return {
+      joined: joined.size,
+      qualified: qualified.size,
+      leaderboard: [...best.values()].sort((a, b) => b.score - a.score).slice(0, limits.leaderboard),
+      events: events.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limits.events),
+    }
   }
 
   async countTapSessions(campaignId: string, privyUserId: string) {

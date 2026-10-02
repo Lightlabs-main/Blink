@@ -1,4 +1,4 @@
-import type { CampaignStatus, SolanaCluster } from '@blink/domain'
+import type { CampaignStatus, QuestRequirements, SolanaCluster } from '@blink/domain'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 import { assertTransition, type CampaignRepository, type NewCampaign, type StoredCampaign } from './campaign-repo.ts'
@@ -35,6 +35,10 @@ export function toStored(row: Campaign): StoredCampaign {
     claimedRaw: BigInt(row.claimedRaw.toFixed(0)),
     tapRush: row.tapGoal !== null && row.tapSeconds !== null ? { goal: row.tapGoal, seconds: row.tapSeconds } : null,
     pauseReason: row.pauseReason,
+    requirements: (row.requirementsJson as QuestRequirements | null) ?? null,
+    requirementsHash: row.requirementsHash,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
     createdAt: row.createdAt,
   }
 }
@@ -62,6 +66,10 @@ export class PrismaCampaignRepository implements CampaignRepository {
         rewardPerClaimRaw: c.rewardPerClaimRaw?.toString() ?? null,
         tapGoal: c.tapRush?.goal ?? null,
         tapSeconds: c.tapRush?.seconds ?? null,
+        requirementsJson: c.requirements ? (c.requirements as object) : undefined,
+        requirementsHash: c.requirementsHash ?? null,
+        startsAt: c.startsAt ?? null,
+        endsAt: c.endsAt ?? null,
       },
     })
     return toStored(row)

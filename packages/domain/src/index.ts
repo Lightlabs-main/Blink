@@ -5,7 +5,8 @@
  */
 
 /** MASTER_PROMPT §0 — V1 campaign mechanics. Future (not V1): ORE Action, Market Challenge. */
-export const CAMPAIGN_TYPES = ['GIFT', 'TAP_RUSH', 'EARLY_CLAIM', 'REFERRAL', 'SEEKER'] as const
+/** EARLY_CLAIM is presented as "Flash Drop" (D-18); stored values stay backward compatible. */
+export const CAMPAIGN_TYPES = ['GIFT', 'TAP_RUSH', 'EARLY_CLAIM', 'REFERRAL', 'SEEKER', 'VERIFIED_QUEST'] as const
 export type CampaignType = (typeof CAMPAIGN_TYPES)[number]
 
 /**
@@ -79,11 +80,16 @@ export interface CampaignSummary {
   tapRush: TapRushRules | null
   /** Why Blink paused the drop (a PauseReason); null unless PAUSED. */
   pauseReason: string | null
+  /** D-21: Verified Quest requirements, frozen at creation (null for other mechanics). */
+  requirements: QuestRequirements | null
+  /** D-21: optional campaign window (ISO), enforced server-side. */
+  startsAt: string | null
+  endsAt: string | null
   createdAt: string
 }
 
-/** Mechanics recipients can claim (D-13, D-14, D-17). */
-export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH', 'REFERRAL', 'SEEKER'] as const satisfies readonly CampaignType[]
+/** Mechanics recipients can claim (D-13, D-14, D-17, D-21). */
+export const CLAIMABLE_TYPES = ['GIFT', 'EARLY_CLAIM', 'TAP_RUSH', 'REFERRAL', 'SEEKER', 'VERIFIED_QUEST'] as const satisfies readonly CampaignType[]
 
 export function isClaimableType(type: CampaignType): boolean {
   return (CLAIMABLE_TYPES as readonly CampaignType[]).includes(type)
@@ -293,4 +299,207 @@ export interface XStockEligibilitySummary {
   eligible: boolean
   reason: XStockEligibilityReason
   decidedAt: string
+}
+
+/* ───────────── Verified Quest: reusable verifiers (D-21, docs/VERIFIER_ARCHITECTURE.md) ───────────── */
+
+export const VERIFIER_TYPES = [
+  'SEEKER_SGT',
+  'SKR_BALANCE',
+  'SKR_STAKED',
+  'SKR_TOTAL',
+  'ORE_BALANCE',
+  'ORE_STAKED',
+  'ORE_ACTIVITY',
+  'TAP_RUSH',
+  'X_QUEST',
+] as const
+export type VerifierType = (typeof VERIFIER_TYPES)[number]
+
+export type VerifierKind = 'ELIGIBILITY' | 'ACTION'
+/** ENABLED: usable. DISABLED: shown as "coming soon", never satisfiable. BLOCKED: policy review required. */
+export type VerifierAvailability = 'ENABLED' | 'DISABLED' | 'BLOCKED'
+
+export interface VerifierDefinition {
+  type: VerifierType
+  version: number
+  kind: VerifierKind
+  label: string
+  /** Creator-facing explanation; {min} is replaced with the configured minimum. */
+  describe: string
+  /** Token symbol + decimals for a minimum amount; null when the verifier takes no amount. */
+  amount: { symbol: 'SKR' | 'ORE'; decimals: number } | null
+  source: string
+  chain: 'solana:mainnet' | 'blink'
+  /** Read-only checks never ask the user to sign a transaction. */
+  readOnly: boolean
+  availability: VerifierAvailability
+}
+
+/**
+ * The allowlisted registry. Protocol addresses live server-side in @blink/solana, never in campaign config.
+ * Decimals: SKR 6 and ORE 11, read from the mints onchain 2026-10-01 (DEPENDENCIES.md); the server re-reads them.
+ */
+export const VERIFIERS: Record<VerifierType, VerifierDefinition> = {
+  SEEKER_SGT: {
+    type: 'SEEKER_SGT', version: 1, kind: 'ELIGIBILITY', label: 'Verified Seeker', describe: 'Owns a Solana Seeker (Seeker Genesis Token)',
+    amount: null, source: 'Solana Mobile SGT checks (D-17)', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  SKR_BALANCE: {
+    type: 'SKR_BALANCE', version: 1, kind: 'ELIGIBILITY', label: 'SKR holder', describe: 'Holds at least {min} SKR',
+    amount: { symbol: 'SKR', decimals: 6 }, source: 'SKR token accounts', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  SKR_STAKED: {
+    type: 'SKR_STAKED', version: 1, kind: 'ELIGIBILITY', label: 'SKR staker', describe: 'Has at least {min} SKR staked',
+    amount: { symbol: 'SKR', decimals: 6 }, source: 'Solana Mobile SKR staking program, all guardian pools', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  SKR_TOTAL: {
+    type: 'SKR_TOTAL', version: 1, kind: 'ELIGIBILITY', label: 'SKR held + staked', describe: 'Holds and stakes at least {min} SKR in total',
+    amount: { symbol: 'SKR', decimals: 6 }, source: 'SKR token accounts + staking program', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  ORE_BALANCE: {
+    type: 'ORE_BALANCE', version: 1, kind: 'ELIGIBILITY', label: 'ORE holder', describe: 'Holds at least {min} ORE',
+    amount: { symbol: 'ORE', decimals: 11 }, source: 'ORE token accounts', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  ORE_STAKED: {
+    type: 'ORE_STAKED', version: 1, kind: 'ELIGIBILITY', label: 'ORE staker', describe: 'Has at least {min} ORE staked',
+    amount: { symbol: 'ORE', decimals: 11 }, source: 'Regolith Labs ore-stake program', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
+  },
+  ORE_ACTIVITY: {
+    type: 'ORE_ACTIVITY', version: 1, kind: 'ACTION', label: 'ORE mining', describe: 'Mines ORE during the campaign',
+    amount: null, source: 'not yet specified (update §9, §29)', chain: 'solana:mainnet', readOnly: true, availability: 'DISABLED',
+  },
+  TAP_RUSH: {
+    type: 'TAP_RUSH', version: 1, kind: 'ACTION', label: 'Tap Rush', describe: 'Wins a Tap Rush round',
+    amount: null, source: 'Blink server-timed round (D-13, D-14)', chain: 'blink', readOnly: true, availability: 'ENABLED',
+  },
+  X_QUEST: {
+    type: 'X_QUEST', version: 0, kind: 'ACTION', label: 'X / Twitter', describe: 'Not available',
+    amount: null, source: 'BLOCKED: policy review required (update §19)', chain: 'blink', readOnly: true, availability: 'BLOCKED',
+  },
+}
+
+export interface QuestCondition {
+  verifier: VerifierType
+  /** Minimum in raw base units (decimal string) for amount verifiers; absent otherwise. */
+  minRaw?: RawAmount
+}
+
+export interface QuestGroup {
+  mode: 'ALL' | 'ANY'
+  conditions: QuestCondition[]
+}
+
+/** Every group must pass (implicit AND); inside a group, ALL or ANY. No deeper nesting (update §6). */
+export interface QuestRequirements {
+  eligibility: QuestGroup[]
+  actions: QuestGroup[]
+}
+
+export const QUEST_LIMITS = { maxGroups: 4, maxConditionsPerGroup: 4 } as const
+
+export const VERIFICATION_STATUSES = ['NOT_STARTED', 'CHECKING', 'PASSED', 'FAILED', 'PENDING', 'ERROR', 'STALE'] as const
+export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number]
+
+/** Public/mobile summary of one condition's result. Sensitive evidence stays server-side. */
+export interface ConditionResult {
+  verifier: VerifierType
+  status: VerificationStatus
+  /** Raw amounts as strings: what qualified and what was required. */
+  actualRaw?: RawAmount
+  requiredRaw?: RawAmount
+  detail?: string
+}
+
+export interface QuestEvaluation {
+  qualified: boolean
+  /** Same shape as the requirements, one result per condition. */
+  eligibility: { mode: 'ALL' | 'ANY'; passed: boolean; results: ConditionResult[] }[]
+  actions: { mode: 'ALL' | 'ANY'; passed: boolean; results: ConditionResult[] }[]
+  checkedAt: string
+}
+
+/** Pure combination; only PASSED counts. ERROR / STALE / PENDING never satisfy a condition (fail closed). */
+export function combineQuest(
+  requirements: QuestRequirements,
+  resultFor: (c: QuestCondition) => ConditionResult,
+  checkedAt: string,
+): QuestEvaluation {
+  const fold = (groups: QuestGroup[]) =>
+    groups.map((g) => {
+      const results = g.conditions.map(resultFor)
+      const passed = g.mode === 'ALL' ? results.every((r) => r.status === 'PASSED') : results.some((r) => r.status === 'PASSED')
+      return { mode: g.mode, passed, results }
+    })
+  const eligibility = fold(requirements.eligibility)
+  const actions = fold(requirements.actions)
+  const qualified = [...eligibility, ...actions].length > 0 && [...eligibility, ...actions].every((g) => g.passed)
+  return { qualified, eligibility, actions, checkedAt }
+}
+
+/** Raw → display string without floating point (display only). */
+export function formatRaw(raw: bigint, decimals: number, maxFraction = 4): string {
+  const scale = pow10(decimals)
+  const whole = raw / scale
+  const frac = (raw % scale).toString().padStart(decimals, '0').slice(0, maxFraction).replace(/0+$/, '')
+  return frac ? `${whole.toLocaleString('en-US')}.${frac}` : whole.toLocaleString('en-US')
+}
+
+/** "500.5" → raw bigint at `decimals`, rounding down; throws on malformed input. Display/input helper only. */
+export function parseAmountToRaw(value: string, decimals: number): bigint {
+  const m = value.trim().match(/^(\d+)(?:\.(\d+))?$/)
+  if (!m) throw new Error('enter a number like 500 or 12.5')
+  const frac = (m[2] ?? '').slice(0, decimals).padEnd(decimals, '0')
+  return BigInt(m[1]!) * pow10(decimals) + (frac ? BigInt(frac) : 0n)
+}
+
+function pow10(n: number): bigint {
+  let r = 1n
+  for (let i = 0; i < n; i++) r *= 10n
+  return r
+}
+
+/* ───────────── Live campaign room (D-21; polling transport, realtime-ready DTOs) ───────────── */
+
+export const LIVE_EVENT_TYPES = [
+  'PARTICIPANT_JOINED',
+  'REQUIREMENT_VERIFIED',
+  'PARTICIPANT_QUALIFIED',
+  'PAYOUT_CONFIRMED',
+  'CAMPAIGN_PAUSED',
+  'CAMPAIGN_ENDED',
+] as const
+export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number]
+
+/** Privacy-safe public identity: a truncated wallet only. Never email, Privy id, country or compliance data. */
+export interface PublicParticipant {
+  label: string
+}
+
+export interface LiveEvent {
+  type: LiveEventType
+  who: PublicParticipant | null
+  at: string
+}
+
+export interface LeaderboardEntry {
+  who: PublicParticipant
+  score: number
+}
+
+export interface CampaignRoom {
+  campaignId: string
+  status: CampaignStatus
+  joined: number
+  qualified: number
+  rewardsRemaining: number
+  endsAt: string | null
+  /** Tap Rush only; null for quests without a numeric score (no artificial leaderboards). */
+  leaderboard: LeaderboardEntry[] | null
+  events: LiveEvent[]
+  serverTime: string
+}
+
+export function publicLabel(wallet: string | null | undefined): PublicParticipant {
+  return { label: wallet && wallet.length > 8 ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'Someone' }
 }

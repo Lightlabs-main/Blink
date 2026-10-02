@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
 import { TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
-import { claimRequest, createCampaignRequest, declareEligibilityRequest, finishTapRushRequest, submitFundingRequest } from '@blink/validation'
+import { claimRequest, createCampaignRequest, declareEligibilityRequest, finishTapRushRequest, questHasTapRush, submitFundingRequest } from '@blink/validation'
 import { address, type GetAccountInfoApi, type Rpc } from '@solana/kit'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 
@@ -12,6 +12,7 @@ import { type CampaignRepository, type StoredCampaign, toSummary } from './campa
 import { type ClaimRepository, type StoredClaim, toClaimSummary } from './claim-repo.ts'
 import { ClaimService, type SeekerVerifier } from './claim-service.ts'
 import type { EligibilityService } from './eligibility.ts'
+import type { QuestService } from './quest-service.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
@@ -36,6 +37,8 @@ export interface AppDeps {
   seeker?: SeekerVerifier
   /** D-20: xStocks eligibility gate. Without it, every enforced xStock path fails closed. */
   eligibility?: EligibilityService
+  /** D-21: Verified Quest evaluation (mainnet reads). */
+  quests?: QuestService
   /** Read-only mainnet market data for xStocks; optional (tests, offline). */
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
@@ -226,7 +229,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       campaignTokenAccount,
       allowanceRaw: BigInt(body.allowanceRaw),
       rewardPerClaimRaw: body.rewardPerClaimRaw === undefined ? null : BigInt(body.rewardPerClaimRaw),
-      tapRush: body.type === 'TAP_RUSH' ? (body.tapRush ?? TAP_RUSH_DEFAULTS) : null,
+      tapRush:
+        body.type === 'TAP_RUSH' || (body.requirements && questHasTapRush(body.requirements)) ? (body.tapRush ?? TAP_RUSH_DEFAULTS) : null,
+      // D-21: frozen requirements + a hash of their canonical JSON (immutable once LIVE; no edit endpoint exists).
+      requirements: body.requirements ?? null,
+      requirementsHash: body.requirements ? createHash('sha256').update(JSON.stringify(body.requirements)).digest('hex') : null,
+      startsAt: body.startsAt ? new Date(body.startsAt) : null,
+      endsAt: body.endsAt ? new Date(body.endsAt) : null,
     })
     return reply.status(201).send({ campaign: toSummary(stored) })
   })
@@ -311,7 +320,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility, quests: deps.quests })
   }
 
   async function claimResponse(claim: StoredClaim | null) {
@@ -319,6 +328,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const campaign = await deps.campaigns.findById(claim.campaignId)
     return { claim: campaign ? toClaimSummary(claim, campaign) : null }
   }
+
+  /** D-21: check the caller's Verified Quest requirements now (server-side, current onchain state). */
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/verify', async (req) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    return { evaluation: await requireClaims().verify(auth, req.params.id) }
+  })
+
+  /** D-21: public live room (polled by the app). Real aggregates only; no emails, ids, countries or compliance data. */
+  app.get<{ Params: { id: string } }>('/v1/campaigns/:id/room', async (req) => {
+    return { room: await requireClaims().room(req.params.id) }
+  })
 
   /** Starts a server-timed Tap Rush round. The client starts its timer when this returns. */
   app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/start', async (req) => {

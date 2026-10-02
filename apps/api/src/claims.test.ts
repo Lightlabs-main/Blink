@@ -8,6 +8,7 @@ import type { AuthVerifier } from './auth.ts'
 import { InMemoryCampaignRepository, type NewCampaign, type StoredCampaign } from './campaign-repo.ts'
 import { InMemoryClaimRepository, type StoredClaim } from './claim-repo.ts'
 import { EligibilityService } from './eligibility.ts'
+import { type ChainReader, QuestService } from './quest-service.ts'
 import type { PayoutService } from './payout-service.ts'
 
 const CREATOR_WALLET = '11111111111111111111111111111112'
@@ -73,7 +74,16 @@ afterEach(async () => {
 })
 
 function build(
-  opts: { failPayouts?: boolean; failFor?: string[]; noPayouts?: boolean; ready?: boolean; env?: typeof env; sgt?: Record<string, string>; eligibility?: EligibilityService } = {},
+  opts: {
+    failPayouts?: boolean
+    failFor?: string[]
+    noPayouts?: boolean
+    ready?: boolean
+    env?: typeof env
+    sgt?: Record<string, string>
+    eligibility?: EligibilityService
+    chain?: ChainReader
+  } = {},
 ) {
   campaigns = new InMemoryCampaignRepository()
   claims = new InMemoryClaimRepository(campaigns)
@@ -88,6 +98,12 @@ function build(
     payouts,
     seeker: opts.sgt ? { findSgt: async (wallet: string) => opts.sgt![wallet] ?? null } : undefined,
     eligibility: opts.eligibility,
+    quests: new QuestService({
+      auth: fakeAuth(),
+      claims,
+      chain: opts.chain,
+      seeker: opts.sgt ? { findSgt: async (wallet: string) => opts.sgt![wallet] ?? null } : undefined,
+    }),
   })
   return payouts
 }
@@ -625,5 +641,151 @@ describe('xStocks eligibility gate (D-20) and payout kill switch', () => {
     expect(res.json().error.code).toBe('PAYOUTS_PAUSED')
     expect((await campaigns.findById(c.id))!.claimedRaw).toBe(0n)
     expect((await app.inject({ method: 'GET', url: '/v1/status' })).json().payouts.killSwitch).toBe(true)
+  })
+})
+
+describe('Verified Quest (D-21)', () => {
+  /** "Verified Seeker AND (hold >= 500 SKR OR stake >= 500 SKR) AND complete Tap Rush" (update §6 example). */
+  const SEEKER_SKR_TAP = {
+    eligibility: [
+      { mode: 'ALL' as const, conditions: [{ verifier: 'SEEKER_SGT' as const }] },
+      {
+        mode: 'ANY' as const,
+        conditions: [
+          { verifier: 'SKR_BALANCE' as const, minRaw: '500000000' },
+          { verifier: 'SKR_STAKED' as const, minRaw: '500000000' },
+        ],
+      },
+    ],
+    actions: [{ mode: 'ALL' as const, conditions: [{ verifier: 'TAP_RUSH' as const }] }],
+  }
+  const rules = { goal: 20, seconds: 10 }
+
+  /** Wallet "seedvault-<user>" holds/stakes per the maps (raw SKR); everything else is zero. */
+  function chain(skrHeld: Record<string, bigint>, skrStaked: Record<string, bigint>, fail = false): ChainReader {
+    const read = (m: Record<string, bigint>) => async (w: string) => {
+      if (fail) throw new Error('rpc 429')
+      return m[w] ?? 0n
+    }
+    return { skrBalance: read(skrHeld), skrStaked: read(skrStaked), oreBalance: read({}), oreStaked: read({}) }
+  }
+
+  const verify = (id: string, user: string) => app.inject({ method: 'POST', url: `/v1/campaigns/${id}/verify`, headers: as(user) })
+
+  async function winRound(id: string, user: string) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const start = await app.inject({ method: 'POST', url: `/v1/campaigns/${id}/tap-rush/start`, headers: as(user) })
+    const session = start.json().session
+    vi.setSystemTime(Date.now() + 10_000)
+    const times = Array.from({ length: 25 }, (_, i) => 120 + i * 140 + ((i * 53) % 70))
+    await app.inject({ method: 'POST', url: `/v1/campaigns/${id}/tap-rush/finish`, headers: as(user), payload: { sessionId: session.id, taps: 25, tapTimesMs: times } })
+    vi.useRealTimers()
+  }
+
+  it('shows each requirement separately and qualifies only when every group passes', async () => {
+    const payouts = build({ sgt: { 'seedvault-alice': 'SGT-1' }, chain: chain({}, { 'seedvault-alice': 784_000_000n }) })!
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: rules })
+
+    const before = (await verify(c.id, 'alice')).json().evaluation
+    expect(before.qualified).toBe(false)
+    expect(before.eligibility[0].results[0]).toMatchObject({ verifier: 'SEEKER_SGT', status: 'PASSED' })
+    expect(before.eligibility[1]).toMatchObject({ mode: 'ANY', passed: true })
+    expect(before.eligibility[1].results[1]).toMatchObject({ verifier: 'SKR_STAKED', status: 'PASSED', actualRaw: '784000000', requiredRaw: '500000000' })
+    expect(before.actions[0].results[0]).toMatchObject({ verifier: 'TAP_RUSH', status: 'NOT_STARTED' })
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('NOT_QUALIFIED')
+
+    await winRound(c.id, 'alice')
+    expect((await verify(c.id, 'alice')).json().evaluation.qualified).toBe(true)
+    expect((await claim(c.id, 'alice')).json().claim.status).toBe('PAID')
+    expect(payouts.paid).toEqual(['wallet-alice'])
+  })
+
+  it('without the Seeker, or below every SKR threshold, the user does not qualify', async () => {
+    build({ sgt: {}, chain: chain({ 'seedvault-bob': 499_999_999n }, {}) })
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: rules })
+    await winRound(c.id, 'bob')
+    const ev = (await verify(c.id, 'bob')).json().evaluation
+    expect(ev.eligibility[0].results[0].status).toBe('FAILED')
+    expect(ev.eligibility[1].passed).toBe(false)
+    expect(ev.qualified).toBe(false)
+    expect((await claim(c.id, 'bob')).json().error.code).toBe('NOT_QUALIFIED')
+  })
+
+  it('fails closed when the chain cannot be read', async () => {
+    build({ sgt: { 'seedvault-alice': 'SGT-1' }, chain: chain({}, {}, true) })
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: rules })
+    await winRound(c.id, 'alice')
+    const ev = (await verify(c.id, 'alice')).json().evaluation
+    expect(ev.eligibility[1].results.map((r: { status: string }) => r.status)).toEqual(['ERROR', 'ERROR'])
+    expect(ev.qualified).toBe(false)
+    expect((await claim(c.id, 'alice')).json().error.code).toBe('NOT_QUALIFIED')
+  })
+
+  it('creation validates requirements against the registry', async () => {
+    build()
+    const creator = { ...fakeAuth(), getVerifiedExternalSolanaWallets: async () => [CREATOR_WALLET] }
+    await app.close()
+    app = buildApp({
+      env,
+      auth: creator,
+      campaigns,
+      rpc: { getAccountInfo: () => ({ send: async () => ({ context: { slot: 1n }, value: null }) }) } as unknown as Rpc<GetAccountInfoApi>,
+      assets: ASSETS,
+      claims,
+    })
+    const make = (requirements: object) =>
+      app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100', requirements } })
+    const ok = await make(SEEKER_SKR_TAP)
+    expect(ok.statusCode).toBe(201)
+    expect(ok.json().campaign).toMatchObject({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: { goal: 50, seconds: 10 } })
+    const stored = await campaigns.findById(ok.json().campaign.id)
+    expect(stored!.requirementsHash).toMatch(/^[0-9a-f]{64}$/)
+
+    const bad = async (r: object) => (await make(r)).statusCode
+    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] }] })).toBe(400)
+    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'X_QUEST' }] }] })).toBe(400)
+    expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }], actions: [] })).toBe(400)
+    expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED' }] }], actions: [] })).toBe(400)
+    expect(await bad({ eligibility: [], actions: [] })).toBe(400)
+    const noReq = await app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100' } })
+    expect(noReq.statusCode).toBe(400)
+  })
+
+  it('respects the campaign window', async () => {
+    build()
+    const soon = await liveCampaign({ startsAt: new Date(Date.now() + 3_600_000) })
+    expect((await claim(soon.id, 'alice')).json().error.code).toBe('NOT_STARTED')
+    const over = await liveCampaign({ endsAt: new Date(Date.now() - 1000) })
+    expect((await claim(over.id, 'alice')).json().error.code).toBe('CAMPAIGN_OVER')
+  })
+})
+
+describe('live campaign room (D-21)', () => {
+  it('reports real counts, a truncated-wallet leaderboard and events, and never leaks identities', async () => {
+    build()
+    const c = await liveCampaign({ type: 'TAP_RUSH', tapRush: { goal: 20, seconds: 10 }, allowanceRaw: 300n })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    for (const [user, taps] of [['alice', 25], ['bob', 18]] as const) {
+      const s = (await app.inject({ method: 'POST', url: `/v1/campaigns/${c.id}/tap-rush/start`, headers: as(user) })).json().session
+      vi.setSystemTime(Date.now() + 10_000)
+      const times = Array.from({ length: taps }, (_, i) => 120 + i * 140 + ((i * 53) % 70))
+      await app.inject({ method: 'POST', url: `/v1/campaigns/${c.id}/tap-rush/finish`, headers: as(user), payload: { sessionId: s.id, taps, tapTimesMs: times } })
+      if (user === 'alice') await claim(c.id, 'alice', { tapSessionId: s.id })
+    }
+    vi.useRealTimers()
+    const res = await app.inject({ method: 'GET', url: `/v1/campaigns/${c.id}/room` })
+    const room = res.json().room
+    expect(room).toMatchObject({ joined: 2, qualified: 1, rewardsRemaining: 2, status: 'LIVE' })
+    expect(room.leaderboard.map((e: { score: number }) => e.score)).toEqual([25, 18])
+    expect(room.leaderboard[0].who.label).toMatch(/^wall…lice$/)
+    expect(room.events.map((e: { type: string }) => e.type)).toContain('PAYOUT_CONFIRMED')
+    expect(res.body).not.toMatch(/did:privy|country|eligib/i)
+  })
+
+  it('quests without a score show progress, not a leaderboard', async () => {
+    build()
+    const c = await liveCampaign({ type: 'GIFT' })
+    const room = (await app.inject({ method: 'GET', url: `/v1/campaigns/${c.id}/room` })).json().room
+    expect(room.leaderboard).toBeNull()
   })
 })
