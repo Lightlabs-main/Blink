@@ -156,18 +156,26 @@ export class SolanaFundingService implements FundingService {
       throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
     }
 
-    let signature: Signature
-    try {
-      signature = await this.rpc
-        .sendTransaction(signedTransactionBase64 as Base64EncodedWireTransaction, {
-          encoding: 'base64',
-          preflightCommitment: 'confirmed',
-        })
-        .send()
-    } catch (err) {
-      const text = String((err as Error)?.message ?? err)
-      if (text.includes('#7050008')) throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
-      throw new FundingRequestError('SEND_FAILED', 'the network rejected this transaction — please try again', 422)
+    // Preflight at 'processed': a wallet's fresh blockhash may not be 'confirmed' on our RPC yet. A
+    // blockhash-not-found from a lagging node is retried a few times before giving up.
+    let signature: Signature | undefined
+    for (let attempt = 0; !signature; attempt++) {
+      try {
+        signature = await this.rpc
+          .sendTransaction(signedTransactionBase64 as Base64EncodedWireTransaction, {
+            encoding: 'base64',
+            preflightCommitment: 'processed',
+          })
+          .send()
+      } catch (err) {
+        const text = String((err as Error)?.message ?? err)
+        if (text.includes('#7050008') && attempt < 4) {
+          await new Promise((r) => setTimeout(r, 2000))
+          continue
+        }
+        if (text.includes('#7050008')) throw new FundingRequestError('WRONG_NETWORK', WRONG_NETWORK_MESSAGE, 400)
+        throw new FundingRequestError('SEND_FAILED', 'the network rejected this transaction — please try again', 422)
+      }
     }
     this.pending.delete(campaign.id)
     await this.waitForConfirmation(signature)
@@ -188,7 +196,7 @@ export class SolanaFundingService implements FundingService {
   }
 
   private async blockhashKnown(blockhash: string) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       const { value } = await this.rpc.isBlockhashValid(blockhash as Blockhash, { commitment: 'processed' }).send()
       if (value) return true
       await new Promise((r) => setTimeout(r, 1500))
