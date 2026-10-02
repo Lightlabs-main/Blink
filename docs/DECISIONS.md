@@ -407,3 +407,11 @@ funding a devnet drop. With a saved auth token, the MWA library sends an older-p
 that carries no network, so the wallet assumes mainnet. Funding now runs `authorize({ chain, identity })` without
 the saved token in the same session as `signTransactions`, and checks the authorized account is the campaign's
 creator wallet. Ships with the next APK.
+
+## D-28 — Accept harmless wallet additions to the funding transaction (2026-10-02)
+
+Found on device: Phantom signed the funding transaction but changed it (it adds priority-fee and "Lighthouse"
+assertion instructions), so the exact-bytes check refused it every time. The check now decodes both messages and
+requires the same fee payer, the same signers, no address lookup tables and exactly Blink's instructions in
+order; the only extra instructions allowed are Compute Budget and Lighthouse, which cannot move tokens. The
+funded account is still verified on-chain before a drop goes LIVE.
