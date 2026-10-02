@@ -26,6 +26,11 @@ function hex(data: ArrayLike<number> | undefined) {
   return data ? Array.from(data, (b) => b.toString(16).padStart(2, '0')).join('') : ''
 }
 
+/** The recent blockhash (or nonce) a message was signed against. */
+export function messageLifetimeToken(messageBytes: Uint8Array): string {
+  return getCompiledTransactionMessageDecoder().decode(messageBytes).lifetimeToken
+}
+
 export type SameIntent = { ok: true; added: string[] } | { ok: false; reason: string }
 
 /** True when `signed` carries exactly `prepared`'s instructions, signers and fee payer, plus only allowlisted wallet additions. */
