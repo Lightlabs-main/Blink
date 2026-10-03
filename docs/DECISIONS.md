@@ -443,3 +443,18 @@ Grotesque headlines, DM Sans text, DM Mono numbers (only the used weights are bu
 Lime is an accent only: the logo's dot on hero cards, the active-tab dot, the Scan button, completed steps and the
 Tap Rush target. Primary buttons are cream on ink (ink on cream in Day). The website keeps the broadsheet design
 for now.
+
+## D-32 — Send and Receive in the Blink stock wallet, fees paid by Blink (2026-10-03, Maris)
+
+- **Receive:** the stock wallet's address, QR code and share sheet (Profile → Stock wallet, Home → Wallet).
+- **Send:** SOL or any supported xStock (devnet: tNVDAx) to any Solana address. Stock wallets usually hold no SOL,
+  so Blink's fee payer (the §16 Privy server wallet) pays the network fee and, when needed, the recipient's
+  token-account rent. The server builds and simulates the transfer (`POST /v1/me/send/prepare`); the app signs the
+  message bytes with the Privy embedded wallet (exactly what Privy's provider does for a transaction); the server
+  accepts back only the identical message for that user, adds the fee-payer signature and sends it
+  (`POST /v1/me/send/submit`). `GET /v1/me/wallet` returns balances read live.
+- **Guards:** the global kill switch (`PAYOUTS_ENABLED`) also pauses sends; 20 sends per user per day; budget
+  ledger entries of kind `SEND` (mainnet budget cap applies); xStock sends follow the D-20 eligibility gate when
+  enforced; frozen or paused mints are refused; SOL sends may not leave less than the rent-exempt minimum.
+- **Verified on devnet** with `scripts/devnet-send-e2e.ts`: a wallet with 0 SOL sent test stock to a new wallet,
+  Blink paid the fee and rent, and tampered or over-balance sends were refused.

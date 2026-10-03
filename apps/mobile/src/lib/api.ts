@@ -87,9 +87,25 @@ export interface SkrPosition {
   withdrawableAt: string | null
 }
 
+/** D-32: the Blink stock wallet (Privy embedded wallet) and its balances. */
+export interface StockWallet {
+  wallet: string
+  solLamports: string
+  assets: { mint: string; symbol: string; decimals: number; logo: string | null; isTest: boolean; raw: string }[]
+}
+
 export type SkrAction = 'stake' | 'unstake' | 'withdraw' | 'cancel_unstake'
 
 export const api = {
+  stockWallet: (t: GetAccessToken) => authed<{ wallet: StockWallet }>(t, '/v1/me/wallet'),
+  /** Blink pays the fee; the stock wallet signs in the app, then `sendSubmit` sends it. */
+  sendPrepare: (t: GetAccessToken, body: { asset: string; to: string; amountRaw: string }) =>
+    authed<{ prepared: { transaction: string; from: string; createsRecipientAccount: boolean } }>(t, '/v1/me/send/prepare', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  sendSubmit: (t: GetAccessToken, signedTransaction: string) =>
+    authed<{ signature: string }>(t, '/v1/me/send/submit', { method: 'POST', body: JSON.stringify({ signedTransaction }) }),
   skrPosition: (t: GetAccessToken, wallet: string) => authed<{ position: SkrPosition }>(t, `/v1/skr/position?wallet=${encodeURIComponent(wallet)}`),
   skrPrepare: (t: GetAccessToken, body: { wallet: string; action: SkrAction; amountRaw?: string; all?: boolean }) =>
     authed<{ prepared: { transaction: string; minContextSlot: string; lastValidBlockHeight: string } }>(t, '/v1/skr/prepare', {
