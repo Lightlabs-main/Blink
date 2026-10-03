@@ -12,7 +12,7 @@ export class BudgetExceededError extends Error {
  * On mainnet the reservation is refused when spent + reserved + next > budget. Other clusters are recorded only.
  */
 export interface BudgetLedger {
-  reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId: string }): Promise<void>
+  reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId?: string }): Promise<void>
   settle(idempotencyKey: string, state: 'SPENT' | 'RELEASED', txSignature?: string): Promise<void>
 }
 
@@ -21,7 +21,7 @@ export class InMemoryBudgetLedger implements BudgetLedger {
 
   constructor(private readonly env: BlinkEnv) {}
 
-  async reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId: string }) {
+  async reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId?: string }) {
     if (this.entries.has(entry.idempotencyKey)) return
     guardMainnet(this.env, this.total(), entry.lamports)
     this.entries.set(entry.idempotencyKey, { lamports: entry.lamports, state: 'RESERVED' })
@@ -51,7 +51,7 @@ export class PrismaBudgetLedger implements BudgetLedger {
     private readonly env: BlinkEnv,
   ) {}
 
-  async reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId: string }) {
+  async reserve(entry: { idempotencyKey: string; kind: string; lamports: bigint; campaignId?: string }) {
     const cluster = DB_CLUSTER[this.env.SOLANA_CLUSTER as SolanaCluster]
     await this.prisma.$transaction(async (tx) => {
       if (await tx.budgetLedgerEntry.findUnique({ where: { idempotencyKey: entry.idempotencyKey } })) return

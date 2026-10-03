@@ -11,6 +11,8 @@ import {
   pushTokenDeleteRequest,
   pushTokenRequest,
   questHasTapRush,
+  sendPrepareRequest,
+  sendSubmitRequest,
   skrPrepareRequest,
   submitFundingRequest,
 } from '@blink/validation'
@@ -26,6 +28,7 @@ import type { EligibilityService } from './eligibility.ts'
 import type { QuestService } from './quest-service.ts'
 import { NOOP_NOTIFIER, type Notifier, type PushTokenStore } from './push.ts'
 import type { SkrStaking } from './skr-service.ts'
+import type { SendService } from './send-service.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
@@ -54,6 +57,8 @@ export interface AppDeps {
   quests?: QuestService
   /** D-23: in-app SKR staking (mainnet reads + unsigned transactions for the user's own wallet). */
   skr?: SkrStaking
+  /** D-32: Send from the Blink stock wallet (fees paid by Blink). */
+  send?: SendService
   /** D-24: push notifications. */
   pushTokens?: PushTokenStore
   notifier?: Notifier
@@ -146,6 +151,40 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!wallets.includes(req.params.address)) throw new ClaimError('WALLET_NOT_LINKED', 'this wallet is not linked to your account', 404)
     if (!deps.auth.unlinkExternalSolanaWallet) throw new ClaimError('UNLINK_UNAVAILABLE', 'removing wallets is not available right now', 503)
     return { verifiedCreatorWallets: await deps.auth.unlinkExternalSolanaWallet(auth.privyUserId, req.params.address) }
+  })
+
+  // ---- D-32: the Blink stock wallet: balances, Receive (address) and sponsored Send ----
+
+  function requireSend() {
+    if (!deps.send) throw new ClaimError('SEND_UNAVAILABLE', 'sending is not available right now', 503)
+    return deps.send
+  }
+
+  app.get('/v1/me/wallet', async (req) => {
+    const auth = await requireAuth(req)
+    return { wallet: await requireSend().balances(auth.privyUserId) }
+  })
+
+  app.post('/v1/me/send/prepare', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    // Blink pays these fees: at most 20 sends per user per day.
+    if (!limiter.hit(`send:${auth.privyUserId}`, 20, 24 * 60 * 60 * 1000)) {
+      throw new ClaimError('RATE_LIMITED', 'you have reached today’s sending limit — try again tomorrow', 429)
+    }
+    const parsed = sendPrepareRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    return {
+      prepared: await requireSend().prepare(auth.privyUserId, req.ip, { asset: parsed.data.asset, to: parsed.data.to, amountRaw: BigInt(parsed.data.amountRaw) }),
+    }
+  })
+
+  app.post('/v1/me/send/submit', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const parsed = sendSubmitRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    return requireSend().submit(auth.privyUserId, parsed.data.signedTransaction)
   })
 
   // ---- D-24: push notifications ----

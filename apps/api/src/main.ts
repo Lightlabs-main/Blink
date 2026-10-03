@@ -23,6 +23,7 @@ import { GeoipCountryResolver } from './ip-country.ts'
 import { MainnetChainReader, QuestService } from './quest-service.ts'
 import { ExpoPushNotifier, InMemoryPushTokenStore, PrismaPushTokenStore, type PushTokenStore } from './push.ts'
 import { MainnetSkrStaking } from './skr-service.ts'
+import { SendService } from './send-service.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -113,6 +114,18 @@ const app = buildApp({
   quests,
   // D-23: SKR staking reads/builds on mainnet; the user's wallet signs and sends.
   skr: new MainnetSkrStaking(mainnetRead),
+  // D-32: Send from the stock wallet; Blink's fee payer pays the network fee.
+  send: new SendService({
+    env,
+    rpc: clusterRpc,
+    assets,
+    auth,
+    signer: new PrivyServerWalletSigner(privy),
+    serviceWallets: claims,
+    ledger,
+    eligibility,
+    log: { warn: (o, msg) => app.log.warn(o, msg) },
+  }),
   pushTokens,
   notifier,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
