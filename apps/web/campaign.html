@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stock drop · Blink-to-Stock</title>
     <meta name="description" content="Someone shared a tokenized stock drop with you. Open it in Blink-to-Stock to claim." />
-    <meta name="theme-color" content="#f3eee3" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0b" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="You've been sent a stock drop on Blink-to-Stock" />
     <meta property="og:description" content="Open it in Blink to claim xStocks — tokenized stock exposure on Solana. Free, no seed phrase." />
     <meta property="og:image" content="https://blinksol.site/icon.png" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap"
       rel="stylesheet"
     />
     <script>
@@ -28,31 +28,28 @@
   </head>
   <body>
     <!-- Served for /c/<campaign-id>[?ref=CODE]. With the app installed, Android opens these links in Blink directly. -->
-    <header class="container">
-      <div class="topline">
-        <a class="label kicker" href="/">← Blink-to-Stock</a>
-        <div class="topline-end">
-          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between day and night edition">
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="/"><img src="/icon.png" alt="" width="36" height="36" />Blink</a>
+        <div class="nav-end">
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between light and dark">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
-            <span data-theme-label>Night</span>
+            <span data-theme-label>Dark</span>
           </button>
-          <a class="label kicker" href="/download/blink-to-stock.apk">Get the app →</a>
+          <a class="btn btn-ink" href="/download/blink-to-stock.apk"><span>Get the app</span></a>
         </div>
       </div>
-      <hr class="rule-double" />
     </header>
 
-    <main class="certificate-page">
+    <main class="campaign-page">
       <div class="container">
         <div class="certificate">
-          <div class="certificate-inner">
             <div class="kicker" id="kind">Stock drop</div>
-            <p class="entitles" id="entitles">This drop entitles the bearer to</p>
+            <p class="entitles" id="entitles">This drop gives you</p>
             <div class="amount" id="reward">&nbsp;</div>
             <h1 id="symbol">…</h1>
             <p class="entitles" id="headline">&nbsp;</p>
             <span class="stamp" id="stamp">Checking</span>
-          </div>
         </div>
 
         <a class="btn btn-ink btn-block" id="open" href="#">Open in Blink</a>
@@ -64,9 +61,9 @@
           <div class="fact"><span>Network</span><strong id="network">—</strong></div>
         </div>
 
-        <div class="boxed">
+        <div class="card">
           <div class="kicker">How to claim</div>
-          <ol class="ledger" style="margin-top: 8px">
+          <ol class="steps-list">
             <li>Install Blink for Android and open this link again — it opens straight in the app.</li>
             <li>Sign in with your email. A secure wallet is created for you.</li>
             <li id="how-last">Claim it — the stock is sent to your wallet for free.</li>

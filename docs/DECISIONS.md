@@ -471,3 +471,9 @@ for now.
   (Miner 752 bytes, authority @8, round_id @664 matching the current board round for active miners).
 - **Farming:** a wallet can only be linked to one Privy account, and each account claims once per drop.
 - Profile no longer lists "ORE mining checks" under Coming soon.
+
+## D-34 — The website matches the logo too (2026-10-03)
+
+blinksol.site drops the broadsheet design (D-18) for the same system as the app (D-31): ink/cream with the lime
+dot, Bricolage Grotesque, DM Sans, DM Mono, rounded cards and pill buttons, light/dark following the system with a
+toggle. Content, live drops listing, campaign pages (`/c/:id`) and App Links are unchanged.
