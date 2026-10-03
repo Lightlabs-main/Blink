@@ -35,6 +35,16 @@ export const ORE_MINT = address('oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp')
 export const ORE_STAKE_PROGRAM = address('stakecNP3FpiExZPCgZfqRgumVzi6dNqnfrjwXyTgeH')
 /** ore-stake `OreAccount::Stake = 108` (api/src/state/mod.rs). */
 const ORE_STAKE_DISCRIMINATOR = 108
+/**
+ * ORE mining program (regolith-labs/ore `api/src/lib.rs` declare_id). Accounts are steel `repr(C)` with an 8-byte
+ * discriminator: `OreAccount::Miner = 103`, `OreAccount::Board = 105` (api/src/state/mod.rs).
+ * Miner (752 bytes): authority @8 · … · deployed/mass/cumulative [u64;25] @64/264/464 · round_id u64 @664 (the last
+ * round the miner deployed in). Board: round_id u64 @8 (the current round).
+ * Layout VERIFIED against live mainnet accounts 2026-10-03 (D-33).
+ */
+export const ORE_PROGRAM = address('oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv')
+const ORE_MINER_DISCRIMINATOR = 103
+const ORE_BOARD_DISCRIMINATOR = 105
 
 export class ProtocolReadError extends Error {
   override name = 'ProtocolReadError'
@@ -188,4 +198,26 @@ export async function readMintDecimals(rpc: Rpc<GetAccountInfoApi>, mint: Addres
   const decimals = (value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed?.info?.decimals
   if (typeof decimals !== 'number') throw new ProtocolReadError(`cannot read decimals of ${mint}`)
   return decimals
+}
+
+export async function deriveOreMiner(authority: Address): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({ programAddress: ORE_PROGRAM, seeds: [getUtf8Encoder().encode('miner'), addrEnc.encode(authority)] })
+  return pda
+}
+
+/** The ORE round currently being mined (Board PDA `["board"]`). */
+export async function readOreBoardRound(rpc: ReaderRpc): Promise<bigint> {
+  const [board] = await getProgramDerivedAddress({ programAddress: ORE_PROGRAM, seeds: [getUtf8Encoder().encode('board')] })
+  const bytes = await accountBytes(rpc, board, ORE_PROGRAM)
+  if (!bytes || bytes.length < 16 || bytes[0] !== ORE_BOARD_DISCRIMINATOR) throw new ProtocolReadError('ORE board not found (wrong network?)')
+  return u64(bytes, 8)
+}
+
+/** The last ORE round `owner` mined in (Miner PDA `["miner", owner]`); 0 when the wallet never mined. */
+export async function readOreMinerRound(rpc: ReaderRpc, owner: Address): Promise<bigint> {
+  const bytes = await accountBytes(rpc, await deriveOreMiner(owner), ORE_PROGRAM)
+  if (!bytes) return 0n
+  if (bytes.length < 672 || bytes[0] !== ORE_MINER_DISCRIMINATOR) throw new ProtocolReadError('not an ORE Miner account')
+  if (pubkey(bytes, 8) !== owner) throw new ProtocolReadError('ORE miner account authority mismatch')
+  return u64(bytes, 664)
 }

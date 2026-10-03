@@ -367,8 +367,8 @@ export const VERIFIERS: Record<VerifierType, VerifierDefinition> = {
     amount: { symbol: 'ORE', decimals: 11 }, source: 'Regolith Labs ore-stake program', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
   },
   ORE_ACTIVITY: {
-    type: 'ORE_ACTIVITY', version: 1, kind: 'ACTION', label: 'ORE mining', describe: 'Mines ORE during the campaign',
-    amount: null, source: 'not yet specified (update §9, §29)', chain: 'solana:mainnet', readOnly: true, availability: 'DISABLED',
+    type: 'ORE_ACTIVITY', version: 1, kind: 'ACTION', label: 'ORE mining', describe: 'Mines ORE after the campaign starts',
+    amount: null, source: 'Regolith Labs ORE program: Miner.round_id after the round recorded at creation (D-33)', chain: 'solana:mainnet', readOnly: true, availability: 'ENABLED',
   },
   TAP_RUSH: {
     type: 'TAP_RUSH', version: 1, kind: 'ACTION', label: 'Tap Rush', describe: 'Wins a Tap Rush round',
@@ -384,6 +384,11 @@ export interface QuestCondition {
   verifier: VerifierType
   /** Minimum in raw base units (decimal string) for amount verifiers; absent otherwise. */
   minRaw?: RawAmount
+  /**
+   * ORE_ACTIVITY only, set by the SERVER at creation (never by the creator): the ORE round being mined when the
+   * campaign was created. Mining in a later round qualifies, so mining from before the campaign never counts.
+   */
+  afterRound?: RawAmount
 }
 
 export interface QuestGroup {

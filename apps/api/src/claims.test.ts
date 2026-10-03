@@ -663,12 +663,22 @@ describe('Verified Quest (D-21)', () => {
   const rules = { goal: 20, seconds: 10 }
 
   /** Wallet "seedvault-<user>" holds/stakes per the maps (raw SKR); everything else is zero. */
-  function chain(skrHeld: Record<string, bigint>, skrStaked: Record<string, bigint>, fail = false): ChainReader {
+  function chain(skrHeld: Record<string, bigint>, skrStaked: Record<string, bigint>, fail = false, oreRounds: Record<string, bigint> = {}, board = 1_000n): ChainReader {
     const read = (m: Record<string, bigint>) => async (w: string) => {
       if (fail) throw new Error('rpc 429')
       return m[w] ?? 0n
     }
-    return { skrBalance: read(skrHeld), skrStaked: read(skrStaked), oreBalance: read({}), oreStaked: read({}) }
+    return {
+      skrBalance: read(skrHeld),
+      skrStaked: read(skrStaked),
+      oreBalance: read({}),
+      oreStaked: read({}),
+      oreMinerRound: read(oreRounds),
+      oreBoardRound: async () => {
+        if (fail) throw new Error('rpc 429')
+        return board
+      },
+    }
   }
 
   const verify = (id: string, user: string) => app.inject({ method: 'POST', url: `/v1/campaigns/${id}/verify`, headers: as(user) })
@@ -743,13 +753,53 @@ describe('Verified Quest (D-21)', () => {
     expect(stored!.requirementsHash).toMatch(/^[0-9a-f]{64}$/)
 
     const bad = async (r: object) => (await make(r)).statusCode
-    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] }] })).toBe(400)
+    // D-33: the start round is set by the server only; a creator cannot choose it.
+    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1' }] }] })).toBe(400)
     expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'X_QUEST' }] }] })).toBe(400)
     expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }], actions: [] })).toBe(400)
     expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED' }] }], actions: [] })).toBe(400)
     expect(await bad({ eligibility: [], actions: [] })).toBe(400)
     const noReq = await app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100' } })
     expect(noReq.statusCode).toBe(400)
+  })
+
+  it('ORE mining (D-33): records the round at creation; only mining after it qualifies', async () => {
+    build()
+    const creator = { ...fakeAuth(), getVerifiedExternalSolanaWallets: async () => [CREATOR_WALLET] }
+    await app.close()
+    const oreChain = chain({}, {}, false, { 'seedvault-alice': 1_001n, 'seedvault-bob': 1_000n }, 1_000n)
+    app = buildApp({
+      env,
+      auth: creator,
+      campaigns,
+      rpc: { getAccountInfo: () => ({ send: async () => ({ context: { slot: 1n }, value: null }) }) } as unknown as Rpc<GetAccountInfoApi>,
+      assets: ASSETS,
+      claims,
+      quests: new QuestService({ auth: creator, claims, chain: oreChain }),
+    })
+    const requirements = { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] }] }
+    const made = await app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100', requirements } })
+    expect(made.statusCode).toBe(201)
+    expect(made.json().campaign.requirements.actions[0].conditions[0]).toEqual({ verifier: 'ORE_ACTIVITY', afterRound: '1000' })
+
+    // Evaluation (each test user's verified wallet is "seedvault-<name>").
+    await app.close()
+    build({ chain: oreChain })
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1000' }] }] } })
+    const alice = (await verify(c.id, 'alice')).json().evaluation
+    expect(alice.qualified).toBe(true)
+    const bob = (await verify(c.id, 'bob')).json().evaluation
+    expect(bob.actions[0].results[0]).toMatchObject({ status: 'FAILED', detail: 'NOT_MINED_SINCE_START' })
+    const never = (await verify(c.id, 'carol')).json().evaluation
+    expect(never.qualified).toBe(false)
+  })
+
+  it('ORE mining fails closed when ORE cannot be read', async () => {
+    build({ chain: chain({}, {}, true) })
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1000' }] }] } })
+    const ev = (await verify(c.id, 'alice')).json().evaluation
+    expect(ev.actions[0].results[0].status).toBe('ERROR')
+    expect(ev.qualified).toBe(false)
   })
 
   it('respects the campaign window', async () => {
