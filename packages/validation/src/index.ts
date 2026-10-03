@@ -13,6 +13,7 @@ import {
   VERIFIER_TYPES,
   VERIFIERS,
 } from '@blink/domain'
+import type { QuestCondition } from '@blink/domain'
 import { z } from 'zod'
 
 /** Base58 Solana address shape. Format check only — onchain existence/ownership is verified server-side. */
@@ -75,6 +76,18 @@ export const questRequirements = z
       }
     }
   })
+
+/** D-33: does any requirement use `verifier`? */
+export function questUses(r: QuestRequirements, verifier: QuestCondition['verifier']): boolean {
+  return [...r.eligibility, ...r.actions].some((g) => g.conditions.some((c) => c.verifier === verifier))
+}
+
+/** D-33: the server stamps every ORE_ACTIVITY condition with the round current at creation. */
+export function stampOreRound(r: QuestRequirements, round: bigint): QuestRequirements {
+  const stamp = (gs: QuestRequirements['actions']) =>
+    gs.map((g) => ({ ...g, conditions: g.conditions.map((c) => (c.verifier === 'ORE_ACTIVITY' ? { ...c, afterRound: round.toString() } : c)) }))
+  return { eligibility: stamp(r.eligibility), actions: stamp(r.actions) }
+}
 
 export function questHasTapRush(r: QuestRequirements): boolean {
   return r.actions.some((g) => g.conditions.some((c) => c.verifier === 'TAP_RUSH'))

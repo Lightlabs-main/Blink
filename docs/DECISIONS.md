@@ -458,3 +458,16 @@ for now.
   enforced; frozen or paused mints are refused; SOL sends may not leave less than the rent-exempt minimum.
 - **Verified on devnet** with `scripts/devnet-send-e2e.ts`: a wallet with 0 SOL sent test stock to a new wallet,
   Blink paid the fee and rent, and tampered or over-balance sends were refused.
+
+## D-33 — ORE mining quest action (2026-10-03, Maris: "yes add it")
+
+- **Rule:** "mined ORE after the campaign started". At creation the server reads the ORE `Board.round_id` (the
+  round being mined) and stamps it on every `ORE_ACTIVITY` condition as `afterRound` before the requirements are
+  hashed and frozen. A participant passes when any of their verified wallets has `Miner.round_id` (the last round it
+  deployed in) greater than `afterRound`. Mining from before the campaign can never count, a wallet that never
+  mined reads 0, and an unreadable chain is `ERROR` (fails closed). Creators cannot set `afterRound` (strict schema).
+- **Source:** regolith-labs/ore (`api/src/lib.rs` program id, `state/mod.rs` discriminators Miner 103 / Board 105
+  and seeds, `state/miner.rs`, `state/board.rs`). Layout VERIFIED against live mainnet accounts 2026-10-03
+  (Miner 752 bytes, authority @8, round_id @664 matching the current board round for active miners).
+- **Farming:** a wallet can only be linked to one Privy account, and each account claims once per drop.
+- Profile no longer lists "ORE mining checks" under Coming soon.

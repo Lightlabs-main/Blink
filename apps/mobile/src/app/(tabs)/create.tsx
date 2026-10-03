@@ -168,6 +168,8 @@ export default function Create() {
   const [skrMin, setSkrMin] = useState('')
   const [oreRule, setOreRule] = useState<TokenRule>('off')
   const [oreMin, setOreMin] = useState('')
+  // D-33: an action — mine ORE after the campaign starts (the server records the start round).
+  const [questOre, setQuestOre] = useState(false)
   const [questTap, setQuestTap] = useState(true)
 
   const isQuest = type === 'VERIFIED_QUEST'
@@ -213,12 +215,13 @@ export default function Create() {
       if (skr) eligibility.push(skr)
       if (ore) eligibility.push(ore)
       const actions: QuestGroup[] = questTap ? [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }] : []
+      if (questOre) actions.push({ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] })
       if (!eligibility.length && !actions.length) return { ok: false, error: 'Add at least one requirement or action.' }
       return { ok: true, requirements: { eligibility, actions } }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Check the minimums.' }
     }
-  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap])
+  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre])
 
   const create = useMutation({
     mutationFn: async () => {
@@ -292,7 +295,7 @@ export default function Create() {
   // Plain-English summary for the review step (update §11 step 6).
   const conditions: QuestCondition[] = isQuest && quest.ok ? quest.requirements.eligibility.flatMap((g) => g.conditions) : []
   const who = conditions.length ? `People who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : 'Anyone'
-  const doWhat = hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${TAP_RUSH_DEFAULTS.seconds}s)` : ''
+  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${TAP_RUSH_DEFAULTS.seconds}s)` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}`
   const sentence =
     selected && reward?.ok && people !== null
       ? `${who}${doWhat} can receive ${reward.display} ${selected.symbol} each. Up to ${people.toString()} ${people === 1n ? 'winner' : 'winners'}${
@@ -374,7 +377,16 @@ export default function Create() {
               ))}
             </Row>
           ) : null}
-          <Option badge="Soon" body="Verified ORE mining during the campaign." disabled icon="layers" on={false} title="ORE activity" />
+          <Option
+            body="Mine ORE after the campaign starts. Earlier mining doesn’t count."
+            icon="layers"
+            on={questOre}
+            onPress={() => {
+              haptics.tap()
+              setQuestOre((v) => !v)
+            }}
+            title="ORE mining"
+          />
           <Option badge="Soon" body="Scan a code at your event." disabled icon="scan" on={false} title="QR check-in" />
           <Option badge="Unavailable" body="Paused pending X platform policy review." disabled icon="share" on={false} title="X / Twitter" />
           {!quest.ok ? <Notice message={quest.error} /> : null}

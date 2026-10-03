@@ -39,7 +39,7 @@ Each fact below is marked by how it is known:
 | `SKR_TOTAL` | eligibility, read-only | `SKR_BALANCE + SKR_STAKED` (one wallet set, one evaluation) | implemented |
 | `ORE_BALANCE` | eligibility, read-only | ORE token accounts; mint `oreoU2…ybcp`, 11 decimals [official][onchain] | implemented |
 | `ORE_STAKED` | eligibility, read-only | ore-stake `Stake.balance` at PDA `["stake", wallet]` | implemented |
-| `ORE_ACTIVITY` | action | — | **DISABLED**: no deterministic, replay-safe evidence defined (§9, §29) |
+| `ORE_ACTIVITY` | action | ORE program `oreV3EG…ULvWv`: `Miner.round_id` (PDA `["miner", wallet]`, u64 @664) must be greater than the `Board.round_id` (PDA `["board"]`, u64 @8) the server records at creation (D-33) | implemented |
 | `TAP_RUSH` | action | server-timed round with tap-timing checks (D-13, D-14); one unused qualified round | implemented (mechanic + quest action) |
 | `X_QUEST` | action | — | **BLOCKED / POLICY_REVIEW_REQUIRED** (§19); registry slot only |
 

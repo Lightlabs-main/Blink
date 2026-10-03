@@ -8,6 +8,8 @@ import {
 import {
   ORE_MINT,
   readMintDecimals,
+  readOreBoardRound,
+  readOreMinerRound,
   readOreStaked,
   readSkrStaked,
   readTokenBalance,
@@ -33,6 +35,9 @@ export interface ChainReader {
   skrStaked(wallet: string): Promise<bigint>
   oreBalance(wallet: string): Promise<bigint>
   oreStaked(wallet: string): Promise<bigint>
+  /** D-33: the last ORE round `wallet` mined in (0 = never) and the round being mined now. */
+  oreMinerRound(wallet: string): Promise<bigint>
+  oreBoardRound(): Promise<bigint>
 }
 
 /** Mainnet-beta genesis hash, VERIFIED against the live cluster 2026-10-01. */
@@ -78,6 +83,14 @@ export class MainnetChainReader implements ChainReader {
     await this.check()
     return readOreStaked(this.rpc, address(wallet))
   }
+  async oreMinerRound(wallet: string) {
+    await this.check()
+    return readOreMinerRound(this.rpc, address(wallet))
+  }
+  async oreBoardRound() {
+    await this.check()
+    return readOreBoardRound(this.rpc)
+  }
 }
 
 export interface QuestOutcome {
@@ -100,6 +113,12 @@ export class QuestService {
       log?: { warn: (o: object, msg: string) => void }
     },
   ) {}
+
+  /** D-33: the ORE round being mined now, recorded on ORE_ACTIVITY conditions when a campaign is created. */
+  async currentOreRound(): Promise<bigint> {
+    if (!this.deps.chain) throw new Error('mainnet reader not configured')
+    return this.deps.chain.oreBoardRound()
+  }
 
   async evaluate(campaign: StoredCampaign, privyUserId: string): Promise<QuestOutcome> {
     const requirements = campaign.requirements
@@ -144,6 +163,15 @@ export class QuestService {
             return
           }
           if (!chain) throw new Error('mainnet reader not configured')
+          if (c.verifier === 'ORE_ACTIVITY') {
+            // D-33: mined in a round after the one recorded when the campaign was created (any verified wallet).
+            if (c.afterRound === undefined) throw new Error('ORE_ACTIVITY condition has no start round')
+            const after = BigInt(c.afterRound)
+            const rounds = await Promise.all(wallets.map((w) => chain.oreMinerRound(w)))
+            const last = rounds.reduce((a, b) => (b > a ? b : a), 0n)
+            results.set(c, { verifier: c.verifier, status: last > after ? 'PASSED' : 'FAILED', detail: last > after ? undefined : 'NOT_MINED_SINCE_START' })
+            return
+          }
           const required = BigInt(c.minRaw ?? '0')
           const actual =
             c.verifier === 'SKR_BALANCE'

@@ -11,6 +11,8 @@ import {
   pushTokenDeleteRequest,
   pushTokenRequest,
   questHasTapRush,
+  questUses,
+  stampOreRound,
   sendPrepareRequest,
   sendSubmitRequest,
   skrPrepareRequest,
@@ -346,6 +348,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       return sendError(reply, 409, 'DERIVED_ACCOUNT_EXISTS', 'derived campaign account already exists; investigation required')
     }
 
+    // D-33: ORE mining counts only after this campaign starts, so record the round being mined right now.
+    let requirements = body.requirements ?? null
+    if (requirements && questUses(requirements, 'ORE_ACTIVITY')) {
+      try {
+        if (!deps.quests) throw new Error('quests not configured')
+        requirements = stampOreRound(requirements, await deps.quests.currentOreRound())
+      } catch (err) {
+        req.log.warn({ err }, 'ORE round read failed')
+        return sendError(reply, 503, 'ORE_UNAVAILABLE', 'could not read ORE on mainnet right now — try again')
+      }
+    }
+
     const stored = await deps.campaigns.create({
       id,
       type: body.type,
@@ -361,8 +375,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       tapRush:
         body.type === 'TAP_RUSH' || (body.requirements && questHasTapRush(body.requirements)) ? (body.tapRush ?? TAP_RUSH_DEFAULTS) : null,
       // D-21: frozen requirements + a hash of their canonical JSON (immutable once LIVE; no edit endpoint exists).
-      requirements: body.requirements ?? null,
-      requirementsHash: body.requirements ? createHash('sha256').update(JSON.stringify(body.requirements)).digest('hex') : null,
+      requirements,
+      requirementsHash: requirements ? createHash('sha256').update(JSON.stringify(requirements)).digest('hex') : null,
       startsAt: body.startsAt ? new Date(body.startsAt) : null,
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
     })

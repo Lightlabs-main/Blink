@@ -22,7 +22,6 @@ const SOON: { title: string; body: string; icon: IconName }[] = [
   { title: 'Stock Clubs', body: 'Communities around the stocks you hold', icon: 'sparkle' },
   { title: 'Stock Passport', body: 'One record of every stock you earned', icon: 'shield' },
   { title: 'QR Event check-in', body: 'Prove you were at the event', icon: 'scan' },
-  { title: 'ORE mining checks', body: 'Quests for ORE miners', icon: 'target' },
 ]
 
 function RowIcon({ icon, tint = color.lime }: { icon: IconName; tint?: string }) {

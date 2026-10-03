@@ -1,7 +1,7 @@
 import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native'
 
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
@@ -93,6 +93,11 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
   function cta(c: QuestCondition, r: ConditionResult | undefined) {
     if (!user || r?.status === 'PASSED') return null
     if (c.verifier === 'TAP_RUSH') return { label: 'Play Tap Rush', icon: 'bolt' as const, go: () => router.push(`/tap-rush/${campaign.id}`) }
+    if (c.verifier === 'ORE_ACTIVITY') {
+      return r?.status === 'ERROR' || r?.status === 'FAILED' || !r
+        ? { label: 'Open ORE to mine', icon: 'arrowUpRight' as const, go: () => void Linking.openURL('https://ore.supply') }
+        : null
+    }
     if (c.verifier === 'SEEKER_SGT') return { label: 'Connect my Seeker', icon: 'phone' as const, go: () => router.push({ pathname: '/login/wallet', params: { purpose: 'seeker' } }) }
     // D-23: a verified wallet that is short on staked SKR can stake right here (mainnet; the wallet signs).
     if ((c.verifier === 'SKR_STAKED' || c.verifier === 'SKR_TOTAL') && r?.status === 'FAILED' && r.actualRaw !== undefined) {
