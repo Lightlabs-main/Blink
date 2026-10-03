@@ -219,3 +219,14 @@ export const pushTokenRequest = z
   .strict()
 
 export const pushTokenDeleteRequest = z.object({ token: z.string().min(1).max(256) }).strict()
+
+/** D-32: POST /v1/me/send/prepare — `asset` is 'SOL' or a supported mint; raw amount as a decimal string. */
+export const sendPrepareRequest = z
+  .object({
+    asset: z.union([z.literal('SOL'), base58Address]),
+    to: base58Address,
+    amountRaw: z.string().regex(/^[1-9]\d{0,19}$/, 'invalid amount'),
+  })
+  .strict()
+
+export const sendSubmitRequest = z.object({ signedTransaction: z.string().min(100).max(4000) }).strict()
