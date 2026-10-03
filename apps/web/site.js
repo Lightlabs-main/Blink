@@ -36,8 +36,8 @@
 
   function noDrops(message) {
     if (rows) rows.replaceChildren(el('tr', { className: 'empty-row' }, [el('td', { colSpan: 5, textContent: message })]))
-    if (sideTitle) sideTitle.textContent = 'No live drops'
-    if (sideNote) sideNote.textContent = 'New drops are listed the moment a creator funds one. Got a QR from a friend? Scan it in the app.'
+    if (sideTitle) sideTitle.textContent = 'No live drops right now'
+    if (sideNote) sideNote.textContent = 'Point your Android camera here to download. Got a QR from a friend? Scan it in the app.'
   }
 
   Promise.all([fetch('/api/v1/campaigns'), fetch('/api/v1/xstocks')])
@@ -47,14 +47,14 @@
       const assets = x.ok ? (await x.json()).xstocks : []
 
       if (ticker) {
-        ticker.prepend(el('span', { className: 'ticker-item' }, [el('b', { textContent: 'LIVE' }), campaigns.length + (campaigns.length === 1 ? ' drop open now' : ' drops open now')]))
+        ticker.prepend(el('span', { className: 'ticker-item' }, [el('b', { textContent: 'LIVE' }), ' ' + campaigns.length + (campaigns.length === 1 ? ' drop open now' : ' drops open now')]))
       }
       loopTicker()
 
       if (!campaigns.length) return noDrops('No live drops right now — check back soon, or scan a friend’s QR in the app.')
 
-      if (sideTitle) sideTitle.textContent = campaigns.length + (campaigns.length === 1 ? ' live drop' : ' live drops')
-      if (sideNote) sideNote.textContent = 'Open for claiming right now. See Section B for the full listing.'
+      if (sideTitle) sideTitle.textContent = campaigns.length + (campaigns.length === 1 ? ' drop open now' : ' drops open now')
+      if (sideNote) sideNote.textContent = 'Point your Android camera here to download, then claim from your phone.'
 
       rows.replaceChildren(
         ...campaigns.slice(0, 20).map((d) => {
