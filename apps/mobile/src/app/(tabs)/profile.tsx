@@ -137,10 +137,10 @@ export default function Profile() {
           <ListRow
             chevron={false}
             leading={<RowIcon icon="wallet" />}
-            onPress={stockWallet ? () => void Share.share({ message: stockWallet }) : undefined}
-            subtitle={stockWallet ? shortAddress(stockWallet, 6, 6) : 'Being created…'}
+            onPress={stockWallet ? () => router.push('/wallet') : undefined}
+            subtitle={stockWallet ? `${shortAddress(stockWallet, 6, 6)} · Send & receive` : 'Being created…'}
             title="Stock wallet"
-            trailing={stockWallet ? <Icon name="share" size={18} stroke={color.textDim} /> : undefined}
+            trailing={stockWallet ? <Icon name="chevronRight" size={18} stroke={color.textMuted} /> : undefined}
           />
           {creatorWallets.map((w) => (
             <View key={w}>

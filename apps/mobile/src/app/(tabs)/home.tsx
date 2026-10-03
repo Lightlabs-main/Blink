@@ -161,7 +161,7 @@ export default function Home() {
         <QuickAction highlight icon="scan" label="Scan" onPress={() => router.push('/scan')} />
         <QuickAction icon="plus" label="Create" onPress={() => router.push('/create')} />
         <QuickAction icon="bolt" label="Drops" onPress={() => router.push('/drops')} />
-        <QuickAction icon="wallet" label="Wallet" onPress={() => router.push('/profile')} />
+        <QuickAction icon="wallet" label="Wallet" onPress={() => router.push('/wallet')} />
       </Row>
 
       {/* Live drops */}
