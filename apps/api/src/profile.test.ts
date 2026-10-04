@@ -37,8 +37,12 @@ describe('usernames and pictures (D-37)', () => {
     expect((await set('b', 'MARIS')).json().error.code).toBe('USERNAME_TAKEN')
     expect((await set('b', 'no spaces')).json().error.code).toBe('INVALID_USERNAME')
     expect((await set('b', 'admin')).json().error.code).toBe('INVALID_USERNAME')
+    // A released name is never handed to someone else; its first owner can take it back.
     expect((await set('a', null)).json().profile.username).toBeNull()
-    expect((await set('b', 'maris')).json().profile.username).toBe('maris')
+    expect((await set('b', 'maris')).json().error.code).toBe('USERNAME_TAKEN')
+    expect((await set('a', 'stella')).json().profile.username).toBe('stella')
+    expect((await set('b', 'maris')).json().error.code).toBe('USERNAME_TAKEN')
+    expect((await set('a', 'maris')).json().profile.username).toBe('maris')
   })
 
   it('accepts only real JPEG/PNG pictures and serves them by an opaque id', async () => {

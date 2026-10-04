@@ -55,6 +55,8 @@ export function avatarPath(p: StoredProfile | null | undefined): string | null {
 
 export class InMemoryProfileStore implements ProfileStore {
   private readonly rows = new Map<string, StoredProfile & { avatar: { bytes: Uint8Array; type: string } | null }>()
+  /** username → the account that first used it (kept after it is changed or removed). */
+  private readonly claimed = new Map<string, string>()
 
   private row(privyUserId: string) {
     let r = this.rows.get(privyUserId)
@@ -80,7 +82,11 @@ export class InMemoryProfileStore implements ProfileStore {
     return out
   }
   async setUsername(privyUserId: string, username: string | null) {
-    if (username && [...this.rows.values()].some((r) => r.username === username && r.privyUserId !== privyUserId)) throw new UsernameTakenError()
+    if (username) {
+      const owner = this.claimed.get(username)
+      if (owner && owner !== privyUserId) throw new UsernameTakenError()
+      this.claimed.set(username, privyUserId)
+    }
     const r = this.row(privyUserId)
     r.username = username
     return this.view(r)
@@ -117,14 +123,23 @@ export class PrismaProfileStore implements ProfileStore {
   }
   async setUsername(privyUserId: string, username: string | null) {
     try {
-      const r = await this.prisma.profile.upsert({
-        where: { privyUserId },
-        create: { privyUserId, publicId: newPublicId(), username },
-        update: { username },
-        select: this.select,
+      const r = await this.prisma.$transaction(async (tx) => {
+        if (username) {
+          // A name stays with the account that first used it, even after it is changed or removed.
+          const claim = await tx.usernameClaim.findUnique({ where: { username } })
+          if (claim && claim.privyUserId !== privyUserId) throw new UsernameTakenError()
+          if (!claim) await tx.usernameClaim.create({ data: { username, privyUserId } })
+        }
+        return tx.profile.upsert({
+          where: { privyUserId },
+          create: { privyUserId, publicId: newPublicId(), username },
+          update: { username },
+          select: this.select,
+        })
       })
       return this.view(r)
     } catch (err) {
+      if (err instanceof UsernameTakenError) throw err
       if ((err as { code?: string }).code === 'P2002') throw new UsernameTakenError()
       throw err
     }
