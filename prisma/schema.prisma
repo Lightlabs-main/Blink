@@ -277,3 +277,12 @@ model XTask {
   @@unique([campaignId, postId])
   @@unique([campaignId, authorHandle])
 }
+
+/// D-37: every username ever set stays with the account that first used it, so a released name can't be taken over.
+model UsernameClaim {
+  username    String   @id
+  privyUserId String
+  createdAt   DateTime @default(now())
+
+  @@index([privyUserId])
+}
