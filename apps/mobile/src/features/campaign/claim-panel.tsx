@@ -67,6 +67,7 @@ export function ClaimReceipt({
   asset: XStockListing | undefined
   challenge?: { campaign: CampaignSummary; text: string }
 }) {
+  const router = useRouter()
   const amount = displayShares(asset, claim.amountRaw)
   const label = `${amount ?? ''} ${claim.xstockSymbol}`.trim()
   const bonus = claim.kind === 'REFERRAL_BONUS'
@@ -84,16 +85,15 @@ export function ClaimReceipt({
             </T>
           </View>
         </Row>
-        {claim.txSignature ? (
-          <Button
-            icon="arrowUpRight"
-            onPress={() => void Linking.openURL(explorerTxUrl(claim.txSignature!, claim.cluster))}
-            size="md"
-            variant="secondary"
-          >
-            View receipt on Solana
-          </Button>
-        ) : null}
+        {/* D-38: the branded receipt (shareable image, post on X, explorer link). */}
+        <Button
+          icon="sparkle"
+          onPress={() => router.push({ pathname: '/receipt/[id]', params: { id: `${bonus ? 'INVITE_BONUS' : 'REWARD'}:${claim.id}` } })}
+          size="md"
+          variant="secondary"
+        >
+          View & share receipt
+        </Button>
         {challenge ? (
           <Button icon="share" onPress={() => shareChallenge(challenge.campaign, challenge.text)} size="md">
             Challenge a friend

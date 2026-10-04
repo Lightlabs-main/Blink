@@ -55,3 +55,19 @@ describe('usernames and pictures (D-37)', () => {
     expect((await app.inject({ method: 'GET', url })).statusCode).toBe(404)
   })
 })
+
+describe('history (D-38)', () => {
+  it('lists sends and funded drops, newest first, only for the caller', async () => {
+    const { InMemoryTransferStore } = await import('./history.ts')
+    const transfers = new InMemoryTransferStore()
+    const campaigns = new InMemoryCampaignRepository()
+    app = buildApp({ env, auth, campaigns, rpc: {} as Rpc<GetAccountInfoApi>, assets: [], transfers })
+    await transfers.record({ privyUserId: 'did:privy:a', cluster: 'devnet', asset: 'SOL', symbol: 'SOL', decimals: 9, amountRaw: 5n, toAddress: 'To1', signature: 'sig-1', status: 'CONFIRMED' })
+    await transfers.record({ privyUserId: 'did:privy:b', cluster: 'devnet', asset: 'SOL', symbol: 'SOL', decimals: 9, amountRaw: 7n, toAddress: 'To2', signature: 'sig-2', status: 'CONFIRMED' })
+    const res = await app.inject({ method: 'GET', url: '/v1/me/history', headers: as('a') })
+    const items = res.json().items
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'SENT', symbol: 'SOL', amountRaw: '5', signature: 'sig-1', counterparty: 'To1', mint: null })
+    expect((await app.inject({ method: 'GET', url: '/v1/me/history' })).statusCode).toBe(401)
+  })
+})

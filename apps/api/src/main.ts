@@ -25,6 +25,7 @@ import { ExpoPushNotifier, InMemoryPushTokenStore, PrismaPushTokenStore, type Pu
 import { MainnetSkrStaking } from './skr-service.ts'
 import { SendService } from './send-service.ts'
 import { InMemoryProfileStore, PrismaProfileStore, type ProfileStore } from './profile.ts'
+import { InMemoryTransferStore, PrismaTransferStore, type TransferStore } from './history.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -47,8 +48,10 @@ let ledger: BudgetLedger
 let prisma: ReturnType<typeof createPrismaClient> | undefined
 let pushTokens: PushTokenStore
 let profiles: ProfileStore
+let transfers: TransferStore
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
+  transfers = new PrismaTransferStore(prisma)
   pushTokens = new PrismaPushTokenStore(prisma)
   profiles = new PrismaProfileStore(prisma)
   campaigns = new PrismaCampaignRepository(prisma)
@@ -60,6 +63,7 @@ if (env.DATABASE_URL) {
   campaigns = memory
   pushTokens = new InMemoryPushTokenStore()
   profiles = new InMemoryProfileStore()
+  transfers = new InMemoryTransferStore()
   claims = new InMemoryClaimRepository(memory)
   ledger = new InMemoryBudgetLedger(env)
 } else {
@@ -127,12 +131,14 @@ const app = buildApp({
     signer: new PrivyServerWalletSigner(privy),
     serviceWallets: claims,
     ledger,
+    transfers,
     eligibility,
     log: { warn: (o, msg) => app.log.warn(o, msg) },
   }),
   pushTokens,
   notifier,
   profiles,
+  transfers,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,

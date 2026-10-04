@@ -25,6 +25,7 @@ import { ClaimError } from './payout-service.ts'
 import type { ServiceWalletStore } from './claim-repo.ts'
 import type { ServerWalletSigner } from './delegate.ts'
 import type { EligibilityService } from './eligibility.ts'
+import type { TransferStore } from './history.ts'
 
 type SendRpc = Rpc<
   GetAccountInfoApi &
@@ -52,7 +53,17 @@ export interface WalletBalances {
  * accepts back exactly the transaction it prepared for that user, adds the fee-payer signature and sends it.
  */
 export class SendService {
-  private readonly pending = new Map<string, { messageBytes: Uint8Array; expiresAt: number; from: string; estimatedLamports: bigint; lastValidBlockHeight: bigint }>()
+  private readonly pending = new Map<
+    string,
+    {
+      messageBytes: Uint8Array
+      expiresAt: number
+      from: string
+      estimatedLamports: bigint
+      lastValidBlockHeight: bigint
+      record: { asset: string; symbol: string; decimals: number; amountRaw: bigint; toAddress: string }
+    }
+  >()
 
   constructor(
     private readonly deps: {
@@ -63,6 +74,8 @@ export class SendService {
       signer: ServerWalletSigner
       serviceWallets: ServiceWalletStore
       ledger: BudgetLedger
+      /** D-38: records each send for the user's history and receipts. */
+      transfers?: TransferStore
       eligibility?: EligibilityService
       log?: { warn: (o: object, msg: string) => void }
     },
@@ -98,6 +111,7 @@ export class SendService {
     if (!this.deps.env.PAYOUTS_ENABLED) throw new ClaimError('PAYOUTS_PAUSED', 'Sending is paused for now. Please try again later.', 503)
     const from = await this.stockWallet(privyUserId)
     let asset: SendAsset
+    let label = { symbol: 'SOL', decimals: 9 }
     if (input.asset === 'SOL') {
       asset = { kind: 'SOL' }
     } else {
@@ -106,6 +120,7 @@ export class SendService {
       // D-20: moving xStocks through Blink follows the same eligibility gate as receiving them.
       if (!known.isTest) await this.deps.eligibility?.requireEligible(privyUserId, ip)
       asset = { kind: 'TOKEN', mint: address(known.mint), decimals: known.decimals }
+      label = { symbol: known.symbol, decimals: known.decimals }
     }
     const feePayer = await this.deps.serviceWallets.get(`fee-payer-${this.deps.env.SOLANA_CLUSTER}`)
     if (!feePayer) throw new ClaimError('SEND_UNAVAILABLE', 'sending is not available yet', 503)
@@ -127,6 +142,7 @@ export class SendService {
       from,
       estimatedLamports: plan.estimatedLamports,
       lastValidBlockHeight: plan.lastValidBlockHeight,
+      record: { asset: input.asset, ...label, amountRaw: input.amountRaw, toAddress: input.to },
     })
     return { transaction: plan.transaction, from, createsRecipientAccount: plan.createsRecipientAccount }
   }
@@ -177,15 +193,27 @@ export class SendService {
       const s = value[0]
       if (s?.err) {
         await this.deps.ledger.settle(ledgerKey, 'SPENT', signature)
+        await this.remember(privyUserId, pending.record, signature, 'FAILED')
         throw new ClaimError('SEND_FAILED', 'the transfer failed on the network', 422)
       }
       if (s?.confirmationStatus === 'confirmed' || s?.confirmationStatus === 'finalized') {
         await this.deps.ledger.settle(ledgerKey, 'SPENT', signature)
+        await this.remember(privyUserId, pending.record, signature, 'CONFIRMED')
         return { signature }
       }
       await new Promise((r) => setTimeout(r, 1500))
     }
     // Still pending: report the signature; the explorer link shows the final state.
+    await this.remember(privyUserId, pending.record, signature, 'PENDING')
     return { signature }
+  }
+
+  /** History is best-effort: a failed write never turns a completed transfer into an error. */
+  private async remember(privyUserId: string, r: { asset: string; symbol: string; decimals: number; amountRaw: bigint; toAddress: string }, signature: string, status: 'CONFIRMED' | 'PENDING' | 'FAILED') {
+    try {
+      await this.deps.transfers?.record({ privyUserId, cluster: this.deps.env.SOLANA_CLUSTER, ...r, signature, status })
+    } catch (err) {
+      this.deps.log?.warn({ err: err instanceof Error ? err.message : String(err) }, 'could not record transfer')
+    }
   }
 }

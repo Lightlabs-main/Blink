@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
-import { TAP_RUSH_DEFAULTS } from '@blink/domain'
+import { type HistoryItem, TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
 import {
   claimRequest,
@@ -33,6 +33,7 @@ import type { QuestService } from './quest-service.ts'
 import { NOOP_NOTIFIER, type Notifier, type PushTokenStore } from './push.ts'
 import type { SkrStaking } from './skr-service.ts'
 import type { SendService } from './send-service.ts'
+import type { TransferStore } from './history.ts'
 import { AVATAR_MAX_BYTES, avatarPath, type ProfileStore, sniffImage, usernameProblem, UsernameTakenError } from './profile.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
@@ -62,6 +63,8 @@ export interface AppDeps {
   quests?: QuestService
   /** D-23: in-app SKR staking (mainnet reads + unsigned transactions for the user's own wallet). */
   skr?: SkrStaking
+  /** D-38: sends, for history and receipts. */
+  transfers?: TransferStore
   /** D-37: usernames and profile pictures. */
   profiles?: ProfileStore
   /** D-32: Send from the Blink stock wallet (fees paid by Blink). */
@@ -158,6 +161,76 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!wallets.includes(req.params.address)) throw new ClaimError('WALLET_NOT_LINKED', 'this wallet is not linked to your account', 404)
     if (!deps.auth.unlinkExternalSolanaWallet) throw new ClaimError('UNLINK_UNAVAILABLE', 'removing wallets is not available right now', 503)
     return { verifiedCreatorWallets: await deps.auth.unlinkExternalSolanaWallet(auth.privyUserId, req.params.address) }
+  })
+
+  // ---- D-38: history (every line opens a receipt) ----
+
+  app.get('/v1/me/history', async (req) => {
+    const auth = await requireAuth(req)
+    const decimalsOf = (mint: string) => deps.assets.find((a) => a.mint === mint)?.decimals ?? 0
+    const items: HistoryItem[] = []
+    const claims = deps.claims ? await deps.claims.listForUser(auth.privyUserId, 100) : []
+    const campaignCache = new Map<string, StoredCampaign | null>()
+    const campaignOf = async (id: string) => {
+      if (!campaignCache.has(id)) campaignCache.set(id, await deps.campaigns.findById(id))
+      return campaignCache.get(id) ?? null
+    }
+    for (const c of claims) {
+      const campaign = await campaignOf(c.campaignId)
+      if (!campaign) continue
+      items.push({
+        id: `${c.kind === 'REFERRAL_BONUS' ? 'INVITE_BONUS' : 'REWARD'}:${c.id}`,
+        kind: c.kind === 'REFERRAL_BONUS' ? 'INVITE_BONUS' : 'REWARD',
+        cluster: campaign.cluster,
+        symbol: campaign.xstockSymbol,
+        mint: campaign.mint,
+        decimals: decimalsOf(campaign.mint),
+        amountRaw: c.amountRaw.toString(),
+        status: c.status === 'PAID' ? 'CONFIRMED' : c.status === 'FAILED' ? 'FAILED' : 'PENDING',
+        signature: c.txSignature,
+        campaignId: campaign.id,
+        campaignType: campaign.type,
+        counterparty: null,
+        at: c.createdAt.toISOString(),
+      })
+    }
+    for (const t of deps.transfers ? await deps.transfers.listForUser(auth.privyUserId, 100) : []) {
+      items.push({
+        id: `SENT:${t.id}`,
+        kind: 'SENT',
+        cluster: t.cluster as HistoryItem['cluster'],
+        symbol: t.symbol,
+        mint: t.asset === 'SOL' ? null : t.asset,
+        decimals: t.decimals,
+        amountRaw: t.amountRaw.toString(),
+        status: t.status,
+        signature: t.signature,
+        campaignId: null,
+        campaignType: null,
+        counterparty: t.toAddress,
+        at: t.createdAt.toISOString(),
+      })
+    }
+    for (const c of await deps.campaigns.listByCreator(auth.privyUserId, 50)) {
+      if (c.status === 'DRAFT' || c.status === 'AWAITING_FUNDING') continue
+      items.push({
+        id: `FUNDED:${c.id}`,
+        kind: 'FUNDED',
+        cluster: c.cluster,
+        symbol: c.xstockSymbol,
+        mint: c.mint,
+        decimals: decimalsOf(c.mint),
+        amountRaw: c.allowanceRaw.toString(),
+        status: 'CONFIRMED',
+        signature: null,
+        campaignId: c.id,
+        campaignType: c.type,
+        counterparty: c.campaignTokenAccount,
+        at: c.createdAt.toISOString(),
+      })
+    }
+    items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    return { items: items.slice(0, 200) }
   })
 
   // ---- D-37: public profile (username + picture) ----

@@ -244,3 +244,20 @@ model Profile {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+/// D-38: sends from a Blink stock wallet (fees paid by Blink), for the user's history and receipts.
+model Transfer {
+  id          String   @id @db.Uuid
+  privyUserId String
+  cluster     String
+  asset       String
+  symbol      String
+  decimals    Int
+  amountRaw   Decimal  @db.Decimal(20, 0)
+  toAddress   String
+  signature   String   @unique
+  status      String
+  createdAt   DateTime @default(now())
+
+  @@index([privyUserId, createdAt])
+}
