@@ -104,9 +104,12 @@ export interface TapRushRules {
 /** D-13 limits. maxTapsPerSecond rejects scripted results; humans top out well below it. */
 export const TAP_RUSH_LIMITS = {
   minGoal: 10,
-  maxGoal: 200,
+  /** D-36: creators can ask for up to 1,000 taps, with rounds up to 2 minutes. */
+  maxGoal: 1000,
   minSeconds: 5,
-  maxSeconds: 30,
+  maxSeconds: 120,
+  /** D-36: a goal must be winnable: at most this many taps per second on average across the round. */
+  maxGoalPerSecond: 12,
   maxTapsPerSecond: 20,
   maxAttempts: 10,
   /** D-14: two taps closer than this are not a finger. */

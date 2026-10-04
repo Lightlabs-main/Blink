@@ -41,6 +41,10 @@ export const tapRushRules = z
     seconds: z.number().int().min(TAP_RUSH_LIMITS.minSeconds).max(TAP_RUSH_LIMITS.maxSeconds),
   })
   .strict()
+  .refine((r) => r.goal <= r.seconds * TAP_RUSH_LIMITS.maxGoalPerSecond, {
+    message: `that goal is too fast for a person — allow at least 1 second per ${TAP_RUSH_LIMITS.maxGoalPerSecond} taps`,
+    path: ['goal'],
+  })
 
 /** D-21: one requirement. Only ENABLED registry verifiers; amount verifiers need a positive raw minimum. */
 const questCondition = z

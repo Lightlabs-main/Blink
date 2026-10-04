@@ -23,6 +23,7 @@ import {
   type QuestRequirements,
   rawToUiShares,
   TAP_RUSH_DEFAULTS,
+  TAP_RUSH_LIMITS,
   uiSharesToRawFloor,
   VERIFIERS,
 } from '../../shared'
@@ -53,11 +54,76 @@ const COMING_SOON = [
   { label: 'Squad', blurb: 'Friends complete a challenge together.', icon: 'users' as IconName },
 ]
 
-const TAP_LEVELS = [
-  { label: 'Easy', goal: 30 },
-  { label: 'Normal', goal: TAP_RUSH_DEFAULTS.goal },
-  { label: 'Hard', goal: 80 },
-] as const
+/** D-36: round lengths, and preset goals at about 3, 5 and 8 taps a second. */
+const TAP_SECONDS = [10, 30, 60, 120] as const
+const tapPresets = (seconds: number) => [
+  { label: 'Easy', goal: Math.max(TAP_RUSH_LIMITS.minGoal, seconds * 3) },
+  { label: 'Normal', goal: seconds * 5 },
+  { label: 'Hard', goal: Math.min(TAP_RUSH_LIMITS.maxGoal, seconds * 8) },
+]
+const secondsLabel = (s: number) => (s >= 60 ? `${s / 60} min` : `${s} s`)
+
+/** D-36: round length + goal (presets or any custom number up to 1,000, never faster than 12 taps a second). */
+function TapRushPicker({ goal, seconds, setGoal, setSeconds }: { goal: number; seconds: number; setGoal: (g: number) => void; setSeconds: (s: number) => void }) {
+  const [custom, setCustom] = useState('')
+  const max = Math.min(TAP_RUSH_LIMITS.maxGoal, seconds * TAP_RUSH_LIMITS.maxGoalPerSecond)
+  const presets = tapPresets(seconds)
+  return (
+    <View style={{ gap: space.md }}>
+      <T variant="label">Round length</T>
+      <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+        {TAP_SECONDS.map((sec) => (
+          <Chip
+            key={sec}
+            label={secondsLabel(sec)}
+            onPress={() => {
+              setSeconds(sec)
+              setCustom('')
+              setGoal(sec * 5)
+            }}
+            selected={seconds === sec}
+          />
+        ))}
+      </Row>
+      <T variant="label">Tap goal</T>
+      <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+        {presets.map((l) => (
+          <Chip
+            key={l.label}
+            label={`${l.label} · ${l.goal}`}
+            onPress={() => {
+              setCustom('')
+              setGoal(l.goal)
+            }}
+            selected={!custom && goal === l.goal}
+          />
+        ))}
+      </Row>
+      <View style={styles.amountRow}>
+        <TextInput
+          inputMode="numeric"
+          onChangeText={(v) => {
+            const digits = v.replace(/[^0-9]/g, '').slice(0, 4)
+            setCustom(digits)
+            const n = Number(digits)
+            if (n >= TAP_RUSH_LIMITS.minGoal && n <= max) setGoal(n)
+          }}
+          placeholder={`Custom goal (${TAP_RUSH_LIMITS.minGoal}–${max})`}
+          placeholderTextColor={color.textMuted}
+          selectionColor={color.lime}
+          style={[styles.amountInput, font('bodyMedium'), { fontSize: 17 }]}
+          value={custom}
+        />
+        <T variant="label">taps</T>
+      </View>
+      {custom && (Number(custom) < TAP_RUSH_LIMITS.minGoal || Number(custom) > max) ? (
+        <Notice message={`Pick ${TAP_RUSH_LIMITS.minGoal}–${max} taps for a ${secondsLabel(seconds)} round (at most ${TAP_RUSH_LIMITS.maxGoalPerSecond} taps a second).`} tone="warn" />
+      ) : (
+        <T variant="caption">{`Players need ${goal} taps in ${secondsLabel(seconds)}.`}</T>
+      )}
+    </View>
+  )
+}
 
 const DURATIONS = [
   { label: 'No end', hours: 0 },
@@ -161,6 +227,7 @@ export default function Create() {
   const [shares, setShares] = useState('')
   const [perPerson, setPerPerson] = useState('')
   const [tapGoal, setTapGoal] = useState<number>(TAP_RUSH_DEFAULTS.goal)
+  const [tapSeconds, setTapSeconds] = useState<number>(TAP_RUSH_DEFAULTS.seconds)
   const [hours, setHours] = useState(0)
   // Verified Quest building blocks.
   const [seeker, setSeeker] = useState(false)
@@ -234,7 +301,7 @@ export default function Create() {
           mint: selected.mint,
           allowanceRaw: conversion.raw.toString(),
           rewardPerClaimRaw: reward.raw.toString(),
-          tapRush: hasTapRush ? { goal: tapGoal, seconds: TAP_RUSH_DEFAULTS.seconds } : undefined,
+          tapRush: hasTapRush ? { goal: tapGoal, seconds: tapSeconds } : undefined,
           requirements: isQuest && quest.ok ? quest.requirements : undefined,
           endsAt: endsAtFrom(hours),
         },
@@ -295,7 +362,7 @@ export default function Create() {
   // Plain-English summary for the review step (update §11 step 6).
   const conditions: QuestCondition[] = isQuest && quest.ok ? quest.requirements.eligibility.flatMap((g) => g.conditions) : []
   const who = conditions.length ? `People who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : 'Anyone'
-  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${TAP_RUSH_DEFAULTS.seconds}s)` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}`
+  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}`
   const sentence =
     selected && reward?.ok && people !== null
       ? `${who}${doWhat} can receive ${reward.display} ${selected.symbol} each. Up to ${people.toString()} ${people === 1n ? 'winner' : 'winners'}${
@@ -361,7 +428,7 @@ export default function Create() {
       {step === 'action' ? (
         <View style={{ gap: space.md }}>
           <Option
-            body="Hit the tap goal in a 10-second round."
+            body="Hit a tap goal you choose, in a round from 10 seconds to 2 minutes."
             icon="target"
             on={questTap}
             onPress={() => {
@@ -370,13 +437,7 @@ export default function Create() {
             }}
             title="Tap Rush"
           />
-          {questTap ? (
-            <Row gap={space.sm}>
-              {TAP_LEVELS.map((l) => (
-                <Chip key={l.label} label={`${l.label} · ${l.goal}`} onPress={() => setTapGoal(l.goal)} selected={tapGoal === l.goal} />
-              ))}
-            </Row>
-          ) : null}
+          {questTap ? <TapRushPicker goal={tapGoal} seconds={tapSeconds} setGoal={setTapGoal} setSeconds={setTapSeconds} /> : null}
           <Option
             body="Mine ORE after the campaign starts. Earlier mining doesn’t count."
             icon="layers"
@@ -494,13 +555,8 @@ export default function Create() {
           </Card>
           {type === 'TAP_RUSH' ? (
             <Card style={{ gap: space.md }}>
-              <T variant="heading">Tap goal</T>
-              <T variant="label">{`Players must tap this many times in ${TAP_RUSH_DEFAULTS.seconds} seconds.`}</T>
-              <Row gap={space.sm}>
-                {TAP_LEVELS.map((l) => (
-                  <Chip key={l.label} label={`${l.label} · ${l.goal}`} onPress={() => setTapGoal(l.goal)} selected={tapGoal === l.goal} />
-                ))}
-              </Row>
+              <T variant="heading">Tap Rush round</T>
+              <TapRushPicker goal={tapGoal} seconds={tapSeconds} setGoal={setTapGoal} setSeconds={setTapSeconds} />
             </Card>
           ) : null}
           <Card style={{ gap: space.sm }}>
@@ -579,5 +635,6 @@ const styles = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.lime },
   amountWrap: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface },
   amountInput: { flex: 1, fontSize: 48, color: color.text, padding: 0 },
 })

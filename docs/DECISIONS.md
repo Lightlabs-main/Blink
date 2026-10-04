@@ -486,3 +486,10 @@ many Android phones block background network access, so the request never left t
 none). The app now prepares the fresh transaction on each tap just before opening the wallet (a few seconds before
 signing, well inside the ~60–90 s blockhash window), and nothing calls the network inside `transact`. An expired
 approval gets a plain "tap again" message.
+
+## D-36 — Custom Tap Rush goals up to 1,000 taps (2026-10-04, Maris)
+
+Creators choose the round length (10 s, 30 s, 1 min, 2 min) and the goal: presets at about 3/5/8 taps a second or
+any custom number from 10 to 1,000. A goal must be winnable: at most 12 taps a second on average (so 1,000 taps
+needs a 2-minute round); the server enforces it. Tap anti-cheat (D-14) is unchanged; the finish route accepts a
+64 KB body for up to 2,400 tap timings.
