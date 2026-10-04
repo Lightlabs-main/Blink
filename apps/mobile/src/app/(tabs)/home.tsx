@@ -192,7 +192,7 @@ export default function Home() {
       {/* Rewards the user earned from drops */}
       {rewards.length ? (
         <View style={{ gap: space.md }}>
-          <SectionHeader title="Your rewards" />
+          <SectionHeader action="All activity" onAction={() => router.push('/history')} title="Your rewards" />
           <Card padded={false} style={{ paddingHorizontal: space.lg }}>
             {rewards.slice(0, 5).map((r, i) => {
               const asset = assets.get(r.mint)
@@ -202,7 +202,7 @@ export default function Home() {
                   {i > 0 ? <Divider /> : null}
                   <ListRow
                     leading={<StockAvatar isTest={asset?.isTest} logo={asset?.logo} size={36} symbol={r.xstockSymbol} />}
-                    onPress={() => router.push(`/campaign/${r.campaignId}`)}
+                    onPress={() => router.push({ pathname: '/receipt/[id]', params: { id: `${r.kind === 'REFERRAL_BONUS' ? 'INVITE_BONUS' : 'REWARD'}:${r.id}` } })}
                     subtitle={`${r.kind === 'REFERRAL_BONUS' ? 'Referral bonus' : 'Claimed'} · ${r.status === 'PAID' ? 'received' : 'sending…'}`}
                     title={`${amount ? `${amount} ` : ''}${r.xstockSymbol}`}
                     trailing={<Badge label={r.status === 'PAID' ? 'Paid' : 'Pending'} tone={r.status === 'PAID' ? 'live' : 'warn'} />}

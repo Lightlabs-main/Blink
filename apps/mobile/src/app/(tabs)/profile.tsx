@@ -205,6 +205,13 @@ export default function Profile() {
       ) : null}
 
       <View style={{ gap: space.md }}>
+        <SectionHeader title="Activity" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/history')} subtitle="Rewards, sends and drops, each with a receipt" title="History & receipts" />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
         <SectionHeader title="SKR" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/skr')} subtitle="Stake, unstake and withdraw · mainnet" title="SKR staking" />

@@ -501,3 +501,13 @@ Blink/staff/issuer-like names reserved. Pictures: the app crops to a square and 
 accepts only real JPEG/PNG (magic bytes) up to 150 KB and serves them at `/v1/avatars/<random public id>?v=<n>`
 (never the Privy id). Live rooms show `@username` and the picture when set, otherwise the truncated wallet; email
 and wallets stay private. Not moderated automatically — a report/remove flow is a follow-up if needed.
+
+## D-38 — Activity history and branded receipts (2026-10-04, Maris)
+
+`GET /v1/me/history` merges rewards and invite bonuses (claims), sends from the stock wallet (new `Transfer`
+table, written best-effort after each send) and drops the user funded, newest first. Every line opens a receipt:
+an ink card with the Blink logo and lime dot (fixed colours so it looks the same when shared), amount, title,
+@username, date, status, network and transaction. "Share receipt" captures it as a PNG
+(react-native-view-shot) and opens the share sheet (X, WhatsApp, Photos…); "Post on X" opens the X composer with a
+line and the drop or explorer link; "Explorer" opens the transaction. Entry points: Profile → History & receipts,
+Home → Your rewards / All activity, and "View & share receipt" after a claim.

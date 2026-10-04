@@ -187,6 +187,28 @@ export interface ClaimSummary {
   createdAt: string
 }
 
+/** D-38: one line of the user's history; every line opens a receipt. */
+export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED'
+
+export interface HistoryItem {
+  /** `<kind>:<source id>`, stable across refreshes. */
+  id: string
+  kind: HistoryKind
+  cluster: SolanaCluster
+  symbol: string
+  /** null for SOL. */
+  mint: string | null
+  decimals: number
+  amountRaw: RawAmount
+  status: 'CONFIRMED' | 'PENDING' | 'FAILED'
+  signature: string | null
+  campaignId: string | null
+  campaignType: CampaignType | null
+  /** SENT: the recipient address. */
+  counterparty: string | null
+  at: string
+}
+
 /** The caller's invite for a REFERRAL drop and the bonus it earned (at most one per person, D-14). */
 export interface ReferralSummary {
   campaignId: string

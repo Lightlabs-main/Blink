@@ -3,6 +3,7 @@ import type {
   CampaignType,
   CampaignRoom,
   ClaimSummary,
+  HistoryItem,
   QuestEvaluation,
   QuestRequirements,
   ReferralSummary,
@@ -108,6 +109,8 @@ export interface StockWallet {
 export type SkrAction = 'stake' | 'unstake' | 'withdraw' | 'cancel_unstake'
 
 export const api = {
+  /** D-38: rewards, invite bonuses, sends and funded drops, newest first. */
+  history: (t: GetAccessToken) => authed<{ items: HistoryItem[] }>(t, '/v1/me/history'),
   myProfile: (t: GetAccessToken) => authed<{ profile: MyProfile }>(t, '/v1/me/profile'),
   setUsername: (t: GetAccessToken, username: string | null) =>
     authed<{ profile: MyProfile }>(t, '/v1/me/profile', { method: 'PUT', body: JSON.stringify({ username }) }),
