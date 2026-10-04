@@ -20,6 +20,7 @@ import {
   VERIFIERS,
 } from '../../shared'
 import { ClaimReceipt, claimQueryKey, sentence, useClaimRefresh, useMyClaim } from './claim-panel'
+import { XTaskPanel } from './x-task'
 
 const STATUS: Record<VerificationStatus, { icon: IconName; tint: string; text: string }> = {
   PASSED: { icon: 'check', tint: color.lime, text: 'Requirement complete' },
@@ -93,6 +94,7 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
   function cta(c: QuestCondition, r: ConditionResult | undefined) {
     if (!user || r?.status === 'PASSED') return null
     if (c.verifier === 'TAP_RUSH') return { label: 'Play Tap Rush', icon: 'bolt' as const, go: () => router.push(`/tap-rush/${campaign.id}`) }
+    if (c.verifier === 'X_QUEST') return null
     if (c.verifier === 'ORE_ACTIVITY') {
       return r?.status === 'ERROR' || r?.status === 'FAILED' || !r
         ? { label: 'Open ORE to mine', icon: 'arrowUpRight' as const, go: () => void Linking.openURL('https://ore.supply') }
@@ -119,7 +121,7 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
           <T variant="heading">{qualified ? 'Qualified' : `Win ${rewardLabel}`}</T>
         </Row>
         <T variant="label" color={color.text}>
-          {qualified ? 'Every requirement is complete. Claim your reward below.' : 'Complete every requirement. Blink checks each one onchain.'}
+          {qualified ? 'Every requirement is complete. Claim your reward below.' : 'Complete every requirement. Blink checks each one itself.'}
         </T>
       </View>
 
@@ -159,6 +161,9 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
                           )}
                         </View>
                       </Row>
+                      {c.verifier === 'X_QUEST' && live && user && r?.status !== 'PASSED' ? (
+                        <XTaskPanel campaignId={campaign.id} onVerified={() => void check.refetch()} />
+                      ) : null}
                       {action && live ? (
                         <Button icon={action.icon} onPress={action.go} size="sm" style={{ alignSelf: 'flex-start' }} variant="secondary">
                           {action.label}

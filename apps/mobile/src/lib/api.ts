@@ -108,7 +108,20 @@ export interface StockWallet {
 
 export type SkrAction = 'stake' | 'unstake' | 'withdraw' | 'cancel_unstake'
 
+/** D-39: the caller's X task for a drop. */
+export interface XTask {
+  code: string | null
+  mustInclude: string | null
+  suggestedText: string | null
+  verified: boolean
+  postUrl: string | null
+  authorHandle: string | null
+}
+
 export const api = {
+  xTask: (t: GetAccessToken, campaignId: string) => authed<{ task: XTask }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/x-task`),
+  submitXTask: (t: GetAccessToken, campaignId: string, url: string) =>
+    authed<{ task: XTask }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/x-task`, { method: 'POST', body: JSON.stringify({ url }) }),
   /** D-38: rewards, invite bonuses, sends and funded drops, newest first. */
   history: (t: GetAccessToken) => authed<{ items: HistoryItem[] }>(t, '/v1/me/history'),
   myProfile: (t: GetAccessToken) => authed<{ profile: MyProfile }>(t, '/v1/me/profile'),

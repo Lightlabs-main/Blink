@@ -400,8 +400,8 @@ export const VERIFIERS: Record<VerifierType, VerifierDefinition> = {
     amount: null, source: 'Blink server-timed round (D-13, D-14)', chain: 'blink', readOnly: true, availability: 'ENABLED',
   },
   X_QUEST: {
-    type: 'X_QUEST', version: 0, kind: 'ACTION', label: 'X / Twitter', describe: 'Not available',
-    amount: null, source: 'BLOCKED: policy review required (update §19)', chain: 'blink', readOnly: true, availability: 'BLOCKED',
+    type: 'X_QUEST', version: 1, kind: 'ACTION', label: 'Post on X', describe: 'Posts on X with their Blink code',
+    amount: null, source: 'X public oEmbed: post text contains the person’s code, posted after the campaign started (D-39)', chain: 'blink', readOnly: true, availability: 'ENABLED',
   },
 }
 
@@ -414,6 +414,8 @@ export interface QuestCondition {
    * campaign was created. Mining in a later round qualifies, so mining from before the campaign never counts.
    */
   afterRound?: RawAmount
+  /** X_QUEST only (D-39): text the post must also contain, e.g. "#Blink" or "@yourbrand". Set by the creator. */
+  mustInclude?: string
 }
 
 export interface QuestGroup {

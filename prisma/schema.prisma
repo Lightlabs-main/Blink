@@ -261,3 +261,19 @@ model Transfer {
 
   @@index([privyUserId, createdAt])
 }
+
+/// D-39: X task per person per campaign: their personal code and the verified post. One X account / post per campaign.
+model XTask {
+  campaignId   String    @db.Uuid
+  privyUserId  String
+  code         String
+  postId       String?
+  postUrl      String?
+  authorHandle String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@id([campaignId, privyUserId])
+  @@unique([campaignId, postId])
+  @@unique([campaignId, authorHandle])
+}
