@@ -477,3 +477,12 @@ for now.
 blinksol.site drops the broadsheet design (D-18) for the same system as the app (D-31): ink/cream with the lime
 dot, Bricolage Grotesque, DM Sans, DM Mono, rounded cards and pill buttons, light/dark following the system with a
 toggle. Content, live drops listing, campaign pages (`/c/:id`) and App Links are unchanged.
+
+## D-35 — Never call Blink while the wallet app is on screen (2026-10-04)
+
+Found on device with build f1860f62: funding failed on every wallet with "Could not reach Blink". D-29 had moved
+the funding prepare call inside the MWA session; while the wallet app is in front, Blink is a background app and
+many Android phones block background network access, so the request never left the phone (the server logged
+none). The app now prepares the fresh transaction on each tap just before opening the wallet (a few seconds before
+signing, well inside the ~60–90 s blockhash window), and nothing calls the network inside `transact`. An expired
+approval gets a plain "tap again" message.
