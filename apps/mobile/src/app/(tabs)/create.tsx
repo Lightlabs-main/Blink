@@ -237,6 +237,9 @@ export default function Create() {
   const [oreMin, setOreMin] = useState('')
   // D-33: an action — mine ORE after the campaign starts (the server records the start round).
   const [questOre, setQuestOre] = useState(false)
+  // D-39: post on X with a personal code (+ optional required text).
+  const [questX, setQuestX] = useState(false)
+  const [xText, setXText] = useState('')
   const [questTap, setQuestTap] = useState(true)
 
   const isQuest = type === 'VERIFIED_QUEST'
@@ -283,12 +286,17 @@ export default function Create() {
       if (ore) eligibility.push(ore)
       const actions: QuestGroup[] = questTap ? [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }] : []
       if (questOre) actions.push({ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] })
+      if (questX) {
+        const must = xText.trim()
+        if (must && (must.length < 2 || must.length > 60)) throw new Error('required X text must be 2–60 characters')
+        actions.push({ mode: 'ALL', conditions: [{ verifier: 'X_QUEST', ...(must ? { mustInclude: must } : {}) }] })
+      }
       if (!eligibility.length && !actions.length) return { ok: false, error: 'Add at least one requirement or action.' }
       return { ok: true, requirements: { eligibility, actions } }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Check the minimums.' }
     }
-  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre])
+  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre, questX, xText])
 
   const create = useMutation({
     mutationFn: async () => {
@@ -362,7 +370,7 @@ export default function Create() {
   // Plain-English summary for the review step (update §11 step 6).
   const conditions: QuestCondition[] = isQuest && quest.ok ? quest.requirements.eligibility.flatMap((g) => g.conditions) : []
   const who = conditions.length ? `People who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : 'Anyone'
-  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}`
+  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}${isQuest && questX ? ' and post on X with their code' : ''}`
   const sentence =
     selected && reward?.ok && people !== null
       ? `${who}${doWhat} can receive ${reward.display} ${selected.symbol} each. Up to ${people.toString()} ${people === 1n ? 'winner' : 'winners'}${
@@ -449,7 +457,30 @@ export default function Create() {
             title="ORE mining"
           />
           <Option badge="Soon" body="Scan a code at your event." disabled icon="scan" on={false} title="QR check-in" />
-          <Option badge="Unavailable" body="Paused pending X platform policy review." disabled icon="share" on={false} title="X / Twitter" />
+          <Option
+            body="Post on X with a personal Blink code. People paste their post link; Blink checks the public post. No X login."
+            icon="share"
+            on={questX}
+            onPress={() => {
+              haptics.tap()
+              setQuestX((v) => !v)
+            }}
+            title="Post on X"
+          />
+          {questX ? (
+            <View style={styles.amountRow}>
+              <TextInput
+                autoCapitalize="none"
+                maxLength={60}
+                onChangeText={setXText}
+                placeholder="Required text (optional), e.g. #Blink or @yourbrand"
+                placeholderTextColor={color.textMuted}
+                selectionColor={color.lime}
+                style={[styles.amountInput, font('body'), { fontSize: 15 }]}
+                value={xText}
+              />
+            </View>
+          ) : null}
           {!quest.ok ? <Notice message={quest.error} /> : null}
         </View>
       ) : null}

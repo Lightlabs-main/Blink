@@ -755,7 +755,8 @@ describe('Verified Quest (D-21)', () => {
     const bad = async (r: object) => (await make(r)).statusCode
     // D-33: the start round is set by the server only; a creator cannot choose it.
     expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1' }] }] })).toBe(400)
-    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'X_QUEST' }] }] })).toBe(400)
+    // D-39: X posts are allowed; required text only on X posts.
+    expect(await bad({ eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH', mustInclude: '#Blink' }] }] })).toBe(400)
     expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }], actions: [] })).toBe(400)
     expect(await bad({ eligibility: [{ mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED' }] }], actions: [] })).toBe(400)
     expect(await bad({ eligibility: [], actions: [] })).toBe(400)

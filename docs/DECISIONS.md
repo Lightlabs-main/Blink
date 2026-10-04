@@ -511,3 +511,16 @@ an ink card with the Blink logo and lime dot (fixed colours so it looks the same
 (react-native-view-shot) and opens the share sheet (X, WhatsApp, Photos…); "Post on X" opens the X composer with a
 line and the drop or explorer link; "Explorer" opens the transaction. Entry points: Profile → History & receipts,
 Home → Your rewards / All activity, and "View & share receipt" after a claim.
+
+## D-39 — X tasks by personal code + public post check, no X login (2026-10-04, Maris: "Paste link + code")
+
+Reverses the X_QUEST block (update §19, D-21) by owner decision. `X_QUEST` ("Post on X") is an action: each person
+gets a personal code per campaign (`BLINK-XXXXXX`); they post on X (post, quote or reply) with it and paste the
+link. The server reads the public post through X's official oEmbed endpoint (`publish.x.com/oembed`, no login, no
+API key, no scraping) and requires: the post exists and is public, its text contains the person's code and the
+creator's optional required text (`mustInclude`), it was posted after the campaign was created (post-id timestamp),
+and that X account / post has not been used by anyone else in the same campaign (unique indexes). Verified tasks
+make the requirement PASSED; X being unreachable returns a retryable error and never passes. 10 submissions per
+hour per user. Not verifiable this way: likes, follows, reposts (nothing public to read).
+**Risk accepted by the owner:** rewarding posts can conflict with X's rules on incentivised engagement; keep tasks
+to genuine posts, one per person, and avoid follow/like-for-reward.

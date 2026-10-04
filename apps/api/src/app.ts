@@ -11,6 +11,7 @@ import {
   pushTokenDeleteRequest,
   pushTokenRequest,
   questHasTapRush,
+  xTaskSubmitRequest,
   avatarUploadRequest,
   profileUpdateRequest,
   questUses,
@@ -34,6 +35,7 @@ import { NOOP_NOTIFIER, type Notifier, type PushTokenStore } from './push.ts'
 import type { SkrStaking } from './skr-service.ts'
 import type { SendService } from './send-service.ts'
 import type { TransferStore } from './history.ts'
+import { parsePostUrl, postTime, XAccountUsedError, type XPostReader, type XTaskStore } from './x-quest.ts'
 import { AVATAR_MAX_BYTES, avatarPath, type ProfileStore, sniffImage, usernameProblem, UsernameTakenError } from './profile.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
@@ -63,6 +65,9 @@ export interface AppDeps {
   quests?: QuestService
   /** D-23: in-app SKR staking (mainnet reads + unsigned transactions for the user's own wallet). */
   skr?: SkrStaking
+  /** D-39: X tasks (personal code + public post check). */
+  xTasks?: XTaskStore
+  xReader?: XPostReader
   /** D-38: sends, for history and receipts. */
   transfers?: TransferStore
   /** D-37: usernames and profile pictures. */
@@ -161,6 +166,63 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!wallets.includes(req.params.address)) throw new ClaimError('WALLET_NOT_LINKED', 'this wallet is not linked to your account', 404)
     if (!deps.auth.unlinkExternalSolanaWallet) throw new ClaimError('UNLINK_UNAVAILABLE', 'removing wallets is not available right now', 503)
     return { verifiedCreatorWallets: await deps.auth.unlinkExternalSolanaWallet(auth.privyUserId, req.params.address) }
+  })
+
+  // ---- D-39: X tasks: personal code, then the public post is checked through X's oEmbed ----
+
+  async function xTaskContext(req: FastifyRequest<{ Params: { id: string } }>) {
+    const auth = await requireAuth(req)
+    if (!deps.xTasks || !deps.xReader) throw new ClaimError('X_UNAVAILABLE', 'X tasks are not available right now', 503)
+    const campaign = /^[0-9a-f-]{36}$/.test(req.params.id) ? await deps.campaigns.findById(req.params.id) : null
+    const condition = campaign?.requirements && [...campaign.requirements.eligibility, ...campaign.requirements.actions].flatMap((g) => g.conditions).find((c) => c.verifier === 'X_QUEST')
+    if (!campaign || !condition) throw new ClaimError('NOT_FOUND', 'this drop has no X task', 404)
+    return { auth, campaign, condition, xTasks: deps.xTasks, xReader: deps.xReader }
+  }
+  const xTaskView = (t: Awaited<ReturnType<XTaskStore['get']>>, campaignId: string, mustInclude?: string) => ({
+    code: t?.code ?? null,
+    mustInclude: mustInclude ?? null,
+    suggestedText: t ? `${mustInclude ? `${mustInclude} ` : ''}Joining this drop on Blink — tokenized stocks, made social. ${t.code} https://blinksol.site/c/${campaignId}` : null,
+    verified: Boolean(t?.verifiedAt),
+    postUrl: t?.postUrl ?? null,
+    authorHandle: t?.authorHandle ?? null,
+  })
+
+  app.get<{ Params: { id: string } }>('/v1/campaigns/:id/x-task', async (req) => {
+    const { auth, campaign, condition, xTasks } = await xTaskContext(req)
+    const task = await xTasks.getOrCreate(campaign.id, auth.privyUserId)
+    return { task: xTaskView(task, campaign.id, condition.mustInclude) }
+  })
+
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/x-task', async (req, reply) => {
+    const { auth, campaign, condition, xTasks, xReader } = await xTaskContext(req)
+    throttle(req, auth)
+    if (!limiter.hit(`x:${auth.privyUserId}`, 10, 60 * 60 * 1000)) throw new ClaimError('RATE_LIMITED', 'too many tries — wait a little and try again', 429)
+    const parsed = xTaskSubmitRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', 'paste the link to your post')
+    const link = parsePostUrl(parsed.data.url)
+    if (!link) return sendError(reply, 400, 'X_URL_INVALID', 'that isn’t a link to a post on X (it should look like x.com/name/status/…)')
+    const task = await xTasks.getOrCreate(campaign.id, auth.privyUserId)
+    if (postTime(link.postId).getTime() < campaign.createdAt.getTime() - 60_000) {
+      return sendError(reply, 400, 'X_POST_TOO_OLD', 'that post is older than this drop — make a new post with your code')
+    }
+    const read = await xReader.read(link.url)
+    if (!read.ok) {
+      return read.reason === 'NOT_FOUND'
+        ? sendError(reply, 404, 'X_POST_NOT_FOUND', 'Blink can’t see that post — check it’s public (not a protected account) and not deleted')
+        : sendError(reply, 503, 'X_UNAVAILABLE', 'X isn’t answering right now — try again in a minute')
+    }
+    const text = read.post.text.toLowerCase()
+    if (!text.includes(task.code.toLowerCase())) return sendError(reply, 400, 'X_CODE_MISSING', `your post doesn’t contain your code ${task.code}`)
+    if (condition.mustInclude && !text.includes(condition.mustInclude.toLowerCase())) {
+      return sendError(reply, 400, 'X_TEXT_MISSING', `your post must also include “${condition.mustInclude}”`)
+    }
+    try {
+      const done = await xTasks.markVerified(campaign.id, auth.privyUserId, { postId: link.postId, postUrl: link.url, authorHandle: read.post.authorHandle })
+      return { task: xTaskView(done, campaign.id, condition.mustInclude) }
+    } catch (err) {
+      if (err instanceof XAccountUsedError) return sendError(reply, 409, 'X_ACCOUNT_USED', 'that X account was already used by someone else in this drop')
+      throw err
+    }
   })
 
   // ---- D-38: history (every line opens a receipt) ----

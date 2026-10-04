@@ -28,6 +28,7 @@ import type { AuthVerifier } from './auth.ts'
 import type { StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository } from './claim-repo.ts'
 import type { SeekerVerifier } from './claim-service.ts'
+import type { XTaskStore } from './x-quest.ts'
 
 /** Mainnet-only protocol reads for Verified Quest (SKR, ORE). */
 export interface ChainReader {
@@ -110,6 +111,8 @@ export class QuestService {
       claims: ClaimRepository
       chain?: ChainReader
       seeker?: SeekerVerifier
+      /** D-39: verified X posts. */
+      xTasks?: XTaskStore
       log?: { warn: (o: object, msg: string) => void }
     },
   ) {}
@@ -153,6 +156,12 @@ export class QuestService {
             const session = await this.deps.claims.findUnusedQualifiedSession(campaign.id, privyUserId)
             if (session) tapSessionId = session.id
             results.set(c, { verifier: c.verifier, status: session ? 'PASSED' : 'NOT_STARTED' })
+            return
+          }
+          if (c.verifier === 'X_QUEST') {
+            // D-39: verified when the person submitted a post Blink checked (see the x-task route).
+            const task = this.deps.xTasks ? await this.deps.xTasks.get(campaign.id, privyUserId) : null
+            results.set(c, { verifier: c.verifier, status: task?.verifiedAt ? 'PASSED' : 'NOT_STARTED', detail: task?.authorHandle ? `@${task.authorHandle}` : undefined })
             return
           }
           if (c.verifier === 'SEEKER_SGT') {

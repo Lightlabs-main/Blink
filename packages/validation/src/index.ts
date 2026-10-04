@@ -48,7 +48,12 @@ export const tapRushRules = z
 
 /** D-21: one requirement. Only ENABLED registry verifiers; amount verifiers need a positive raw minimum. */
 const questCondition = z
-  .object({ verifier: z.enum(VERIFIER_TYPES), minRaw: rawAmount.optional() })
+  .object({
+    verifier: z.enum(VERIFIER_TYPES),
+    minRaw: rawAmount.optional(),
+    // D-39: X_QUEST only; one line, no links (the person's code and the drop link are added by Blink).
+    mustInclude: z.string().trim().min(2).max(60).regex(/^[^\n\r]*$/, 'one line only').optional(),
+  })
   .strict()
   .superRefine((c, ctx) => {
     const def = VERIFIERS[c.verifier]
@@ -57,6 +62,7 @@ const questCondition = z
       ctx.addIssue({ code: 'custom', path: ['minRaw'], message: `${def.label} needs a minimum amount` })
     }
     if (!def.amount && c.minRaw !== undefined) ctx.addIssue({ code: 'custom', path: ['minRaw'], message: `${def.label} takes no amount` })
+    if (c.mustInclude !== undefined && c.verifier !== 'X_QUEST') ctx.addIssue({ code: 'custom', path: ['mustInclude'], message: 'only X posts take required text' })
   })
 
 const questGroup = z
@@ -242,6 +248,9 @@ export const profileUpdateRequest = z.object({ username: z.string().trim().toLow
 
 /** D-37: PUT /v1/me/avatar — a small JPEG/PNG as base64 (the app resizes to 256 px first). */
 export const avatarUploadRequest = z.object({ image: z.string().min(100).max(220_000) }).strict()
+
+/** D-39: POST /v1/campaigns/:id/x-task — the link to the person's post. */
+export const xTaskSubmitRequest = z.object({ url: z.string().trim().min(10).max(300) }).strict()
 
 /** D-32: POST /v1/me/send/prepare — `asset` is 'SOL' or a supported mint; raw amount as a decimal string. */
 export const sendPrepareRequest = z
