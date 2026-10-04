@@ -498,7 +498,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return { session: await requireClaims().startTapRush(auth, req.params.id, req.ip) }
   })
 
-  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/finish', async (req, reply) => {
+  // D-36: rounds of up to 2 minutes carry up to 2,400 tap timings, more than the default 16 KB body limit.
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/tap-rush/finish', { bodyLimit: 64 * 1024 }, async (req, reply) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
     const parsed = finishTapRushRequest.safeParse(req.body)

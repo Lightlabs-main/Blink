@@ -29,7 +29,11 @@ describe('createCampaignRequest', () => {
     const base = { mint, allowanceRaw: '100', rewardPerClaimRaw: '10' }
     expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 50, seconds: 10 } }).success).toBe(true)
     expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 5, seconds: 10 } }).success).toBe(false)
-    expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 50, seconds: 60 } }).success).toBe(false)
+    // D-36: up to 1,000 taps and 2 minutes, but never faster than 12 taps a second on average.
+    expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 1000, seconds: 120 } }).success).toBe(true)
+    expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 1000, seconds: 60 } }).success).toBe(false)
+    expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 1001, seconds: 120 } }).success).toBe(false)
+    expect(createCampaignRequest.safeParse({ ...base, type: 'TAP_RUSH', tapRush: { goal: 50, seconds: 121 } }).success).toBe(false)
     expect(createCampaignRequest.safeParse({ ...base, type: 'GIFT', tapRush: { goal: 50, seconds: 10 } }).success).toBe(false)
   })
 
