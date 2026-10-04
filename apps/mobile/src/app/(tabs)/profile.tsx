@@ -8,9 +8,9 @@ import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
-import { api } from '../../lib/api'
+import { api, apiUrl } from '../../lib/api'
 import { COUNTRIES } from '../../lib/countries'
-import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork } from '../../lib/data'
+import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork, useProfile } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, networkLabel, shortAddress } from '../../lib/format'
 import { embeddedSolanaAddress, userEmail } from '../../lib/privy-user'
 import { type PushState, registerForPush, unregisterPush } from '../../lib/push'
@@ -48,6 +48,8 @@ export default function Profile() {
   const assets = useAssetMap()
 
   const email = userEmail(user)
+  const profile = useProfile()
+  const username = profile.data?.profile.username ?? null
   const stockWallet = embeddedSolanaAddress(user)
   const creatorWallets = me.data?.verifiedCreatorWallets ?? []
   const net = networkLabel(network.data?.cluster)
@@ -101,17 +103,27 @@ export default function Profile() {
     <Screen tabBar>
       <GlowCard>
         <Row>
-          <Avatar label={email ?? creatorWallets[0] ?? 'B'} size={56} />
+          <Pressable accessibilityLabel="Edit profile" onPress={() => router.push('/profile-edit')}>
+            <Avatar label={username ?? email ?? creatorWallets[0] ?? 'B'} size={56} uri={apiUrl(profile.data?.profile.avatarUrl)} />
+          </Pressable>
           <View style={{ flex: 1, gap: 4 }}>
             <T variant="title" numberOfLines={1}>
-              {email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account')}
+              {username ? `@${username}` : (email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account'))}
             </T>
+            {username && email ? (
+              <T variant="caption" numberOfLines={1}>
+                {email}
+              </T>
+            ) : null}
             <Row gap={space.sm}>
               {creatorWallets.length ? <Badge label="Creator" tone="live" /> : <Badge label="Member" tone="neutral" />}
               <Badge label={net.label} tone={net.isTest ? 'warn' : 'live'} />
             </Row>
           </View>
         </Row>
+        <Button icon="user" onPress={() => router.push('/profile-edit')} size="sm" style={{ marginTop: space.lg, alignSelf: 'flex-start' }} variant="secondary">
+          {username ? 'Edit profile' : 'Set username & picture'}
+        </Button>
         <Row gap={0} style={{ marginTop: space.xl }}>
           <View style={styles.stat}>
             <T variant="display">{campaigns.length}</T>
@@ -221,7 +233,7 @@ export default function Profile() {
       <View style={{ gap: space.md }}>
         <SectionHeader title="About" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
-          <ListRow chevron={false} leading={<RowIcon icon="shield" />} subtitle={PRODUCT_COPY.trustStatement} title="How Blink works" />
+          <ListRow leading={<RowIcon icon="shield" />} onPress={() => router.push('/how')} subtitle="Taking part, your wallet, campaigns and safety" title="How Blink works" />
           {__DEV__ ? (
             <>
               <Divider />

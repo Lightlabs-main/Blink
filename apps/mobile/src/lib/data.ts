@@ -14,6 +14,12 @@ export function useNetwork() {
   return useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: 5 * 60_000 })
 }
 
+/** D-37: the signed-in user's username and picture. */
+export function useProfile() {
+  const { getAccessToken, user } = usePrivy()
+  return useQuery({ queryKey: ['profile'], queryFn: () => api.myProfile(getAccessToken), enabled: Boolean(user), staleTime: 60_000 })
+}
+
 export function useMe() {
   const { getAccessToken, user } = usePrivy()
   return useQuery({ queryKey: ['me'], queryFn: () => api.me(getAccessToken), enabled: Boolean(user) })

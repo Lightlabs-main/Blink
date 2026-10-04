@@ -493,3 +493,11 @@ Creators choose the round length (10 s, 30 s, 1 min, 2 min) and the goal: preset
 any custom number from 10 to 1,000. A goal must be winnable: at most 12 taps a second on average (so 1,000 taps
 needs a 2-minute round); the server enforces it. Tap anti-cheat (D-14) is unchanged; the finish route accepts a
 64 KB body for up to 2,400 tap timings.
+
+## D-37 — Usernames and profile pictures (2026-10-04, Maris)
+
+Optional, per account (`Profile` table). Usernames: 3–20 of `a-z 0-9 _`, unique case-insensitively, with
+Blink/staff/issuer-like names reserved. Pictures: the app crops to a square and resizes to 256 px JPEG; the server
+accepts only real JPEG/PNG (magic bytes) up to 150 KB and serves them at `/v1/avatars/<random public id>?v=<n>`
+(never the Privy id). Live rooms show `@username` and the picture when set, otherwise the truncated wallet; email
+and wallets stay private. Not moderated automatically — a report/remove flow is a follow-up if needed.

@@ -24,6 +24,7 @@ import { MainnetChainReader, QuestService } from './quest-service.ts'
 import { ExpoPushNotifier, InMemoryPushTokenStore, PrismaPushTokenStore, type PushTokenStore } from './push.ts'
 import { MainnetSkrStaking } from './skr-service.ts'
 import { SendService } from './send-service.ts'
+import { InMemoryProfileStore, PrismaProfileStore, type ProfileStore } from './profile.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
 
@@ -45,9 +46,11 @@ let claims: ClaimRepository & ServiceWalletStore & EligibilityStore
 let ledger: BudgetLedger
 let prisma: ReturnType<typeof createPrismaClient> | undefined
 let pushTokens: PushTokenStore
+let profiles: ProfileStore
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
   pushTokens = new PrismaPushTokenStore(prisma)
+  profiles = new PrismaProfileStore(prisma)
   campaigns = new PrismaCampaignRepository(prisma)
   claims = new PrismaClaimRepository(prisma)
   ledger = new PrismaBudgetLedger(prisma, env)
@@ -56,6 +59,7 @@ if (env.DATABASE_URL) {
   const memory = new InMemoryCampaignRepository()
   campaigns = memory
   pushTokens = new InMemoryPushTokenStore()
+  profiles = new InMemoryProfileStore()
   claims = new InMemoryClaimRepository(memory)
   ledger = new InMemoryBudgetLedger(env)
 } else {
@@ -128,6 +132,7 @@ const app = buildApp({
   }),
   pushTokens,
   notifier,
+  profiles,
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
   logger: true,

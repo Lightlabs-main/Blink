@@ -237,6 +237,12 @@ export const pushTokenRequest = z
 
 export const pushTokenDeleteRequest = z.object({ token: z.string().min(1).max(256) }).strict()
 
+/** D-37: PUT /v1/me/profile — null clears the username. Lower-cased before the server checks it. */
+export const profileUpdateRequest = z.object({ username: z.string().trim().toLowerCase().max(40).nullable() }).strict()
+
+/** D-37: PUT /v1/me/avatar — a small JPEG/PNG as base64 (the app resizes to 256 px first). */
+export const avatarUploadRequest = z.object({ image: z.string().min(100).max(220_000) }).strict()
+
 /** D-32: POST /v1/me/send/prepare — `asset` is 'SOL' or a supported mint; raw amount as a decimal string. */
 export const sendPrepareRequest = z
   .object({

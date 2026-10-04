@@ -87,6 +87,17 @@ export interface SkrPosition {
   withdrawableAt: string | null
 }
 
+/** D-37: the caller's public profile. `avatarUrl` is a path on the API origin; use `apiUrl()` to load it. */
+export interface MyProfile {
+  username: string | null
+  avatarUrl: string | null
+}
+
+/** Absolute URL for a path the API returned (e.g. a profile picture). */
+export function apiUrl(path: string | null | undefined): string | null {
+  return path && baseUrl ? `${baseUrl}${path}` : null
+}
+
 /** D-32: the Blink stock wallet (Privy embedded wallet) and its balances. */
 export interface StockWallet {
   wallet: string
@@ -97,6 +108,12 @@ export interface StockWallet {
 export type SkrAction = 'stake' | 'unstake' | 'withdraw' | 'cancel_unstake'
 
 export const api = {
+  myProfile: (t: GetAccessToken) => authed<{ profile: MyProfile }>(t, '/v1/me/profile'),
+  setUsername: (t: GetAccessToken, username: string | null) =>
+    authed<{ profile: MyProfile }>(t, '/v1/me/profile', { method: 'PUT', body: JSON.stringify({ username }) }),
+  setAvatar: (t: GetAccessToken, imageBase64: string) =>
+    authed<{ profile: MyProfile }>(t, '/v1/me/avatar', { method: 'PUT', body: JSON.stringify({ image: imageBase64 }) }),
+  removeAvatar: (t: GetAccessToken) => authed<{ profile: MyProfile }>(t, '/v1/me/avatar', { method: 'DELETE' }),
   stockWallet: (t: GetAccessToken) => authed<{ wallet: StockWallet }>(t, '/v1/me/wallet'),
   /** Blink pays the fee; the stock wallet signs in the app, then `sendSubmit` sends it. */
   sendPrepare: (t: GetAccessToken, body: { asset: string; to: string; amountRaw: string }) =>

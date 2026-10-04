@@ -482,7 +482,11 @@ export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number]
 
 /** Privacy-safe public identity: a truncated wallet only. Never email, Privy id, country or compliance data. */
 export interface PublicParticipant {
+  /** The username when the person set one (D-37), otherwise a shortened wallet. */
   label: string
+  username?: string
+  /** Profile picture path on the API origin (`/v1/avatars/...`), when set. */
+  avatarUrl?: string | null
 }
 
 export interface LiveEvent {

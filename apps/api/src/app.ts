@@ -11,6 +11,8 @@ import {
   pushTokenDeleteRequest,
   pushTokenRequest,
   questHasTapRush,
+  avatarUploadRequest,
+  profileUpdateRequest,
   questUses,
   stampOreRound,
   sendPrepareRequest,
@@ -31,6 +33,7 @@ import type { QuestService } from './quest-service.ts'
 import { NOOP_NOTIFIER, type Notifier, type PushTokenStore } from './push.ts'
 import type { SkrStaking } from './skr-service.ts'
 import type { SendService } from './send-service.ts'
+import { AVATAR_MAX_BYTES, avatarPath, type ProfileStore, sniffImage, usernameProblem, UsernameTakenError } from './profile.ts'
 import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
@@ -59,6 +62,8 @@ export interface AppDeps {
   quests?: QuestService
   /** D-23: in-app SKR staking (mainnet reads + unsigned transactions for the user's own wallet). */
   skr?: SkrStaking
+  /** D-37: usernames and profile pictures. */
+  profiles?: ProfileStore
   /** D-32: Send from the Blink stock wallet (fees paid by Blink). */
   send?: SendService
   /** D-24: push notifications. */
@@ -153,6 +158,64 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!wallets.includes(req.params.address)) throw new ClaimError('WALLET_NOT_LINKED', 'this wallet is not linked to your account', 404)
     if (!deps.auth.unlinkExternalSolanaWallet) throw new ClaimError('UNLINK_UNAVAILABLE', 'removing wallets is not available right now', 503)
     return { verifiedCreatorWallets: await deps.auth.unlinkExternalSolanaWallet(auth.privyUserId, req.params.address) }
+  })
+
+  // ---- D-37: public profile (username + picture) ----
+
+  function requireProfiles() {
+    if (!deps.profiles) throw new ClaimError('PROFILES_UNAVAILABLE', 'profiles are not available right now', 503)
+    return deps.profiles
+  }
+  const profileView = (p: Awaited<ReturnType<ProfileStore['get']>>) => ({ username: p?.username ?? null, avatarUrl: avatarPath(p) })
+
+  app.get('/v1/me/profile', async (req) => {
+    const auth = await requireAuth(req)
+    return { profile: profileView(await requireProfiles().get(auth.privyUserId)) }
+  })
+
+  app.put('/v1/me/profile', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const parsed = profileUpdateRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    const name = parsed.data.username || null
+    const problem = name ? usernameProblem(name) : null
+    if (problem) return sendError(reply, 400, 'INVALID_USERNAME', problem)
+    try {
+      return { profile: profileView(await requireProfiles().setUsername(auth.privyUserId, name)) }
+    } catch (err) {
+      if (err instanceof UsernameTakenError) return sendError(reply, 409, 'USERNAME_TAKEN', 'that username is taken')
+      throw err
+    }
+  })
+
+  app.put('/v1/me/avatar', { bodyLimit: 256 * 1024 }, async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const parsed = avatarUploadRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', 'send a small JPEG or PNG')
+    const bytes = Uint8Array.from(Buffer.from(parsed.data.image, 'base64'))
+    const type = sniffImage(bytes)
+    if (!type) return sendError(reply, 400, 'INVALID_IMAGE', 'only JPEG or PNG pictures are supported')
+    if (bytes.length > AVATAR_MAX_BYTES) return sendError(reply, 413, 'IMAGE_TOO_LARGE', 'that picture is too large')
+    return { profile: profileView(await requireProfiles().setAvatar(auth.privyUserId, { bytes, type })) }
+  })
+
+  app.delete('/v1/me/avatar', async (req) => {
+    const auth = await requireAuth(req)
+    return { profile: profileView(await requireProfiles().setAvatar(auth.privyUserId, null)) }
+  })
+
+  /** Public profile pictures by opaque id; versioned URLs, so they can be cached for a long time. */
+  app.get<{ Params: { publicId: string } }>('/v1/avatars/:publicId', async (req, reply) => {
+    if (!/^[A-Za-z0-9_-]{8,20}$/.test(req.params.publicId)) return sendError(reply, 404, 'NOT_FOUND', 'not found')
+    const img = await requireProfiles().avatar(req.params.publicId)
+    if (!img) return sendError(reply, 404, 'NOT_FOUND', 'not found')
+    return reply
+      .header('content-type', img.type)
+      .header('cache-control', 'public, max-age=604800, immutable')
+      .header('x-content-type-options', 'nosniff')
+      .send(Buffer.from(img.bytes))
   })
 
   // ---- D-32: the Blink stock wallet: balances, Receive (address) and sponsored Send ----
@@ -470,7 +533,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility, quests: deps.quests })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility, quests: deps.quests, profiles: deps.profiles })
   }
 
   async function claimResponse(claim: StoredClaim | null) {
