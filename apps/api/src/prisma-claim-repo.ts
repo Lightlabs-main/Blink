@@ -249,17 +249,17 @@ export class PrismaClaimRepository implements ClaimRepository, ServiceWalletStor
       ...checks.filter((q) => q.qualified).map((q) => q.privyUserId),
       ...claims.filter((c) => c.status !== 'FAILED').map((c) => c.privyUserId),
     ])
-    const best = new Map<string, { wallet: string | null; score: number }>()
+    const best = new Map<string, { privyUserId: string; wallet: string | null; score: number }>()
     for (const s of sessions) {
       if (!s.finishedAt || s.rejectReason || s.taps === null) continue
       const prev = best.get(s.privyUserId)
-      if (!prev || s.taps > prev.score) best.set(s.privyUserId, { wallet: s.publicWallet, score: s.taps })
+      if (!prev || s.taps > prev.score) best.set(s.privyUserId, { privyUserId: s.privyUserId, wallet: s.publicWallet, score: s.taps })
     }
     const events: RoomData['events'] = [
-      ...sessions.map((s) => ({ type: 'PARTICIPANT_JOINED' as const, wallet: s.publicWallet, at: s.startedAt })),
-      ...sessions.filter((s) => s.qualified && s.finishedAt).map((s) => ({ type: 'PARTICIPANT_QUALIFIED' as const, wallet: s.publicWallet, at: s.finishedAt! })),
-      ...checks.filter((q) => q.qualified).map((q) => ({ type: 'REQUIREMENT_VERIFIED' as const, wallet: q.publicWallet, at: q.checkedAt })),
-      ...claims.filter((c) => c.status === 'PAID').map((c) => ({ type: 'PAYOUT_CONFIRMED' as const, wallet: c.recipientWallet, at: c.updatedAt })),
+      ...sessions.map((s) => ({ type: 'PARTICIPANT_JOINED' as const, privyUserId: s.privyUserId, wallet: s.publicWallet, at: s.startedAt })),
+      ...sessions.filter((s) => s.qualified && s.finishedAt).map((s) => ({ type: 'PARTICIPANT_QUALIFIED' as const, privyUserId: s.privyUserId, wallet: s.publicWallet, at: s.finishedAt! })),
+      ...checks.filter((q) => q.qualified).map((q) => ({ type: 'REQUIREMENT_VERIFIED' as const, privyUserId: q.privyUserId, wallet: q.publicWallet, at: q.checkedAt })),
+      ...claims.filter((c) => c.status === 'PAID').map((c) => ({ type: 'PAYOUT_CONFIRMED' as const, privyUserId: c.privyUserId, wallet: c.recipientWallet, at: c.updatedAt })),
     ]
     return {
       joined: joined.size,

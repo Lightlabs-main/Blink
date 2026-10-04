@@ -5,8 +5,9 @@ import { StyleSheet, View } from 'react-native'
 
 import { font } from '../../design/fonts'
 import { color, space } from '../../design/tokens'
-import { Card, Divider, PulseDot, Row, T } from '../../design/ui'
-import { api } from '../../lib/api'
+import { Avatar, Card, Divider, PulseDot, Row, T } from '../../design/ui'
+import { api, apiUrl } from '../../lib/api'
+import { useProfile } from '../../lib/data'
 import { embeddedSolanaAddress } from '../../lib/privy-user'
 import { type CampaignSummary, type LiveEvent, publicLabel } from '../../shared'
 
@@ -58,7 +59,7 @@ function eventText(e: LiveEvent, symbol: string) {
 
 /**
  * Live campaign room (D-21, update §13/§33): real aggregates from the server, refreshed every few seconds while the
- * screen is open. No fabricated activity; identities are truncated wallets only.
+ * screen is open. No fabricated activity; people appear by username (D-37) or a truncated wallet.
  */
 export function LiveRoom({ campaign }: { campaign: CampaignSummary }) {
   const { user } = usePrivy()
@@ -69,9 +70,12 @@ export function LiveRoom({ campaign }: { campaign: CampaignSummary }) {
     refetchInterval: live ? 4000 : false,
   })
   const now = useClock(live && Boolean(campaign.endsAt))
+  const profile = useProfile()
   const r = room.data?.room
   if (!r) return null
   const me = publicLabel(embeddedSolanaAddress(user)).label
+  const myName = profile.data?.profile.username ? `@${profile.data.profile.username}` : null
+  const mine_ = (label: string) => label === me || (myName !== null && label === myName)
   const left = campaign.endsAt && now ? Date.parse(campaign.endsAt) - now : null
 
   return (
@@ -107,13 +111,14 @@ export function LiveRoom({ campaign }: { campaign: CampaignSummary }) {
         <View style={{ gap: space.sm }}>
           <Divider />
           {r.leaderboard.slice(0, 5).map((e, i) => {
-            const mine = e.who.label === me
+            const mine = mine_(e.who.label)
             return (
               <Row key={`${e.who.label}-${i}`} style={{ justifyContent: 'space-between' }}>
                 <Row gap={space.sm}>
                   <T variant="numeric" color={color.textMuted}>
                     {String(i + 1)}
                   </T>
+                  <Avatar label={e.who.username ?? e.who.label} size={24} uri={apiUrl(e.who.avatarUrl)} />
                   <T variant="bodyStrong" color={mine ? color.lime : color.text}>
                     {mine ? 'You' : e.who.label}
                   </T>

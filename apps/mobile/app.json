@@ -75,6 +75,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#141210"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Blink uses a photo you choose as your profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "icon": "./assets/icon.png"

@@ -232,3 +232,15 @@ model PushToken {
 
   @@index([privyUserId])
 }
+
+/// D-37: optional public profile — unique username and a small profile picture served by an opaque public id.
+model Profile {
+  privyUserId   String   @id
+  publicId      String   @unique
+  username      String?  @unique
+  avatar        Bytes?
+  avatarType    String?
+  avatarVersion Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

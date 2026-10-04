@@ -20,6 +20,7 @@ import type { EligibilityService } from './eligibility.ts'
 import type { QuestService } from './quest-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { RateLimiter } from './rate-limit.ts'
+import { avatarPath, type ProfileStore } from './profile.ts'
 
 /** D-17: finds a genuine Seeker Genesis Token (mainnet) held by a wallet; returns its mint (the device identity). */
 export interface SeekerVerifier {
@@ -74,6 +75,8 @@ export class ClaimService {
       eligibility?: EligibilityService
       /** D-21: Verified Quest evaluation; required for VERIFIED_QUEST claims. */
       quests?: QuestService
+      /** D-37: usernames and pictures in the live room. */
+      profiles?: ProfileStore
     },
   ) {}
 
@@ -237,6 +240,13 @@ export class ClaimService {
     const campaign = /^[0-9a-f-]{36}$/.test(campaignId) ? await this.deps.campaigns.findById(campaignId) : null
     if (!campaign) throw new ClaimError('NOT_FOUND', 'campaign not found', 404)
     const data = await this.deps.claims.roomData(campaign.id, { leaderboard: 10, events: 15 })
+    // D-37: people who set a username / picture are shown by it; everyone else by a shortened wallet.
+    const ids = [...new Set([...data.leaderboard.map((e) => e.privyUserId), ...data.events.map((e) => e.privyUserId)])]
+    const profiles = this.deps.profiles ? await this.deps.profiles.getMany(ids) : new Map()
+    const who = (privyUserId: string, wallet: string | null) => {
+      const p = profiles.get(privyUserId)
+      return p?.username ? { label: `@${p.username}`, username: p.username, avatarUrl: avatarPath(p) } : { ...publicLabel(wallet), avatarUrl: avatarPath(p) }
+    }
     const reward = campaign.rewardPerClaimRaw
     const scored = campaign.type === 'TAP_RUSH' || (campaign.type === 'VERIFIED_QUEST' && Boolean(campaign.requirements && questHasTapRush(campaign.requirements)))
     return {
@@ -246,8 +256,8 @@ export class ClaimService {
       qualified: data.qualified,
       rewardsRemaining: reward ? Number(maxClaims(campaign.allowanceRaw - campaign.claimedRaw, reward)) : 0,
       endsAt: campaign.endsAt?.toISOString() ?? null,
-      leaderboard: scored ? data.leaderboard.map((e) => ({ who: publicLabel(e.wallet), score: e.score })) : null,
-      events: data.events.map((e) => ({ type: e.type, who: publicLabel(e.wallet), at: e.at.toISOString() })),
+      leaderboard: scored ? data.leaderboard.map((e) => ({ who: who(e.privyUserId, e.wallet), score: e.score })) : null,
+      events: data.events.map((e) => ({ type: e.type, who: who(e.privyUserId, e.wallet), at: e.at.toISOString() })),
       serverTime: new Date().toISOString(),
     }
   }

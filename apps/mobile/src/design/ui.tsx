@@ -504,7 +504,8 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
   )
 }
 
-export function Avatar({ label, size = 40 }: { label: string; size?: number }) {
+export function Avatar({ label, size = 40, uri }: { label: string; size?: number; uri?: string | null }) {
+  if (uri) return <Image accessibilityLabel={label} source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color.surface3 }} />
   return (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       <T style={{ ...font('displayMedium'), fontSize: size * 0.42, color: color.text }}>{label.slice(0, 1).toUpperCase()}</T>
