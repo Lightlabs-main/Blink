@@ -601,7 +601,8 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
   1 week; unmute), remove a member (they can't rejoin until an admin lets them back in — `ClubBan`), pin one message,
   switch the chat to "only admins can send messages" and edit the description. Nobody acts on the owner; only the
   owner acts on admins; nobody acts on themselves. Members are addressed by an opaque per-club id, never the account id.
-  Muted members and non-admins in an admins-only chat can still read and react.
+  Muted members can only read: no messages, voice notes, reactions or gifts (owner decision 2026-10-05).
+  Non-admins in an admins-only chat can't post but can still react and gift.
 - **Not in this build (owner decision):** paid clubs — one-time and monthly — come after October 8.
 
 ## D-44 — Gift xStocks to club members in chat (2026-10-05, Maris)
@@ -610,8 +611,8 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
   the server finds the recipient's Blink (embedded) wallet itself (never shown in the app) and builds the transfer
   through the D-32 Send service; the wallet signs in the app; Blink's fee payer pays the fee and, the first time, the
   recipient's token-account rent (mainnet budget cap applies). Same 20 sends/day cap and the global kill switch.
-- **Checks:** both people must be members of the club — any member can gift, including muted members and in an
-  admins-only chat (owner decision 2026-10-05: muting and admins-only limit messages, not gifts); no self-gifts; only Blink's supported assets; real xStocks need the sender's live eligibility check (inside
+- **Checks:** both people must be members of the club — any member can gift, including in an admins-only chat, but
+  not while muted (owner decisions 2026-10-05); no self-gifts; only Blink's supported assets; real xStocks need the sender's live eligibility check (inside
   Send) and the recipient's stored, current eligible decision (`isEligibleStored`) — otherwise
   `RECIPIENT_NOT_ELIGIBLE` before anything is signed.
 - **Truthful states:** a gift is posted in the chat, notified to the recipient (push) and shown as "Gift received" in

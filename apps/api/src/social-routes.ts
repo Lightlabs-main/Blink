@@ -172,10 +172,15 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
 
   /** D-43: muted members and (in admins-only chats) non-admins can read and react but not post. */
   function requireCanPost(club: StoredClub, member: { role: string; mutedUntil: Date | null }) {
+    requireNotMuted(member)
+    if (club.adminsOnly && !isAdmin(member)) throw new ClaimError('ADMINS_ONLY', 'only admins can send messages in this club right now', 403)
+  }
+
+  /** Owner decision 2026-10-05: a muted member can only read — no messages, voice notes, reactions or gifts. */
+  function requireNotMuted(member: { role: string; mutedUntil: Date | null }) {
     if (member.mutedUntil && member.mutedUntil.getTime() > Date.now() && member.role !== 'OWNER') {
       throw new ClaimError('MUTED', `an admin muted you until ${member.mutedUntil.toISOString()}`, 403)
     }
-    if (club.adminsOnly && !isAdmin(member)) throw new ClaimError('ADMINS_ONLY', 'only admins can send messages in this club right now', 403)
   }
 
   async function memberOnly(req: FastifyRequest<{ Params: { slug: string } }>, auth: AuthContext) {
@@ -387,7 +392,8 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/reactions', async (req, reply) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    const { club, social } = await memberOnly(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    requireNotMuted(member)
     const parsed = reactionRequest.safeParse(req.body)
     if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'that reaction is not available')
     const id = cursor(req.params.mid)
@@ -567,8 +573,9 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/gifts/prepare', async (req, reply) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    // Any member can gift — muting and admins-only chats limit messages, not gifts (owner decision 2026-10-05).
-    const { club, social } = await memberOnly(req, auth)
+    // Any member can gift, including in an admins-only chat; muted members can't (owner decisions 2026-10-05).
+    const { club, member, social } = await memberOnly(req, auth)
+    requireNotMuted(member)
     if (!deps.send) throw new ClaimError('SEND_UNAVAILABLE', 'gifts are not available right now', 503)
     const parsed = giftPrepareRequest.safeParse(req.body)
     if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid gift')

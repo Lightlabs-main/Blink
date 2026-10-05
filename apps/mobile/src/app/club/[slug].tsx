@@ -287,12 +287,13 @@ export default function ClubScreen() {
           canModerate={c.role === 'OWNER' || c.role === 'MOD'}
           canPost={c.joined}
           joining={join.isPending}
+          muted={Boolean(c.myMutedUntil)}
           onJoin={() => join.mutate()}
           onPinChange={refresh}
           pinned={c.pinned}
           postBlocked={
             c.myMutedUntil
-              ? `An admin muted you until ${new Date(c.myMutedUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}. You can still read and react.`
+              ? `An admin muted you until ${new Date(c.myMutedUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}. You can read the chat, but can’t post, react or gift until then.`
               : c.adminsOnly && c.role !== 'OWNER' && c.role !== 'MOD'
                 ? 'Only admins can send messages in this club right now.'
                 : null

@@ -316,7 +316,7 @@ describe('voice notes and admin controls (D-43)', () => {
     expect((await post('bob', `${base}/members/${carolId}/mute`, { minutes: 60 })).json().error.code).toBe('FORBIDDEN')
     await post('alice', `${base}/members/${carolId}/role`, { role: 'MEMBER' })
 
-    // Mute: can't post until unmuted; reactions still work.
+    // Mute: read-only until unmuted (no posts, reactions or gifts).
     expect((await post('bob', `${base}/members/${daveId}/mute`, { minutes: 7 })).statusCode).toBe(400)
     expect((await post('bob', `${base}/members/${daveId}/mute`, { minutes: 60 })).json().mutedUntil).toBeTruthy()
     expect((await post('dave', `${base}/messages`, { body: 'hi' })).json().error.code).toBe('MUTED')
@@ -396,11 +396,16 @@ describe('xStock gifts in club chat (D-44)', () => {
     expect((await g('bob', '/v1/me/passport')).json().passport.badges.map((b: { title: string }) => b.title)).toContain('Gift received')
     expect((await g('bob', `${base}/messages`)).json().messages.at(-1).authorId).toBe(aliceId)
 
-    // Any member can gift: even muted, and even when only admins can send messages.
+    // Admins-only chat: members can't post but can still gift. Muted members can't do anything but read.
     await a.inject({ method: 'PUT', url: `${base}/settings`, headers: as('alice'), payload: { adminsOnly: true } })
-    await p('alice', `${base}/members/${carolId}/mute`, { minutes: 60 })
     eligible.add('did:privy:alice')
-    expect((await p('carol', `${base}/messages`, { body: 'hi' })).json().error.code).toBe('MUTED')
+    expect((await p('carol', `${base}/messages`, { body: 'hi' })).json().error.code).toBe('ADMINS_ONLY')
+    await p('alice', `${base}/members/${carolId}/mute`, { minutes: 60 })
+    expect((await p('carol', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '7' })).json().error.code).toBe('MUTED')
+    const lastId = (await g('carol', `${base}/messages`)).json().messages.at(-1).id
+    expect((await p('carol', `${base}/messages/${lastId}/reactions`, { emoji: '🔥' })).json().error.code).toBe('MUTED')
+    expect((await g('carol', `${base}/messages`)).statusCode).toBe(200)
+    await p('alice', `${base}/members/${carolId}/mute`, { minutes: 0 })
     expect((await p('carol', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '7' })).statusCode).toBe(200)
     expect((await p('carol', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json().message.kind).toBe('GIFT')
     expect(notes).toHaveLength(2)
