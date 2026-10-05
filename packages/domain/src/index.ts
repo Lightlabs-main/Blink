@@ -85,6 +85,8 @@ export interface CampaignSummary {
   /** D-21: optional campaign window (ISO), enforced server-side. */
   startsAt: string | null
   endsAt: string | null
+  /** D-40: the club this drop belongs to, if any. */
+  clubId: string | null
   createdAt: string
 }
 
@@ -149,7 +151,8 @@ export function assessTapRound(tapTimesMs: readonly number[], taps: number, seco
   return { ok: true }
 }
 
-export const TAP_RUSH_DEFAULTS: TapRushRules = { goal: 50, seconds: 10 }
+/** Final social update: 1,000 taps by default; at most 12 taps a second (D-36) makes that a 2-minute round. */
+export const TAP_RUSH_DEFAULTS: TapRushRules = { goal: 1000, seconds: 120 }
 
 /** How many full rewards fit in the pool. */
 export function maxClaims(allowanceRaw: bigint, rewardPerClaimRaw: bigint): bigint {
@@ -188,7 +191,8 @@ export interface ClaimSummary {
 }
 
 /** D-38: one line of the user's history; every line opens a receipt. */
-export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED'
+/** CHECKIN and CLUB_JOINED (D-40) are offchain records: no amount, no transaction. */
+export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED' | 'CHECKIN' | 'CLUB_JOINED'
 
 export interface HistoryItem {
   /** `<kind>:<source id>`, stable across refreshes. */
@@ -206,6 +210,10 @@ export interface HistoryItem {
   campaignType: CampaignType | null
   /** SENT: the recipient address. */
   counterparty: string | null
+  /** CLUB_JOINED: the club's name; CHECKIN: the drop's stock symbol. */
+  title?: string | null
+  /** CLUB_JOINED: the club's slug, to open it. */
+  clubSlug?: string | null
   at: string
 }
 
@@ -339,6 +347,8 @@ export const VERIFIER_TYPES = [
   'ORE_ACTIVITY',
   'TAP_RUSH',
   'X_QUEST',
+  'CLUB_MEMBER',
+  'QR_CHECKIN',
 ] as const
 export type VerifierType = (typeof VERIFIER_TYPES)[number]
 
@@ -402,6 +412,14 @@ export const VERIFIERS: Record<VerifierType, VerifierDefinition> = {
   X_QUEST: {
     type: 'X_QUEST', version: 1, kind: 'ACTION', label: 'Post on X', describe: 'Posts on X with their Blink code',
     amount: null, source: 'X public oEmbed: post text contains the person’s code, posted after the campaign started (D-39)', chain: 'blink', readOnly: true, availability: 'ENABLED',
+  },
+  CLUB_MEMBER: {
+    type: 'CLUB_MEMBER', version: 1, kind: 'ELIGIBILITY', label: 'Club member', describe: 'Is a member of the drop’s club',
+    amount: null, source: 'Blink club membership (D-40); never replaces the xStocks eligibility gate', chain: 'blink', readOnly: true, availability: 'ENABLED',
+  },
+  QR_CHECKIN: {
+    type: 'QR_CHECKIN', version: 1, kind: 'ACTION', label: 'Event check-in', describe: 'Scans the event’s Blink QR code',
+    amount: null, source: 'Blink event code: random, server-issued, one check-in per person (D-40)', chain: 'blink', readOnly: true, availability: 'ENABLED',
   },
 }
 
@@ -540,3 +558,123 @@ export interface CampaignRoom {
 export function publicLabel(wallet: string | null | undefined): PublicParticipant {
   return { label: wallet && wallet.length > 8 ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'Someone' }
 }
+
+/* ───────────── D-40: clubs, chat, squads, passport (offchain; nothing here touches Solana) ───────────── */
+
+export const CLUB_CATEGORIES = ['ASSET', 'ECOSYSTEM', 'COMMUNITY', 'THEME'] as const
+export type ClubCategory = (typeof CLUB_CATEGORIES)[number]
+export const CLUB_CATEGORY_LABEL: Record<ClubCategory, string> = { ASSET: 'Stock', ECOSYSTEM: 'Ecosystem', COMMUNITY: 'Community', THEME: 'Theme' }
+
+export type ClubVisibility = 'PUBLIC' | 'PRIVATE'
+export type ClubRole = 'OWNER' | 'MOD' | 'MEMBER'
+
+export const CLUB_LIMITS = {
+  nameMax: 40,
+  descriptionMax: 280,
+  maxTags: 5,
+  messageMax: 500,
+  messagePage: 30,
+  /** Per user. */
+  messagesPerMinute: 20,
+  clubsPerDay: 3,
+  squadsPerDay: 5,
+  checkinsPerHour: 10,
+  squadSize: 4,
+  /** Distinct member reports that hide a message. */
+  reportsToHide: 3,
+} as const
+
+/** The only reactions (no free-form emoji, nothing to moderate). */
+export const CLUB_REACTIONS = ['🔥', '🚀', '💎', '👏', '😂'] as const
+export type ClubReaction = (typeof CLUB_REACTIONS)[number]
+
+export interface ClubSummary {
+  id: string
+  slug: string
+  name: string
+  description: string
+  category: ClubCategory
+  tags: string[]
+  visibility: ClubVisibility
+  /** Counted from memberships; never estimated. */
+  memberCount: number
+  /** null = run by Blink. */
+  owner: PublicParticipant | null
+  joined: boolean
+  role: ClubRole | null
+  createdAt: string
+}
+
+export interface ClubDetail extends ClubSummary {
+  /** Members of a private club (and its owner/mods) see the invite code. */
+  inviteCode: string | null
+  campaigns: CampaignSummary[]
+}
+
+export interface ChatMessage {
+  /** Increasing; also the pagination cursor. */
+  id: string
+  author: PublicParticipant
+  mine: boolean
+  /** Plain text; never rendered as HTML. Empty when deleted. */
+  body: string
+  replyTo: { id: string; author: PublicParticipant; body: string } | null
+  reactions: { emoji: ClubReaction; count: number; mine: boolean }[]
+  deleted: boolean
+  createdAt: string
+}
+
+/** One way to earn club points, shown with the leaderboard so every score is explainable. */
+export const CLUB_POINTS = { REWARD: 10, QUALIFIED: 5, CHECKIN: 5 } as const
+
+export interface ClubLeaderboardEntry {
+  rank: number
+  who: PublicParticipant
+  points: number
+  rewards: number
+  qualified: number
+  checkins: number
+}
+
+export interface SquadMemberView {
+  who: PublicParticipant
+  captain: boolean
+  /** Best accepted Tap Rush score in this drop (server-recorded), 0 if none yet. */
+  taps: number
+}
+
+export interface SquadSummary {
+  id: string
+  campaignId: string
+  name: string
+  code: string
+  maxSize: number
+  members: SquadMemberView[]
+  /** COMBINED_TAPS: the members' best accepted rounds, summed by the server. */
+  combinedTaps: number
+  /** The drop's goal times the squad size. */
+  target: number
+  complete: boolean
+  mine: boolean
+}
+
+export interface PassportBadge {
+  id: string
+  title: string
+  detail: string
+  at: string
+}
+
+export interface Passport {
+  badges: PassportBadge[]
+  rewards: number
+  checkins: number
+  clubs: number
+  squadWins: number
+}
+
+/** What a Blink QR code (or link) points at. */
+export type ScanTarget =
+  | { kind: 'CAMPAIGN'; campaignId: string; ref?: string }
+  | { kind: 'EVENT'; token: string }
+  | { kind: 'CLUB'; slug: string; invite?: string }

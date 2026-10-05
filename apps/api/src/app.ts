@@ -41,6 +41,8 @@ import type { Asset } from './assets.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import { LIMITS, RateLimiter } from './rate-limit.ts'
+import { registerSocialRoutes } from './social-routes.ts'
+import type { SocialStore } from './social-store.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
 
@@ -72,6 +74,8 @@ export interface AppDeps {
   transfers?: TransferStore
   /** D-37: usernames and profile pictures. */
   profiles?: ProfileStore
+  /** D-40: clubs, chat, squads, event check-ins. */
+  social?: SocialStore
   /** D-32: Send from the Blink stock wallet (fees paid by Blink). */
   send?: SendService
   /** D-24: push notifications. */
@@ -225,6 +229,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     }
   })
 
+  registerSocialRoutes(app, deps, { requireAuth, throttle, limiter })
+
   // ---- D-38: history (every line opens a receipt) ----
 
   app.get('/v1/me/history', async (req) => {
@@ -290,6 +296,27 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         counterparty: c.campaignTokenAccount,
         at: c.createdAt.toISOString(),
       })
+    }
+    // D-40: offchain records (no amount, no transaction): event check-ins and clubs joined.
+    if (deps.social) {
+      for (const ch of await deps.social.checkinsOf(auth.privyUserId)) {
+        const campaign = await campaignOf(ch.campaignId)
+        if (!campaign) continue
+        items.push({
+          id: `CHECKIN:${ch.campaignId}`, kind: 'CHECKIN', cluster: campaign.cluster, symbol: campaign.xstockSymbol, mint: null, decimals: 0, amountRaw: '0',
+          status: 'CONFIRMED', signature: null, campaignId: campaign.id, campaignType: campaign.type, counterparty: null, title: campaign.xstockSymbol, at: ch.at.toISOString(),
+        })
+      }
+      const memberships = await deps.social.membershipsOf(auth.privyUserId)
+      const clubs = new Map((await deps.social.clubsByIds(memberships.map((m) => m.clubId))).map((c) => [c.id, c]))
+      for (const m of memberships) {
+        const club = clubs.get(m.clubId)
+        if (!club) continue
+        items.push({
+          id: `CLUB_JOINED:${club.id}`, kind: 'CLUB_JOINED', cluster: deps.env.SOLANA_CLUSTER, symbol: '', mint: null, decimals: 0, amountRaw: '0',
+          status: 'CONFIRMED', signature: null, campaignId: null, campaignType: null, counterparty: null, title: club.name, clubSlug: club.slug, at: m.joinedAt.toISOString(),
+        })
+      }
     }
     items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     return { items: items.slice(0, 200) }
@@ -517,6 +544,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
     const body = parsed.data
 
+    // D-40: a drop can be posted only in a club the creator belongs to.
+    if (body.clubId) {
+      const member = deps.social ? await deps.social.membership(body.clubId, auth.privyUserId) : null
+      if (!member) return sendError(reply, 403, 'NOT_A_MEMBER', 'you can only post drops in clubs you belong to')
+    }
+
     const xstock = deps.assets.find((x) => x.mint === body.mint)
     if (!xstock) return sendError(reply, 422, 'UNSUPPORTED_MINT', 'this stock is not available on the current network')
 
@@ -577,6 +610,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       requirementsHash: requirements ? createHash('sha256').update(JSON.stringify(requirements)).digest('hex') : null,
       startsAt: body.startsAt ? new Date(body.startsAt) : null,
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
+      clubId: body.clubId ?? null,
     })
     return reply.status(201).send({ campaign: toSummary(stored) })
   })

@@ -26,6 +26,7 @@ import { MainnetSkrStaking } from './skr-service.ts'
 import { SendService } from './send-service.ts'
 import { InMemoryProfileStore, PrismaProfileStore, type ProfileStore } from './profile.ts'
 import { InMemoryTransferStore, PrismaTransferStore, type TransferStore } from './history.ts'
+import { InMemorySocialStore, PrismaSocialStore, type SocialStore } from './social-store.ts'
 import { InMemoryXTaskStore, OEmbedXPostReader, PrismaXTaskStore, type XTaskStore } from './x-quest.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
@@ -51,9 +52,11 @@ let pushTokens: PushTokenStore
 let profiles: ProfileStore
 let transfers: TransferStore
 let xTasks: XTaskStore
+let social: SocialStore
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
   xTasks = new PrismaXTaskStore(prisma)
+  social = new PrismaSocialStore(prisma)
   transfers = new PrismaTransferStore(prisma)
   pushTokens = new PrismaPushTokenStore(prisma)
   profiles = new PrismaProfileStore(prisma)
@@ -68,6 +71,7 @@ if (env.DATABASE_URL) {
   profiles = new InMemoryProfileStore()
   transfers = new InMemoryTransferStore()
   xTasks = new InMemoryXTaskStore()
+  social = new InMemorySocialStore()
   claims = new InMemoryClaimRepository(memory)
   ledger = new InMemoryBudgetLedger(env)
 } else {
@@ -108,7 +112,7 @@ const auth = new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRI
 // D-21: Verified Quest reads SKR/ORE from mainnet (the protocols exist only there), whatever cluster payouts use.
 const mainnetRead = createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')
 const seeker = new MainnetSeekerVerifier(mainnetRead)
-const quests = new QuestService({ auth, claims, chain: new MainnetChainReader(mainnetRead), seeker, xTasks, log: { warn: (o, msg) => app.log.warn(o, msg) } })
+const quests = new QuestService({ auth, claims, chain: new MainnetChainReader(mainnetRead), seeker, xTasks, social, log: { warn: (o, msg) => app.log.warn(o, msg) } })
 // D-20: xStocks eligibility (self-declared + offline IP-country cross-check; no IP is stored or sent anywhere).
 const eligibility = new EligibilityService({ env, store: claims, ipCountry: new GeoipCountryResolver() })
 const app = buildApp({
@@ -143,6 +147,7 @@ const app = buildApp({
   notifier,
   profiles,
   transfers,
+  social,
   // D-39: X tasks read public posts through X's oEmbed endpoint.
   xTasks,
   xReader: new OEmbedXPostReader(),
