@@ -20,6 +20,16 @@
               "scheme": "https",
               "host": "blinksol.site",
               "pathPrefix": "/c/"
+            },
+            {
+              "scheme": "https",
+              "host": "blinksol.site",
+              "pathPrefix": "/e/"
+            },
+            {
+              "scheme": "https",
+              "host": "blinksol.site",
+              "pathPrefix": "/club/"
             }
           ],
           "category": [

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../design/icons'
 import { color, gutter, radius, space } from '../design/tokens'
 import { Button, EmptyState, IconButton, Loading, NavBar, Notice, Row, Screen, T } from '../design/ui'
-import { campaignRoute, parseCampaignLink } from '../lib/format'
+import { campaignRoute, parseScanTarget } from '../lib/format'
 import { haptics } from '../lib/haptics'
 import { hasNativeModule } from '../lib/native'
 
@@ -70,14 +70,17 @@ function Scanner({ camera }: { camera: CameraModule }) {
         facing="back"
         onBarcodeScanned={({ data }) => {
           if (handled.current) return
-          const link = parseCampaignLink(data)
-          if (!link) {
-            setError('That QR code isn’t a Blink campaign.')
+          // D-40: campaigns, event check-ins and club invites. Each opens a Blink screen that asks before doing anything.
+          const target = parseScanTarget(data)
+          if (!target) {
+            setError('That QR code isn’t a Blink code.')
             return
           }
           handled.current = true
           haptics.success()
-          router.replace(campaignRoute(link.id, link.ref) as `/campaign/${string}`)
+          if (target.kind === 'CAMPAIGN') router.replace(campaignRoute(target.campaignId, target.ref) as `/campaign/${string}`)
+          else if (target.kind === 'EVENT') router.replace({ pathname: '/e/[token]', params: { token: target.token } })
+          else router.replace({ pathname: '/club/[slug]', params: target.invite ? { slug: target.slug, invite: target.invite } : { slug: target.slug } })
         }}
         style={StyleSheet.absoluteFill}
       />
@@ -114,7 +117,7 @@ function Scanner({ camera }: { camera: CameraModule }) {
           Point at a Blink QR code
         </T>
         <T variant="label" align="center">
-          The drop opens automatically.
+          Drops, event check-ins and club invites.
         </T>
         <Notice message={error} />
         {error ? (

@@ -1,14 +1,14 @@
 import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Linking, Share, StyleSheet, View } from 'react-native'
+import { Share, StyleSheet, View } from 'react-native'
 
 import { Icon } from '../../design/icons'
 import { color, space } from '../../design/tokens'
 import { Button, Card, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, type XStockListing } from '../../lib/api'
 import { displayShares } from '../../lib/data'
-import { campaignLink, campaignRoute, explorerTxUrl } from '../../lib/format'
+import { campaignLink, campaignRoute } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { type CampaignSummary, type ClaimSummary, maxClaims, PRODUCT_COPY } from '../../shared'
 

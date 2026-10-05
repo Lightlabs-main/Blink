@@ -11,12 +11,12 @@ import { T } from './ui'
 
 const TAB_ICON: Record<string, { icon: IconName; label: string }> = {
   home: { icon: 'home', label: 'Home' },
+  clubs: { icon: 'users', label: 'Clubs' },
   drops: { icon: 'bolt', label: 'Drops' },
-  create: { icon: 'plus', label: 'Create' },
   profile: { icon: 'user', label: 'You' },
 }
 
-/** Floating tab bar with a raised Scan action in the middle (Scan is a screen, not a tab). */
+/** Floating tab bar with a raised Scan action in the middle (Scan is a screen, not a tab). Create is a hidden tab route. */
 export function BlinkTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
   const router = useRouter()

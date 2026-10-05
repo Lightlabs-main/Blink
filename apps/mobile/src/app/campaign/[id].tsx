@@ -7,11 +7,13 @@ import QRCode from 'react-native-qrcode-svg'
 import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
-import { Badge, Button, Card, Divider, GlowCard, Loading, NavBar, Notice, Row, Screen, Stepper, StockAvatar, T } from '../../design/ui'
+import { Badge, Button, Card, Divider, GlowCard, ListRow, Loading, NavBar, Notice, Row, Screen, Stepper, StockAvatar, T } from '../../design/ui'
 import { ClaimPanel, sentence } from '../../features/campaign/claim-panel'
 import { LiveRoom } from '../../features/campaign/live-room'
 import { QuestPanel } from '../../features/campaign/quest-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
+import { EventQrCard } from '../../features/campaign/event-qr'
+import { SquadPanel } from '../../features/campaign/squad-panel'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap, useMe } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, campaignLink, networkLabel, pauseReasonText, shortAddress } from '../../lib/format'
@@ -123,8 +125,23 @@ export default function CampaignScreen() {
 
       {!preLive ? <LiveRoom campaign={c} /> : null}
 
+      {c.clubId ? (
+        <ListRow
+          leading={<Icon name="users" size={20} stroke={color.lime} />}
+          onPress={() => router.push({ pathname: '/club/[slug]', params: { slug: c.clubId! } })}
+          subtitle="Chat, leaderboard and more drops"
+          title="Posted in a club"
+        />
+      ) : null}
+
       {!isCreator && !preLive ? (
         c.type === 'VERIFIED_QUEST' ? <QuestPanel asset={asset} campaign={c} /> : <ClaimPanel asset={asset} campaign={c} referralCode={referralCode} />
+      ) : null}
+
+      {!isCreator && c.tapRush ? <SquadPanel campaign={c} /> : null}
+
+      {isCreator && c.requirements && [...c.requirements.eligibility, ...c.requirements.actions].some((g) => g.conditions.some((x) => x.verifier === 'QR_CHECKIN')) ? (
+        <EventQrCard campaignId={c.id} />
       ) : null}
 
       {isCreator && c.status === 'PAUSED' ? (

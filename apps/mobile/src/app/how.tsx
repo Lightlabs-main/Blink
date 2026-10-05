@@ -43,6 +43,9 @@ export default function HowBlinkWorks() {
         <View style={{ gap: space.md }}>
           <BlinkLogo size={44} />
           <T variant="display">Tokenized stocks, made social.</T>
+          <T variant="bodyStrong" color={color.lime}>
+            Private identity. Transparent settlement.
+          </T>
           <T variant="body">
             Creators fund campaigns with real tokenized stocks (xStocks on Solana). You join, complete what the campaign asks, and the stock lands in
             your Blink wallet — free, with a public receipt.
@@ -54,10 +57,12 @@ export default function HowBlinkWorks() {
         <T variant="title">Taking part</T>
         <Card>
           <View style={{ gap: space.lg }}>
-            <Step body="Scan a Blink QR code or open a link a friend shared. Drops also appear in the Drops tab." n={1} title="Find a drop" />
-            <Step body="Each drop says who can join and what to do: play Tap Rush, hold or stake SKR, mine ORE, post on X, or just claim." n={2} title="Check what it asks" />
-            <Step body="Blink checks every requirement itself, on Solana or on X, right before it pays. Nothing is self-reported." n={3} title="Blink verifies it" />
-            <Step body="The stock is sent to your Blink wallet. You get a receipt with the Blink logo to keep or share." n={4} title="Get the stock" />
+            <Step body="Find a drop or a club in the app, from a link a friend shared, or by scanning a Blink QR." n={1} title="Join" />
+            <Step body="Meet who-can-join conditions such as owning a Seeker, holding or staking SKR or ORE, or being in the club." n={2} title="Qualify" />
+            <Step body="Finish the action: Tap Rush (solo or as a squad), a Verified Quest, an event check-in or a post on X." n={3} title="Complete" />
+            <Step body="Blink checks every requirement itself, on Solana or on X, before it reserves a reward. Nothing is self-reported." n={4} title="Blink verifies" />
+            <Step body="Eligible, qualified people receive the drop’s tokenized-stock reward in their Blink wallet." n={5} title="Receive" />
+            <Step body="Every completed drop and settlement stays in Receipts & Activity, ready to share." n={6} title="Keep the receipt" />
           </View>
         </Card>
       </View>

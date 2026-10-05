@@ -25,6 +25,7 @@ import {
 } from '../../design/ui'
 import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, greeting, networkLabel, shortAddress } from '../../lib/format'
+import { ClubTile, useMyClubs } from '../../features/clubs/club-ui'
 import { userEmail } from '../../lib/privy-user'
 import type { CampaignSummary } from '../../shared'
 
@@ -70,6 +71,8 @@ export default function Home() {
   const mine = useMyCampaigns()
   const claims = useMyClaims()
   const assets = useAssetMap()
+  const clubs = useMyClubs()
+  const myClubs = clubs.data?.clubs ?? []
   const { positions, isLoading: positionsLoading } = usePositions()
   const [refreshing, setRefreshing] = useState(false)
 
@@ -158,9 +161,10 @@ export default function Home() {
 
       {/* Quick actions */}
       <Row gap={space.sm}>
-        <QuickAction highlight icon="scan" label="Scan" onPress={() => router.push('/scan')} />
-        <QuickAction icon="plus" label="Create" onPress={() => router.push('/create')} />
-        <QuickAction icon="bolt" label="Drops" onPress={() => router.push('/drops')} />
+        {/* D-40: Scan lives in the tab bar; Create moved here from the tabs. */}
+        <QuickAction highlight icon="plus" label="Create" onPress={() => router.push('/create')} />
+        <QuickAction icon="users" label="Clubs" onPress={() => router.push('/clubs')} />
+        <QuickAction icon="target" label="Squad" onPress={() => router.push({ pathname: '/drops', params: { filter: 'TAP_RUSH' } })} />
         <QuickAction icon="wallet" label="Wallet" onPress={() => router.push('/wallet')} />
       </Row>
 
@@ -189,10 +193,35 @@ export default function Home() {
         )}
       </View>
 
+      {/* D-40: clubs the user joined */}
+      <View style={{ gap: space.md }}>
+        <SectionHeader action={myClubs.length ? 'See all' : 'Discover'} onAction={() => router.push('/clubs')} title="Your clubs" />
+        {clubs.isPending ? (
+          <Row>
+            <Skeleton height={112} radius={radius.lg} width={150} />
+            <Skeleton height={112} radius={radius.lg} width={150} />
+          </Row>
+        ) : myClubs.length === 0 ? (
+          <Pressable onPress={() => router.push('/clubs')} style={styles.inlineCta}>
+            <Icon name="users" size={18} stroke={color.lime} />
+            <T variant="bodyStrong" style={{ flex: 1 }}>
+              Join a club to chat and compete together
+            </T>
+            <Icon name="arrowRight" size={18} stroke={color.lime} />
+          </Pressable>
+        ) : (
+          <ScrollView contentContainerStyle={{ gap: space.md, paddingRight: space.xl }} horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -20 }}>
+            {myClubs.slice(0, 4).map((c) => (
+              <ClubTile club={c} key={c.id} onPress={() => router.push({ pathname: '/club/[slug]', params: { slug: c.slug } })} />
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
       {/* Rewards the user earned from drops */}
       {rewards.length ? (
         <View style={{ gap: space.md }}>
-          <SectionHeader action="All activity" onAction={() => router.push('/history')} title="Your rewards" />
+          <SectionHeader action="Receipts" onAction={() => router.push('/history')} title="Your rewards" />
           <Card padded={false} style={{ paddingHorizontal: space.lg }}>
             {rewards.slice(0, 5).map((r, i) => {
               const asset = assets.get(r.mint)

@@ -1,4 +1,4 @@
-import { type CampaignStatus, type CampaignType, REFERRAL_CODE_RE } from '../shared'
+import { type CampaignStatus, type CampaignType, REFERRAL_CODE_RE, type ScanTarget } from '../shared'
 
 export function shortAddress(value: string, head = 4, tail = 4): string {
   return value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${value.slice(-tail)}`
@@ -57,6 +57,26 @@ export function parseCampaignLink(data: string): { id: string; ref: string | nul
   const ref = m[2] ?? null
   if (ref !== null && !REFERRAL_CODE_RE.test(ref)) return null
   return { id: m[1]!, ref }
+}
+
+/** D-40: a club's shareable link (a private club's link carries its invite code). */
+export function clubLink(slug: string, invite?: string | null): string {
+  return `${WEB_ORIGIN}/club/${slug}${invite ? `?invite=${invite}` : ''}`
+}
+
+const EVENT_RE = /^https:\/\/(?:www\.)?blinksol\.site\/e\/([A-Za-z0-9_-]{20,64})\/?$/
+const CLUB_RE = /^https:\/\/(?:www\.)?blinksol\.site\/club\/([a-z0-9-]{3,32})\/?(?:\?invite=([A-Z0-9]{8}))?$/
+
+/** D-40: every kind of Blink QR (campaign, event check-in, club invite). Anything else is refused, never opened. */
+export function parseScanTarget(data: string): ScanTarget | null {
+  const campaign = parseCampaignLink(data)
+  if (campaign) return { kind: 'CAMPAIGN', campaignId: campaign.id, ref: campaign.ref ?? undefined }
+  const trimmed = data.trim()
+  const e = trimmed.match(EVENT_RE)
+  if (e) return { kind: 'EVENT', token: e[1]! }
+  const c = trimmed.match(CLUB_RE)
+  if (c) return { kind: 'CLUB', slug: c[1]!, invite: c[2] }
+  return null
 }
 
 /** In-app route for a campaign (used after scanning and as a sign-in return target). */

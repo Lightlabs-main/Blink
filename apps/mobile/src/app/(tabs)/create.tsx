@@ -1,6 +1,6 @@
 import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Badge, Button, Card, Chip, EmptyState, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
 import { describeCondition } from '../../features/campaign/quest-panel'
+import { useMyClubs } from '../../features/clubs/club-ui'
 import { api, ApiError } from '../../lib/api'
 import { useAssets, useHoldings, useMe } from '../../lib/data'
 import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
@@ -49,10 +50,6 @@ const EXPERIENCES: { type: CampaignType; label: string; blurb: string; icon: Ico
   { type: 'GIFT', label: 'Gift', blurb: 'Send stock directly through a link or QR.', icon: 'gift' },
   { type: 'REFERRAL', label: 'Referral', blurb: 'People invite friends — both get rewarded.', icon: 'users' },
 ]
-const COMING_SOON = [
-  { label: 'QR Event', blurb: 'Reward people at a physical event.', icon: 'scan' as IconName },
-  { label: 'Squad', blurb: 'Friends complete a challenge together.', icon: 'users' as IconName },
-]
 
 /** D-36: round lengths, and preset goals at about 3, 5 and 8 taps a second. */
 const TAP_SECONDS = [10, 30, 60, 120] as const
@@ -60,6 +57,8 @@ const tapPresets = (seconds: number) => [
   { label: 'Easy', goal: Math.max(TAP_RUSH_LIMITS.minGoal, seconds * 3) },
   { label: 'Normal', goal: seconds * 5 },
   { label: 'Hard', goal: Math.min(TAP_RUSH_LIMITS.maxGoal, seconds * 8) },
+  // The Blink default (1,000 taps) fits only the 2-minute round.
+  ...(seconds * TAP_RUSH_LIMITS.maxGoalPerSecond >= TAP_RUSH_DEFAULTS.goal ? [{ label: 'Classic', goal: TAP_RUSH_DEFAULTS.goal }] : []),
 ]
 const secondsLabel = (s: number) => (s >= 60 ? `${s / 60} min` : `${s} s`)
 
@@ -177,6 +176,27 @@ function Option({ on, disabled, icon, title, body, onPress, badge }: { on: boole
   )
 }
 
+/** D-40: post the drop in one of your clubs (optional). Shown in Limits, and in Eligibility for "club members only". */
+function ClubPicker({ clubId, setClubId }: { clubId: string | null; setClubId: (id: string | null) => void }) {
+  const clubs = useMyClubs()
+  const mine = clubs.data?.clubs ?? []
+  return (
+    <View style={{ gap: space.sm }}>
+      <T variant="overline">Post in a club (optional)</T>
+      {mine.length === 0 ? (
+        <T variant="caption">Join or start a club to post drops in it.</T>
+      ) : (
+        <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+          <Chip label="No club" onPress={() => setClubId(null)} selected={!clubId} />
+          {mine.map((c) => (
+            <Chip icon="users" key={c.id} label={c.name} onPress={() => setClubId(c.id)} selected={clubId === c.id} />
+          ))}
+        </Row>
+      )}
+    </View>
+  )
+}
+
 function TokenRuleCard({ token, rule, setRule, min, setMin }: { token: 'SKR' | 'ORE'; rule: TokenRule; setRule: (r: TokenRule) => void; min: string; setMin: (v: string) => void }) {
   const rules: [TokenRule, string][] =
     token === 'SKR'
@@ -220,6 +240,11 @@ export default function Create() {
   const me = useMe()
   const assets = useAssets()
   const holdings = useHoldings()
+  const params = useLocalSearchParams<{ clubId?: string }>()
+  const [clubId, setClubId] = useState<string | null>(typeof params.clubId === 'string' && /^[0-9a-f-]{36}$/.test(params.clubId) ? params.clubId : null)
+  // D-40: club members only (eligibility) and an event check-in (action).
+  const [clubOnly, setClubOnly] = useState(false)
+  const [questCheckin, setQuestCheckin] = useState(false)
 
   const [stepIndex, setStepIndex] = useState(0)
   const [type, setType] = useState<CampaignType>('TAP_RUSH')
@@ -280,12 +305,17 @@ export default function Create() {
     try {
       const eligibility: QuestGroup[] = []
       if (seeker) eligibility.push({ mode: 'ALL', conditions: [{ verifier: 'SEEKER_SGT' }] })
+      if (clubOnly) {
+        if (!clubId) throw new Error('pick the club whose members can join')
+        eligibility.push({ mode: 'ALL', conditions: [{ verifier: 'CLUB_MEMBER' }] })
+      }
       const skr = skrRule === 'off' ? null : tokenGroup('SKR', skrRule, toMin(skrMin, 'SKR'))
       const ore = oreRule === 'off' ? null : tokenGroup('ORE', oreRule, toMin(oreMin, 'ORE'))
       if (skr) eligibility.push(skr)
       if (ore) eligibility.push(ore)
       const actions: QuestGroup[] = questTap ? [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }] : []
       if (questOre) actions.push({ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] })
+      if (questCheckin) actions.push({ mode: 'ALL', conditions: [{ verifier: 'QR_CHECKIN' }] })
       if (questX) {
         const must = xText.trim()
         if (must && (must.length < 2 || must.length > 60)) throw new Error('required X text must be 2–60 characters')
@@ -296,7 +326,7 @@ export default function Create() {
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Check the minimums.' }
     }
-  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre, questX, xText])
+  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre, questX, xText, clubOnly, clubId, questCheckin])
 
   const create = useMutation({
     mutationFn: async () => {
@@ -312,6 +342,7 @@ export default function Create() {
           tapRush: hasTapRush ? { goal: tapGoal, seconds: tapSeconds } : undefined,
           requirements: isQuest && quest.ok ? quest.requirements : undefined,
           endsAt: endsAtFrom(hours),
+          clubId: clubId ?? undefined,
         },
         creatorWallet,
       )
@@ -362,7 +393,7 @@ export default function Create() {
 
   const canNext =
     (step === 'experience' && Boolean(type)) ||
-    step === 'eligibility' ||
+    (step === 'eligibility' && (!clubOnly || Boolean(clubId))) ||
     (step === 'action' && quest.ok) ||
     (step === 'reward' && Boolean(selected) && !selected?.paused && Boolean(conversion?.ok) && Boolean(reward?.ok) && !rewardError && (people ?? 0n) > 0n) ||
     step === 'limits'
@@ -370,7 +401,7 @@ export default function Create() {
   // Plain-English summary for the review step (update §11 step 6).
   const conditions: QuestCondition[] = isQuest && quest.ok ? quest.requirements.eligibility.flatMap((g) => g.conditions) : []
   const who = conditions.length ? `People who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : 'Anyone'
-  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}${isQuest && questX ? ' and post on X with their code' : ''}`
+  const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}${isQuest && questX ? ' and post on X with their code' : ''}${isQuest && questCheckin ? ' and check in at your event' : ''}`
   const sentence =
     selected && reward?.ok && people !== null
       ? `${who}${doWhat} can receive ${reward.display} ${selected.symbol} each. Up to ${people.toString()} ${people === 1n ? 'winner' : 'winners'}${
@@ -408,9 +439,20 @@ export default function Create() {
               title={e.label}
             />
           ))}
-          {COMING_SOON.map((e) => (
-            <Option badge="Soon" body={e.blurb} disabled icon={e.icon} key={e.label} on={false} title={e.label} />
-          ))}
+          {/* D-40: a QR Event is a Verified Quest whose action is checking in with your event QR. */}
+          <Option
+            body="Reward people at a physical event: they scan your QR to check in."
+            icon="scan"
+            on={isQuest && questCheckin && !questTap}
+            onPress={() => {
+              haptics.tap()
+              setType('VERIFIED_QUEST')
+              setQuestCheckin(true)
+              setQuestTap(false)
+            }}
+            title="QR Event"
+          />
+          <T variant="caption">Squads are built into every Tap Rush drop: up to 4 friends team up for a combined goal.</T>
         </View>
       ) : null}
 
@@ -429,6 +471,17 @@ export default function Create() {
           />
           <TokenRuleCard min={skrMin} rule={skrRule} setMin={setSkrMin} setRule={setSkrRule} token="SKR" />
           <TokenRuleCard min={oreMin} rule={oreRule} setMin={setOreMin} setRule={setOreRule} token="ORE" />
+          <Option
+            body="Only members of the club you post this drop in. Joining a club is free."
+            icon="users"
+            on={clubOnly}
+            onPress={() => {
+              haptics.tap()
+              setClubOnly((v) => !v)
+            }}
+            title="Club members only"
+          />
+          {clubOnly ? <ClubPicker clubId={clubId} setClubId={setClubId} /> : null}
           <T variant="caption">Checked onchain right before a reward is reserved. Blink never locks anyone’s tokens.</T>
         </View>
       ) : null}
@@ -456,7 +509,16 @@ export default function Create() {
             }}
             title="ORE mining"
           />
-          <Option badge="Soon" body="Scan a code at your event." disabled icon="scan" on={false} title="QR check-in" />
+          <Option
+            body="People scan your event QR in Blink to check in, once each. No location is collected."
+            icon="scan"
+            on={questCheckin}
+            onPress={() => {
+              haptics.tap()
+              setQuestCheckin((v) => !v)
+            }}
+            title="Event check-in"
+          />
           <Option
             body="Post on X with a personal Blink code. People paste their post link; Blink checks the public post. No X login."
             icon="share"
@@ -583,6 +645,9 @@ export default function Create() {
                 <Chip key={d.label} label={d.label} onPress={() => setHours(d.hours)} selected={hours === d.hours} />
               ))}
             </Row>
+          </Card>
+          <Card style={{ gap: space.md }}>
+            <ClubPicker clubId={clubId} setClubId={setClubId} />
           </Card>
           {type === 'TAP_RUSH' ? (
             <Card style={{ gap: space.md }}>

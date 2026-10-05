@@ -1,4 +1,12 @@
 import type {
+  ChatMessage,
+  ClubCategory,
+  ClubDetail,
+  ClubLeaderboardEntry,
+  ClubReaction,
+  ClubSummary,
+  Passport,
+  SquadSummary,
   CampaignSummary,
   CampaignType,
   CampaignRoom,
@@ -183,6 +191,7 @@ export const api = {
       requirements?: QuestRequirements
       startsAt?: string
       endsAt?: string
+      clubId?: string
     },
     creatorWallet?: string,
   ) =>
@@ -223,4 +232,44 @@ export const api = {
       `/v1/campaigns/${encodeURIComponent(id)}/tap-rush/finish`,
       { method: 'POST', body: JSON.stringify({ sessionId, taps: tapTimesMs.length, tapTimesMs }) },
     ),
+  // ---- D-40: clubs, chat, squads, event check-in, passport ----
+  clubs: (t: GetAccessToken, opts: { tab?: 'discover' | 'joined'; q?: string } = {}) => {
+    const qs = new URLSearchParams()
+    if (opts.tab) qs.set('tab', opts.tab)
+    if (opts.q) qs.set('q', opts.q)
+    return authed<{ clubs: ClubSummary[] }>(t, `/v1/clubs${qs.size ? `?${qs.toString()}` : ''}`)
+  },
+  club: (t: GetAccessToken, slug: string, invite?: string) =>
+    authed<{ club: ClubDetail }>(t, `/v1/clubs/${encodeURIComponent(slug)}${invite ? `?invite=${encodeURIComponent(invite)}` : ''}`),
+  createClub: (t: GetAccessToken, body: { name: string; description: string; category: ClubCategory; tags: string[]; visibility: 'PUBLIC' | 'PRIVATE' }) =>
+    authed<{ club: ClubSummary }>(t, '/v1/clubs', { method: 'POST', body: JSON.stringify(body) }),
+  joinClub: (t: GetAccessToken, slug: string, invite?: string) =>
+    authed<{ club: ClubSummary }>(t, `/v1/clubs/${encodeURIComponent(slug)}/join`, { method: 'POST', body: JSON.stringify(invite ? { invite } : {}) }),
+  leaveClub: (t: GetAccessToken, slug: string) => authed<{ club: ClubSummary }>(t, `/v1/clubs/${encodeURIComponent(slug)}/leave`, { method: 'POST', body: '{}' }),
+  messages: (t: GetAccessToken, slug: string, cursor: { before?: string; after?: string } = {}) => {
+    const qs = new URLSearchParams()
+    if (cursor.before) qs.set('before', cursor.before)
+    if (cursor.after) qs.set('after', cursor.after)
+    return authed<{ messages: ChatMessage[]; serverTime: string }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages${qs.size ? `?${qs.toString()}` : ''}`)
+  },
+  sendMessage: (t: GetAccessToken, slug: string, body: string, replyTo?: string) =>
+    authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages`, { method: 'POST', body: JSON.stringify(replyTo ? { body, replyTo } : { body }) }),
+  deleteMessage: (t: GetAccessToken, slug: string, id: string) =>
+    authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  react: (t: GetAccessToken, slug: string, id: string, emoji: ClubReaction) =>
+    authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  reportMessage: (t: GetAccessToken, slug: string, id: string) =>
+    authed<{ reported: true; hidden: boolean }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/report`, { method: 'POST', body: '{}' }),
+  clubLeaderboard: (t: GetAccessToken, slug: string, period: 'week' | 'all') =>
+    authed<{ leaderboard: ClubLeaderboardEntry[]; points: { REWARD: number; QUALIFIED: number; CHECKIN: number } }>(t, `/v1/clubs/${encodeURIComponent(slug)}/leaderboard?period=${period}`),
+  eventCode: (t: GetAccessToken, campaignId: string, rotate = false) =>
+    authed<{ event: { token: string; link: string } }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/event-code`, rotate ? { method: 'POST' } : {}),
+  checkIn: (t: GetAccessToken, token: string) =>
+    authed<{ checkin: { campaignId: string; alreadyCheckedIn: boolean } }>(t, '/v1/checkin', { method: 'POST', body: JSON.stringify({ token }) }),
+  squads: (t: GetAccessToken, campaignId: string) => authed<{ mine: SquadSummary | null; squads: SquadSummary[] }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/squads`),
+  createSquad: (t: GetAccessToken, campaignId: string, name: string) =>
+    authed<{ squad: SquadSummary }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/squads`, { method: 'POST', body: JSON.stringify({ name }) }),
+  joinSquad: (t: GetAccessToken, code: string) => authed<{ squad: SquadSummary }>(t, '/v1/squads/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  leaveSquad: (t: GetAccessToken, id: string) => authed<{ ok: true; disbanded: boolean }>(t, `/v1/squads/${encodeURIComponent(id)}/leave`, { method: 'POST', body: '{}' }),
+  passport: (t: GetAccessToken) => authed<{ passport: Passport }>(t, '/v1/me/passport'),
 }
