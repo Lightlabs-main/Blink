@@ -584,7 +584,14 @@ export const CLUB_LIMITS = {
   squadSize: 4,
   /** Distinct member reports that hide a message. */
   reportsToHide: 3,
+  /** D-43: voice notes. */
+  voiceMaxMs: 60_000,
+  voiceMaxBytes: 1_000_000,
+  voicesPerTenMinutes: 15,
 } as const
+
+/** D-43: how long an admin can mute a member (0 = unmute). */
+export const CLUB_MUTE_MINUTES = [0, 60, 480, 1440, 10080] as const
 
 /** The only reactions (no free-form emoji, nothing to moderate). */
 export const CLUB_REACTIONS = ['🔥', '🚀', '💎', '👏', '😂'] as const
@@ -616,6 +623,21 @@ export interface ClubDetail extends ClubSummary {
   /** Members of a private club (and its owner/mods) see the invite code. */
   inviteCode: string | null
   campaigns: CampaignSummary[]
+  /** D-43: only the owner and admins can send messages. */
+  adminsOnly: boolean
+  pinned: ChatMessage | null
+  /** D-43: set while an admin has muted the caller. */
+  myMutedUntil: string | null
+}
+
+/** D-43: a member as shown in the members list. `id` is opaque (one-way per club), never the account id. */
+export interface ClubMemberView {
+  id: string
+  who: PublicParticipant
+  role: ClubRole
+  mutedUntil: string | null
+  joinedAt: string
+  me: boolean
 }
 
 export interface ChatMessage {
@@ -625,6 +647,9 @@ export interface ChatMessage {
   mine: boolean
   /** Plain text; never rendered as HTML. Empty when deleted. */
   body: string
+  kind: 'TEXT' | 'VOICE'
+  /** D-43: a voice note (null for text and deleted messages). */
+  voice: { url: string; durationMs: number } | null
   replyTo: { id: string; author: PublicParticipant; body: string } | null
   reactions: { emoji: ClubReaction; count: number; mine: boolean }[]
   deleted: boolean

@@ -31,15 +31,42 @@ export interface StoredClub {
   ownerPrivyUserId: string | null
   /** D-41: join rules; empty = anyone. */
   rules: QuestGroup[]
+  /** D-43: only the owner and admins can send messages. */
+  adminsOnly: boolean
+  pinnedMessageId: bigint | null
   createdAt: Date
 }
+
+/** What a creator supplies; the store fills the chat settings with their defaults. */
+export type NewClub = Omit<StoredClub, 'createdAt' | 'adminsOnly' | 'pinnedMessageId'>
 
 export interface StoredMember {
   clubId: string
   privyUserId: string
   role: ClubRole
   publicWallet: string | null
+  /** D-43: muted by an admin until then. */
+  mutedUntil: Date | null
   joinedAt: Date
+}
+
+export interface StoredBan {
+  clubId: string
+  privyUserId: string
+  publicWallet: string | null
+  createdAt: Date
+}
+
+export interface NewMessage {
+  clubId: string
+  authorPrivyUserId: string
+  authorWallet: string | null
+  body: string
+  replyToId: bigint | null
+  /** D-43: voice notes. */
+  kind?: 'TEXT' | 'VOICE'
+  voiceId?: string | null
+  voiceMs?: number | null
 }
 
 export interface StoredMessage {
@@ -49,6 +76,9 @@ export interface StoredMessage {
   authorWallet: string | null
   body: string
   replyToId: bigint | null
+  kind: string
+  voiceId: string | null
+  voiceMs: number | null
   deletedAt: Date | null
   createdAt: Date
 }
@@ -86,9 +116,22 @@ export class AlreadyInSquadError extends Error {
 
 export interface SocialStore {
   /** Creates the club and, when there is an owner, their OWNER membership. Throws SlugTakenError. */
-  createClub(club: Omit<StoredClub, 'createdAt'>, owner: { privyUserId: string; publicWallet: string | null } | null): Promise<StoredClub>
+  createClub(club: NewClub, owner: { privyUserId: string; publicWallet: string | null } | null): Promise<StoredClub>
   findClub(idOrSlug: string): Promise<StoredClub | null>
   setRules(clubId: string, rules: QuestGroup[]): Promise<void>
+  /** D-43: chat settings (owner/admins). */
+  setSettings(clubId: string, s: { adminsOnly?: boolean; description?: string; pinnedMessageId?: bigint | null }): Promise<void>
+  setRole(clubId: string, privyUserId: string, role: 'MOD' | 'MEMBER'): Promise<void>
+  setMuted(clubId: string, privyUserId: string, until: Date | null): Promise<void>
+  /** Removes the membership and records the ban (they can't rejoin until unbanned). */
+  ban(clubId: string, privyUserId: string, by: string, publicWallet: string | null): Promise<void>
+  unban(clubId: string, privyUserId: string): Promise<void>
+  isBanned(clubId: string, privyUserId: string): Promise<boolean>
+  bans(clubId: string): Promise<StoredBan[]>
+  /** D-43: voice-note audio by its random id. */
+  addVoice(v: { id: string; clubId: string; bytes: Uint8Array; mime: string }): Promise<void>
+  voice(id: string): Promise<{ bytes: Uint8Array; mime: string; clubId: string } | null>
+  messageByVoiceId(voiceId: string): Promise<StoredMessage | null>
   findClubByInvite(code: string): Promise<StoredClub | null>
   /** Public clubs plus the caller's own (private ones included), newest first, at most `limit`. */
   listClubs(opts: { privyUserId: string; q?: string; limit: number }): Promise<StoredClub[]>
@@ -103,7 +146,7 @@ export interface SocialStore {
   /** false when not a member. Owners cannot leave (they would orphan the club). */
   leave(clubId: string, privyUserId: string): Promise<boolean>
 
-  addMessage(m: { clubId: string; authorPrivyUserId: string; authorWallet: string | null; body: string; replyToId: bigint | null }): Promise<StoredMessage>
+  addMessage(m: NewMessage): Promise<StoredMessage>
   /** Ascending by id. `before`: the page just older than it (newest first page when absent); `after`: newer ones. */
   listMessages(clubId: string, opts: { before?: bigint; after?: bigint; limit: number }): Promise<StoredMessage[]>
   messagesByIds(ids: bigint[]): Promise<StoredMessage[]>
@@ -148,6 +191,8 @@ export class InMemorySocialStore implements SocialStore {
   private readonly messages: StoredMessage[] = []
   private readonly reactionRows: (StoredReaction & { at: Date })[] = []
   private readonly reports = new Set<string>()
+  private readonly banRows = new Map<string, StoredBan>()
+  private readonly voices = new Map<string, { id: string; clubId: string; bytes: Uint8Array; mime: string }>()
   private readonly eventTokens = new Map<string, string>()
   private readonly checkins: { campaignId: string; privyUserId: string; at: Date }[] = []
   private readonly squads = new Map<string, StoredSquad>()
@@ -159,11 +204,11 @@ export class InMemorySocialStore implements SocialStore {
     return `${c}|${u}`
   }
 
-  async createClub(club: Omit<StoredClub, 'createdAt'>, owner: { privyUserId: string; publicWallet: string | null } | null) {
+  async createClub(club: NewClub, owner: { privyUserId: string; publicWallet: string | null } | null) {
     for (const c of this.clubs.values()) if (c.slug === club.slug) throw new SlugTakenError()
-    const stored = { ...club, createdAt: new Date() }
+    const stored: StoredClub = { ...club, adminsOnly: false, pinnedMessageId: null, createdAt: new Date() }
     this.clubs.set(club.id, stored)
-    if (owner) this.memberRows.set(this.mk(club.id, owner.privyUserId), { clubId: club.id, privyUserId: owner.privyUserId, role: 'OWNER', publicWallet: owner.publicWallet, joinedAt: new Date() })
+    if (owner) this.memberRows.set(this.mk(club.id, owner.privyUserId), { clubId: club.id, privyUserId: owner.privyUserId, role: 'OWNER', publicWallet: owner.publicWallet, mutedUntil: null, joinedAt: new Date() })
     return { ...stored }
   }
   async findClub(idOrSlug: string) {
@@ -173,6 +218,45 @@ export class InMemorySocialStore implements SocialStore {
   async setRules(clubId: string, rules: QuestGroup[]) {
     const c = this.clubs.get(clubId)
     if (c) c.rules = rules
+  }
+  async setSettings(clubId: string, st: { adminsOnly?: boolean; description?: string; pinnedMessageId?: bigint | null }) {
+    const c = this.clubs.get(clubId)
+    if (!c) return
+    if (st.adminsOnly !== undefined) c.adminsOnly = st.adminsOnly
+    if (st.description !== undefined) c.description = st.description
+    if (st.pinnedMessageId !== undefined) c.pinnedMessageId = st.pinnedMessageId
+  }
+  async setRole(clubId: string, privyUserId: string, role: 'MOD' | 'MEMBER') {
+    const m = this.memberRows.get(this.mk(clubId, privyUserId))
+    if (m && m.role !== 'OWNER') m.role = role
+  }
+  async setMuted(clubId: string, privyUserId: string, until: Date | null) {
+    const m = this.memberRows.get(this.mk(clubId, privyUserId))
+    if (m) m.mutedUntil = until
+  }
+  async ban(clubId: string, privyUserId: string, _by: string, publicWallet: string | null) {
+    const k = this.mk(clubId, privyUserId)
+    if (this.memberRows.get(k)?.role === 'OWNER') return
+    this.memberRows.delete(k)
+    this.banRows.set(k, { clubId, privyUserId, publicWallet, createdAt: new Date() })
+  }
+  async unban(clubId: string, privyUserId: string) {
+    this.banRows.delete(this.mk(clubId, privyUserId))
+  }
+  async isBanned(clubId: string, privyUserId: string) {
+    return this.banRows.has(this.mk(clubId, privyUserId))
+  }
+  async bans(clubId: string) {
+    return [...this.banRows.values()].filter((b) => b.clubId === clubId)
+  }
+  async addVoice(v: { id: string; clubId: string; bytes: Uint8Array; mime: string }) {
+    this.voices.set(v.id, v)
+  }
+  async voice(id: string) {
+    return this.voices.get(id) ?? null
+  }
+  async messageByVoiceId(voiceId: string) {
+    return this.messages.find((m) => m.voiceId === voiceId) ?? null
   }
   async findClubByInvite(code: string) {
     return [...this.clubs.values()].find((c) => c.inviteCode === code) ?? null
@@ -209,7 +293,7 @@ export class InMemorySocialStore implements SocialStore {
   async join(clubId: string, privyUserId: string, publicWallet: string | null) {
     const k = this.mk(clubId, privyUserId)
     if (this.memberRows.has(k)) return false
-    this.memberRows.set(k, { clubId, privyUserId, role: 'MEMBER', publicWallet, joinedAt: new Date() })
+    this.memberRows.set(k, { clubId, privyUserId, role: 'MEMBER', publicWallet, mutedUntil: null, joinedAt: new Date() })
     return true
   }
   async leave(clubId: string, privyUserId: string) {
@@ -220,8 +304,8 @@ export class InMemorySocialStore implements SocialStore {
     return true
   }
 
-  async addMessage(m: { clubId: string; authorPrivyUserId: string; authorWallet: string | null; body: string; replyToId: bigint | null }) {
-    const stored: StoredMessage = { ...m, id: BigInt(this.messages.length + 1), deletedAt: null, createdAt: new Date() }
+  async addMessage(m: NewMessage) {
+    const stored: StoredMessage = { ...m, kind: m.kind ?? 'TEXT', voiceId: m.voiceId ?? null, voiceMs: m.voiceMs ?? null, id: BigInt(this.messages.length + 1), deletedAt: null, createdAt: new Date() }
     this.messages.push(stored)
     return { ...stored }
   }
@@ -325,16 +409,16 @@ export class InMemorySocialStore implements SocialStore {
 type Prisma = ReturnType<typeof createPrismaClient>
 const isUnique = (err: unknown) => (err as { code?: string }).code === 'P2002'
 
-function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; rulesJson: unknown; createdAt: Date }): StoredClub {
+function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; rulesJson: unknown; adminsOnly: boolean; pinnedMessageId: bigint | null; createdAt: Date }): StoredClub {
   const { rulesJson, ...rest } = r
   return { ...rest, category: r.category as ClubCategory, visibility: r.visibility as ClubVisibility, rules: Array.isArray(rulesJson) ? (rulesJson as QuestGroup[]) : [] }
 }
-const toMember = (r: { clubId: string; privyUserId: string; role: string; publicWallet: string | null; joinedAt: Date }): StoredMember => ({ ...r, role: r.role as ClubRole })
+const toMember = (r: { clubId: string; privyUserId: string; role: string; publicWallet: string | null; mutedUntil: Date | null; joinedAt: Date }): StoredMember => ({ ...r, role: r.role as ClubRole })
 
 export class PrismaSocialStore implements SocialStore {
   constructor(private readonly prisma: Prisma) {}
 
-  async createClub(club: Omit<StoredClub, 'createdAt'>, owner: { privyUserId: string; publicWallet: string | null } | null) {
+  async createClub(club: NewClub, owner: { privyUserId: string; publicWallet: string | null } | null) {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
         const { rules, ...data } = club
@@ -354,6 +438,41 @@ export class PrismaSocialStore implements SocialStore {
   }
   async setRules(clubId: string, rules: QuestGroup[]) {
     await this.prisma.club.update({ where: { id: clubId }, data: { rulesJson: rules.length ? (rules as object[]) : Db.DbNull } })
+  }
+  async setSettings(clubId: string, st: { adminsOnly?: boolean; description?: string; pinnedMessageId?: bigint | null }) {
+    await this.prisma.club.update({ where: { id: clubId }, data: st })
+  }
+  async setRole(clubId: string, privyUserId: string, role: 'MOD' | 'MEMBER') {
+    await this.prisma.clubMember.updateMany({ where: { clubId, privyUserId, role: { not: 'OWNER' } }, data: { role } })
+  }
+  async setMuted(clubId: string, privyUserId: string, until: Date | null) {
+    await this.prisma.clubMember.updateMany({ where: { clubId, privyUserId }, data: { mutedUntil: until } })
+  }
+  async ban(clubId: string, privyUserId: string, by: string, publicWallet: string | null) {
+    await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.clubMember.deleteMany({ where: { clubId, privyUserId, role: { not: 'OWNER' } } })
+      if (removed.count === 0 && (await tx.clubMember.findUnique({ where: { clubId_privyUserId: { clubId, privyUserId } } }))) return
+      await tx.clubBan.upsert({ where: { clubId_privyUserId: { clubId, privyUserId } }, create: { clubId, privyUserId, byPrivyUserId: by, publicWallet }, update: {} })
+    })
+  }
+  async unban(clubId: string, privyUserId: string) {
+    await this.prisma.clubBan.deleteMany({ where: { clubId, privyUserId } })
+  }
+  async isBanned(clubId: string, privyUserId: string) {
+    return Boolean(await this.prisma.clubBan.findUnique({ where: { clubId_privyUserId: { clubId, privyUserId } } }))
+  }
+  async bans(clubId: string) {
+    return this.prisma.clubBan.findMany({ where: { clubId }, orderBy: { createdAt: 'desc' }, take: 500 })
+  }
+  async addVoice(v: { id: string; clubId: string; bytes: Uint8Array; mime: string }) {
+    await this.prisma.clubVoice.create({ data: { ...v, bytes: Buffer.from(v.bytes) } })
+  }
+  async voice(id: string) {
+    const r = await this.prisma.clubVoice.findUnique({ where: { id } })
+    return r ? { bytes: new Uint8Array(r.bytes), mime: r.mime, clubId: r.clubId } : null
+  }
+  async messageByVoiceId(voiceId: string) {
+    return this.prisma.clubMessage.findUnique({ where: { voiceId } })
   }
   async findClubByInvite(code: string) {
     const row = await this.prisma.club.findUnique({ where: { inviteCode: code } })
@@ -411,7 +530,7 @@ export class PrismaSocialStore implements SocialStore {
     return r.count > 0
   }
 
-  async addMessage(m: { clubId: string; authorPrivyUserId: string; authorWallet: string | null; body: string; replyToId: bigint | null }) {
+  async addMessage(m: NewMessage) {
     return this.prisma.clubMessage.create({ data: m })
   }
   async listMessages(clubId: string, { before, after, limit }: { before?: bigint; after?: bigint; limit: number }) {

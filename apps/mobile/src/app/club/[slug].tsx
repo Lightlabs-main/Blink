@@ -2,10 +2,11 @@ import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Share, View } from 'react-native'
+import { Share, StyleSheet, TextInput, View } from 'react-native'
 
 import { Icon } from '../../design/icons'
-import { color, space } from '../../design/tokens'
+import { font } from '../../design/fonts'
+import { color, radius, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Chip, Divider, EmptyState, ListRow, Loading, NavBar, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
 import { ClubChat } from '../../features/clubs/chat'
 import { ClubRulesList } from '../../features/clubs/club-rules'
@@ -115,7 +116,40 @@ function Leaderboard({ club }: { club: ClubDetail }) {
   )
 }
 
-function About({ club, onLeave, leaving }: { club: ClubDetail; onLeave: () => void; leaving: boolean }) {
+/** D-43: WhatsApp-style admin settings: who can send, the description, and the members list. */
+function AdminSettings({ club, onChanged }: { club: ClubDetail; onChanged: () => void }) {
+  const { getAccessToken } = usePrivy()
+  const [description, setDescription] = useState(club.description)
+  const save = useMutation({
+    mutationFn: (body: { adminsOnly?: boolean; description?: string }) => api.clubSettings(getAccessToken, club.slug, body),
+    onSuccess: () => {
+      haptics.success()
+      onChanged()
+    },
+    onError: () => haptics.error(),
+  })
+  return (
+    <Card style={{ gap: space.md }}>
+      <T variant="heading">Admin settings</T>
+      <T variant="overline">Who can send messages</T>
+      <Row gap={space.sm}>
+        <Chip label="All members" onPress={() => save.mutate({ adminsOnly: false })} selected={!club.adminsOnly} />
+        <Chip icon="lock" label="Only admins" onPress={() => save.mutate({ adminsOnly: true })} selected={club.adminsOnly} />
+      </Row>
+      <T variant="caption">{club.adminsOnly ? 'Members can read and react, but only admins can post.' : 'Every member can post (unless muted).'}</T>
+      <T variant="overline">Description</T>
+      <TextInput maxLength={280} multiline onChangeText={setDescription} placeholderTextColor={color.textMuted} style={styles.input} value={description} />
+      {description.trim() !== club.description ? (
+        <Button loading={save.isPending} onPress={() => save.mutate({ description: description.trim() })} size="sm" style={{ alignSelf: 'flex-start' }} variant="secondary">
+          Save description
+        </Button>
+      ) : null}
+      <Notice message={save.error ? save.error.message : null} />
+    </Card>
+  )
+}
+
+function About({ club, onLeave, leaving, onChanged }: { club: ClubDetail; onLeave: () => void; leaving: boolean; onChanged: () => void }) {
   const router = useRouter()
   const link = clubLink(club.slug, club.visibility === 'PRIVATE' ? club.inviteCode : null)
   return (
@@ -143,6 +177,13 @@ function About({ club, onLeave, leaving }: { club: ClubDetail; onLeave: () => vo
           </Row>
         ) : null}
       </Card>
+      <ListRow
+        leading={<Icon name="users" size={20} stroke={color.lime} />}
+        onPress={() => router.push({ pathname: '/club-members', params: { slug: club.slug } })}
+        subtitle={club.role === 'OWNER' || club.role === 'MOD' ? 'Admins, mute, remove' : 'Who’s in this club'}
+        title={`Members · ${club.memberCount.toLocaleString()}`}
+      />
+      {club.role === 'OWNER' || club.role === 'MOD' ? <AdminSettings club={club} onChanged={onChanged} /> : null}
       {club.rules.length ? <ClubRulesList rules={club.rules} /> : <T variant="caption">Anyone can join this club.</T>}
       {club.role === 'OWNER' ? (
         <Button icon="shield" onPress={() => router.push({ pathname: '/club-rules', params: { slug: club.slug } })} variant="secondary">
@@ -242,14 +283,45 @@ export default function ClubScreen() {
     return (
       <Screen contentStyle={{ gap: space.md }} scroll={false}>
         {header}
-        <ClubChat canModerate={c.role === 'OWNER' || c.role === 'MOD'} canPost={c.joined} joining={join.isPending} onJoin={() => join.mutate()} slug={c.slug} />
+        <ClubChat
+          canModerate={c.role === 'OWNER' || c.role === 'MOD'}
+          canPost={c.joined}
+          joining={join.isPending}
+          onJoin={() => join.mutate()}
+          onPinChange={refresh}
+          pinned={c.pinned}
+          postBlocked={
+            c.myMutedUntil
+              ? `An admin muted you until ${new Date(c.myMutedUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}. You can still read and react.`
+              : c.adminsOnly && c.role !== 'OWNER' && c.role !== 'MOD'
+                ? 'Only admins can send messages in this club right now.'
+                : null
+          }
+          slug={c.slug}
+        />
       </Screen>
     )
   }
   return (
     <Screen>
       {header}
-      {tab === 'drops' ? <Drops club={c} /> : tab === 'leaderboard' ? <Leaderboard club={c} /> : <About club={c} leaving={leave.isPending} onLeave={() => leave.mutate()} />}
+      {tab === 'drops' ? <Drops club={c} /> : tab === 'leaderboard' ? <Leaderboard club={c} /> : <About club={c} leaving={leave.isPending} onChanged={refresh} onLeave={() => leave.mutate()} />}
     </Screen>
   )
 }
+
+const styles = StyleSheet.create({
+  input: {
+    minHeight: 80,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: color.surface2,
+    borderWidth: 1,
+    borderColor: color.border,
+    textAlignVertical: 'top',
+    ...font('body'),
+    fontSize: 15,
+    color: color.text,
+  },
+})

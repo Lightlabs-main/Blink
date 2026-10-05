@@ -41,6 +41,10 @@ received yet (OQ-10), so this version covers what exists today.
 | 20 | Club → Leaderboard | Points match the rule shown (10 won / 5 qualified / 5 check-in) |
 | 21 | Phone A: Start a club → turn on "SKR stakes" with a minimum → phone B (no stake) taps Join | Refused; each rule shows phone B's amount and "Stake SKR in Blink" |
 | 22 | Phone A: club → Drops → post a Tap Rush with "Club members only"; phone C (not a member) opens it | "For <club> members" card; playing is refused until phone C joins |
+| 23 | Club chat: phone B taps the mic, records ~5 s, sends; phone A plays it | Voice note appears within seconds and plays; deleting it removes the audio |
+| 24 | Phone A (owner): About → Members → make phone B an admin; phone B mutes phone C for 1 hour | Phone C sees "An admin muted you…" and can't post; Unmute restores it |
+| 25 | Phone A: About → Admin settings → Only admins; pin a message | Members can't post; the pinned message shows above the chat |
+| 26 | Phone B (admin): remove phone C; phone C taps Join | "An admin removed you"; Members → Removed → Let back in, then Join works |
 
 ## Known limits to mention in a demo
 

@@ -120,6 +120,25 @@ describe.skipIf(!url)('social features on Postgres (D-40)', () => {
     expect((await get('zed', `/v1/campaigns/${mo}`)).json().campaign.membersOnly).toBe(true)
     expect((await post('zed', `/v1/campaigns/${mo}/tap-rush/start`)).json().error.code).toBe('NOT_A_MEMBER')
 
+    // D-43: voice bytes round-trip; mute, admins-only, pin and remove/restore persist.
+    const audio = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypM4A '), Buffer.alloc(500, 7)])
+    const voiceMsg = (await post('carol', `/v1/clubs/${club.slug}/voice`, { audio: audio.toString('base64'), durationMs: 2500 })).json().message
+    const served = await app.inject({ method: 'GET', url: voiceMsg.voice.url })
+    expect(Buffer.from(served.rawPayload).equals(audio)).toBe(true)
+    const daveRef = (await get('dave', `/v1/clubs/${club.slug}/members`)).json().members.find((m: { me: boolean }) => m.me).id
+    expect((await post('alice', `/v1/clubs/${club.slug}/members/${daveRef}/mute`, { minutes: 60 })).json().mutedUntil).toBeTruthy()
+    expect((await post('dave', `/v1/clubs/${club.slug}/messages`, { body: 'x' })).json().error.code).toBe('MUTED')
+    await app.inject({ method: 'PUT', url: `/v1/clubs/${club.slug}/settings`, headers: h('alice'), payload: { adminsOnly: true } })
+    expect((await post('carol', `/v1/clubs/${club.slug}/messages`, { body: 'x' })).json().error.code).toBe('ADMINS_ONLY')
+    await post('alice', `/v1/clubs/${club.slug}/messages/${m1.id}/pin`)
+    expect((await get('carol', `/v1/clubs/${club.slug}`)).json().club).toMatchObject({ adminsOnly: true, pinned: { id: m1.id } })
+    await post('alice', `/v1/clubs/${club.slug}/members/${daveRef}/remove`)
+    expect((await post('dave', `/v1/clubs/${club.slug}/join`)).json().error.code).toBe('REMOVED')
+    const removedRef = (await get('alice', `/v1/clubs/${club.slug}/members`)).json().removed[0].id
+    await post('alice', `/v1/clubs/${club.slug}/removed/${removedRef}/restore`)
+    expect((await post('dave', `/v1/clubs/${club.slug}/join`)).statusCode).toBe(200)
+    await app.inject({ method: 'PUT', url: `/v1/clubs/${club.slug}/settings`, headers: h('alice'), payload: { adminsOnly: false } })
+
     // Captain leaving disbands; members can leave the club; owners cannot.
     expect((await post('bob', `/v1/squads/${squad.id}/leave`)).json().disbanded).toBe(true)
     expect((await post('alice', `/v1/clubs/${club.slug}/leave`)).json().error.code).toBe('OWNER_CANNOT_LEAVE')

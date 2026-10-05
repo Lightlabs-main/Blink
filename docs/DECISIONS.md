@@ -580,3 +580,26 @@ Everything below is offchain Blink state (Postgres). None of it spends SOL or wr
   someone takes part: Tap Rush start, quest verify, claim, referral, bonus retry and event check-in. It never replaces
   the xStocks gate. In Create it sits with the club picker ("Everyone" / "Club members only"); the quest-only
   "Club members only" toggle was folded into it.
+
+## D-42 — Stock Passport as a shareable ID card (2026-10-05, Maris)
+
+The Passport screen leads with a 16:9 ID card in Blink's own style (ink/cream/lime, flat, the logo's dot as a faint
+watermark ring): profile picture, @username, a passport number, "since", level, four counts, the 3 latest stamps and a
+passport-style machine line. "Share Passport" captures it at 1200 × 675 (X's full-width image) and opens the share sheet;
+"Post on X" opens the composer with a line and blinksol.site. The number (`BLK-XXXX-XXXX`) is a one-way hash of the
+account id, stable per account. Levels count stamps only: Newcomer 0, Explorer 1+, Regular 3+, Pro 6+, Legend 10+.
+Never shown: balances, wallets, email, country. A browser-rendered reference is `docs/brand/passport-card-mockup.png`.
+
+## D-43 — Club voice notes and WhatsApp-style admin controls (2026-10-05, Maris)
+
+- **Voice notes:** tap the mic (shown when the text box is empty), record up to 60 s, send or cancel. AAC in M4A, mono
+  32 kbps (`expo-audio`), base64 to `POST /v1/clubs/:slug/voice`; the server accepts only MP4/M4A (`ftyp` box), ≤ 1 MB,
+  15 per 10 minutes plus the chat limit, and stores the bytes in Postgres (`ClubVoice`) like profile pictures. Played
+  from `/v1/voice/<random 128-bit id>`; deleting the message makes it 404. One player per chat. The microphone is
+  used only while the recorder is open (permission text says so). Muted / admins-only rules apply as for text.
+- **Admins:** the owner makes or removes admins (`MOD`). Owner and admins can mute a member (1 h, 8 h, 1 day,
+  1 week; unmute), remove a member (they can't rejoin until an admin lets them back in — `ClubBan`), pin one message,
+  switch the chat to "only admins can send messages" and edit the description. Nobody acts on the owner; only the
+  owner acts on admins; nobody acts on themselves. Members are addressed by an opaque per-club id, never the account id.
+  Muted members and non-admins in an admins-only chat can still read and react.
+- **Not in this build (owner decision):** paid clubs — one-time and monthly — come after October 8.

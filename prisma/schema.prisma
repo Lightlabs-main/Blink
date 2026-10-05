@@ -307,19 +307,24 @@ model Club {
   ownerPrivyUserId String?
   /// D-41: join rules (QuestGroup[]); null/empty = anyone.
   rulesJson        Json?
+  /// D-43: only the owner and admins can send messages.
+  adminsOnly       Boolean  @default(false)
+  pinnedMessageId  BigInt?
   createdAt        DateTime @default(now())
 
   @@index([ownerPrivyUserId, createdAt])
 }
 
 model ClubMember {
-  clubId       String   @db.Uuid
+  clubId       String    @db.Uuid
   privyUserId  String
   /// OWNER | MOD | MEMBER
-  role         String   @default("MEMBER")
+  role         String    @default("MEMBER")
+  /// D-43: an admin muted this member until then.
+  mutedUntil   DateTime?
   /// Truncated label source for members without a username; never shown in full.
   publicWallet String?
-  joinedAt     DateTime @default(now())
+  joinedAt     DateTime  @default(now())
 
   @@id([clubId, privyUserId])
   @@index([privyUserId, joinedAt])
@@ -332,6 +337,10 @@ model ClubMessage {
   authorWallet      String?
   body              String
   replyToId         BigInt?
+  /// D-43: TEXT or VOICE; a voice note points at ClubVoice by its random public id.
+  kind              String    @default("TEXT")
+  voiceId           String?   @unique
+  voiceMs           Int?
   deletedAt         DateTime?
   deletedBy         String?
   createdAt         DateTime  @default(now())
@@ -395,4 +404,26 @@ model ClubMessageReport {
   createdAt   DateTime @default(now())
 
   @@id([messageId, privyUserId])
+}
+
+/// D-43: removed members; they can't rejoin until an admin lets them back in.
+model ClubBan {
+  clubId        String   @db.Uuid
+  privyUserId   String
+  publicWallet  String?
+  byPrivyUserId String
+  createdAt     DateTime @default(now())
+
+  @@id([clubId, privyUserId])
+}
+
+/// D-43: voice-note audio (AAC in MP4, ≤ 1 MB), served by its random id.
+model ClubVoice {
+  id        String   @id
+  clubId    String   @db.Uuid
+  bytes     Bytes
+  mime      String
+  createdAt DateTime @default(now())
+
+  @@index([clubId])
 }

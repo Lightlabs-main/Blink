@@ -8,6 +8,7 @@ import {
   CLUB_CATEGORIES,
   CLUB_RULE_VERIFIERS,
   CLUB_LIMITS,
+  CLUB_MUTE_MINUTES,
   CLUB_REACTIONS,
   isClaimableType,
   QUEST_LIMITS,
@@ -329,3 +330,25 @@ export const createSquadRequest = z.object({ name: plainLine(2, 24) }).strict()
 export const joinSquadRequest = z.object({ code: z.string().regex(/^[A-Z0-9]{6}$/, 'squad codes are 6 letters or numbers') }).strict()
 
 export const checkinRequest = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/, 'not a Blink event code') }).strict()
+
+/* ───────────── D-43: voice notes and admin controls ───────────── */
+
+export const voiceMessageRequest = z
+  .object({
+    /** AAC in an MP4/M4A container, base64. */
+    audio: z.string().min(100).max(Math.ceil((CLUB_LIMITS.voiceMaxBytes * 4) / 3) + 8).regex(/^[A-Za-z0-9+/]+=*$/, 'not base64'),
+    durationMs: z.number().int().min(500).max(CLUB_LIMITS.voiceMaxMs),
+    replyTo: z.string().regex(/^\d{1,19}$/).optional(),
+  })
+  .strict()
+
+export const clubSettingsRequest = z
+  .object({
+    adminsOnly: z.boolean().optional(),
+    description: z.string().trim().min(10).max(CLUB_LIMITS.descriptionMax).regex(PLAIN_TEXT_RE, 'plain text only').optional(),
+  })
+  .strict()
+  .refine((v) => v.adminsOnly !== undefined || v.description !== undefined, 'nothing to change')
+
+export const memberRoleRequest = z.object({ role: z.enum(['MOD', 'MEMBER']) }).strict()
+export const muteRequest = z.object({ minutes: z.union(CLUB_MUTE_MINUTES.map((m) => z.literal(m)) as [z.ZodLiteral<0>, ...z.ZodLiteral<number>[]]) }).strict()
