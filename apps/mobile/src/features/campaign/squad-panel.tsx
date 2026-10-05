@@ -7,12 +7,11 @@ import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Avatar, Button, Card, Notice, Row, T } from '../../design/ui'
-import { api } from '../../lib/api'
+import { api, apiUrl } from '../../lib/api'
 import { campaignLink } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import type { CampaignSummary } from '../../shared'
 
-const base = process.env.EXPO_PUBLIC_BLINK_API_URL ?? ''
 
 /**
  * D-40: squads for Tap Rush drops. Up to 4 friends; the squad goal is the drop's goal × 4, counted from each member's
@@ -60,7 +59,7 @@ export function SquadPanel({ campaign }: { campaign: CampaignSummary }) {
           </View>
           {mine.members.map((m) => (
             <Row key={m.who.label}>
-              <Avatar label={m.who.username ?? m.who.label} size={30} uri={m.who.avatarUrl ? `${base}${m.who.avatarUrl}` : null} />
+              <Avatar label={m.who.username ?? m.who.label} size={30} uri={apiUrl(m.who.avatarUrl)} />
               <T style={{ flex: 1 }} variant="bodyStrong">{`${m.who.label}${m.captain ? ' · captain' : ''}`}</T>
               <T variant="numeric">{m.taps.toLocaleString()}</T>
             </Row>

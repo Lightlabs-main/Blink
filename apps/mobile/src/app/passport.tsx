@@ -1,13 +1,13 @@
 import { usePrivy } from '@privy-io/expo'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { RefreshControl, StyleSheet, View } from 'react-native'
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native'
 
 import { font } from '../design/fonts'
 import { Icon } from '../design/icons'
 import { color, radius, space } from '../design/tokens'
-import { BlinkLogo, Card, Divider, EmptyState, ListRow, NavBar, Notice, Row, Screen, Skeleton, T } from '../design/ui'
-import { api } from '../lib/api'
+import { Avatar, BlinkLogo, Card, Divider, EmptyState, ListRow, NavBar, Notice, Row, Screen, Skeleton, T } from '../design/ui'
+import { api, apiUrl } from '../lib/api'
 import { useProfile } from '../lib/data'
 
 export function usePassport() {
@@ -34,6 +34,7 @@ export default function PassportScreen() {
   const profile = useProfile()
   const p = passport.data?.passport
   const username = profile.data?.profile.username
+  const avatar = apiUrl(profile.data?.profile.avatarUrl)
 
   return (
     <Screen refreshControl={<RefreshControl onRefresh={() => void passport.refetch()} refreshing={passport.isRefetching} tintColor={color.text} />}>
@@ -44,7 +45,18 @@ export default function PassportScreen() {
           <BlinkLogo size={30} />
           <T style={{ ...font('display'), fontSize: 18, color: '#F4F0E6' }}>Blink Passport</T>
         </Row>
-        <T style={{ ...font('bodySemi'), fontSize: 15, color: '#ABFF1A', marginTop: space.lg }}>{username ? `@${username}` : 'Your participation record'}</T>
+        {/* D-37: the holder's picture and username; tap to add or change them. */}
+        <Pressable accessibilityLabel="Edit profile picture and username" onPress={() => router.push('/profile-edit')} style={{ marginTop: space.lg }}>
+          <Row>
+            <Avatar label={username ?? 'B'} size={56} uri={avatar} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <T style={{ ...font('bodySemi'), fontSize: 16, color: '#ABFF1A' }}>{username ? `@${username}` : 'Your participation record'}</T>
+              {!avatar || !username ? (
+                <T style={{ ...font('body'), fontSize: 12.5, color: '#8C887E' }}>{`Tap to add ${!avatar && !username ? 'a picture and username' : !avatar ? 'a profile picture' : 'a username'}`}</T>
+              ) : null}
+            </View>
+          </Row>
+        </Pressable>
         {p ? (
           <Row style={{ marginTop: space.lg }}>
             <Stat label="Rewards" value={p.rewards} />

@@ -78,8 +78,8 @@ function Line({ label, value }: { label: string; value: string }) {
 }
 
 /** The receipt card. `ref` is captured to a PNG for sharing. */
-export const ReceiptCard = forwardRef<View, { item: HistoryItem; asset: XStockListing | undefined; username: string | null }>(function ReceiptCard(
-  { item, asset, username },
+export const ReceiptCard = forwardRef<View, { item: HistoryItem; asset: XStockListing | undefined; username: string | null; avatarUri?: string | null }>(function ReceiptCard(
+  { item, asset, username, avatarUri },
   ref,
 ) {
   const when = new Date(item.at)
@@ -95,7 +95,12 @@ export const ReceiptCard = forwardRef<View, { item: HistoryItem; asset: XStockLi
       <View style={{ gap: 4, marginTop: 26 }}>
         <T style={[font('bodyMedium'), { color: MUTED, fontSize: 15 }]}>{receiptTitle(item)}</T>
         <T style={[font('display'), { color: CREAM, fontSize: isOffchain(item) ? 32 : 40, lineHeight: isOffchain(item) ? 38 : 46, letterSpacing: -1 }]}>{receiptHeadline(item, asset)}</T>
-        {username ? <T style={[font('bodySemi'), { color: LIME, fontSize: 15 }]}>{`@${username}`}</T> : null}
+        {username || avatarUri ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : null}
+            {username ? <T style={[font('bodySemi'), { color: LIME, fontSize: 15 }]}>{`@${username}`}</T> : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.lines}>
@@ -142,6 +147,7 @@ const styles = StyleSheet.create({
   dot: { position: 'absolute', top: 22, right: 22, width: 12, height: 12, borderRadius: 6, backgroundColor: LIME },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logo: { width: 32, height: 32, borderRadius: 8 },
+  avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: INK_2 },
   lines: { marginTop: 22, borderTopWidth: 1, borderColor: INK_2, paddingTop: 8 },
   line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, gap: 12 },
 })

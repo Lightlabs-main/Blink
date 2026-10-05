@@ -10,7 +10,7 @@ import { Avatar, Badge, Button, Card, Chip, Divider, EmptyState, ListRow, Loadin
 import { ClubChat } from '../../features/clubs/chat'
 import { ClubRulesList } from '../../features/clubs/club-rules'
 import { ClubMark, memberLabel } from '../../features/clubs/club-ui'
-import { api, ApiError } from '../../lib/api'
+import { api, ApiError, apiUrl } from '../../lib/api'
 import { displayShares, useAssetMap } from '../../lib/data'
 import { CAMPAIGN_TYPE_LABEL, clubLink } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
@@ -23,7 +23,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'leaderboard', label: 'Leaderboard' },
   { key: 'about', label: 'About' },
 ]
-const base = process.env.EXPO_PUBLIC_BLINK_API_URL ?? ''
 
 function phase(c: CampaignSummary): 'live' | 'upcoming' | 'ended' {
   if (c.status === 'ENDED' || c.status === 'CLOSED' || (c.endsAt && Date.parse(c.endsAt) <= Date.now())) return 'ended'
@@ -98,7 +97,7 @@ function Leaderboard({ club }: { club: ClubDetail }) {
                     <T style={{ width: 22 }} variant="numeric" color={e.rank <= 3 ? color.lime : color.textMuted}>
                       {e.rank}
                     </T>
-                    <Avatar label={e.who.username ?? e.who.label} size={32} uri={e.who.avatarUrl ? `${base}${e.who.avatarUrl}` : null} />
+                    <Avatar label={e.who.username ?? e.who.label} size={32} uri={apiUrl(e.who.avatarUrl)} />
                   </Row>
                 }
                 subtitle={[e.rewards && `${e.rewards} won`, e.qualified && `${e.qualified} qualified`, e.checkins && `${e.checkins} check-ins`].filter(Boolean).join(' · ')}

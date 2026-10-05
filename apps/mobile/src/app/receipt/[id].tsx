@@ -5,6 +5,7 @@ import { Linking, View } from 'react-native'
 import { space } from '../../design/tokens'
 import { Button, Loading, NavBar, Notice, Row, Screen, T } from '../../design/ui'
 import { postReceiptOnX, ReceiptCard, shareReceiptImage } from '../../features/receipts/receipt'
+import { apiUrl } from '../../lib/api'
 import { useAssetMap, useProfile } from '../../lib/data'
 import { explorerTxUrl } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
@@ -50,7 +51,7 @@ export default function Receipt() {
   return (
     <Screen>
       <NavBar onBack={() => router.back()} title="Receipt" />
-      <ReceiptCard asset={asset} item={item} ref={card} username={profile.data?.profile.username ?? null} />
+      <ReceiptCard asset={asset} item={item} ref={card} username={profile.data?.profile.username ?? null} avatarUri={apiUrl(profile.data?.profile.avatarUrl)} />
       <View style={{ gap: space.sm }}>
         <Button icon="share" loading={sharing} onPress={() => void onShare()}>
           Share receipt
