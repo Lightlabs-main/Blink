@@ -55,6 +55,7 @@ export function ClubChat({
   onJoin,
   joining,
   postBlocked,
+  muted = false,
   pinned,
   onPinChange,
 }: {
@@ -65,6 +66,8 @@ export function ClubChat({
   joining: boolean
   /** D-43: why a member can't post right now (muted, admins-only chat); they can still read and react. */
   postBlocked?: string | null
+  /** Owner decision 2026-10-05: muted members can only read (no reactions, replies or gifts either). */
+  muted?: boolean
   pinned?: ChatMessage | null
   onPinChange?: () => void
 }) {
@@ -312,13 +315,13 @@ export function ClubChat({
                   {m.reactions.length ? (
                     <Row gap={6} style={{ flexWrap: 'wrap' }}>
                       {m.reactions.map((r) => (
-                        <Pressable disabled={!canPost} key={r.emoji} onPress={() => void react(m, r.emoji)} style={[styles.reaction, r.mine && styles.reactionMine]}>
+                        <Pressable disabled={!canPost || muted} key={r.emoji} onPress={() => void react(m, r.emoji)} style={[styles.reaction, r.mine && styles.reactionMine]}>
                           <T style={{ fontSize: 13 }}>{`${r.emoji} ${r.count}`}</T>
                         </Pressable>
                       ))}
                     </Row>
                   ) : null}
-                  {selected === m.id && !m.deleted && canPost ? (
+                  {selected === m.id && !m.deleted && canPost && !muted ? (
                     <Row gap={6} style={{ flexWrap: 'wrap', marginTop: 4 }}>
                       {CLUB_REACTIONS.map((e) => (
                         <Pressable accessibilityLabel={`React ${e}`} key={e} onPress={() => void react(m, e)} style={styles.reaction}>
