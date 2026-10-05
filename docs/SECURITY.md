@@ -128,3 +128,15 @@ Applies to requirements such as SGT, SKR, ORE and Tap Rush.
 - Signature recorded before send, plus compare-and-set before send (D-16)
 - Rate limits (D-16)
 - Simulation before signing (D-12)
+
+## 4. Social features (D-40)
+
+- All offchain; no SOL is spent and nothing is signed for clubs, chat, squads, check-ins or the Passport.
+- Identity is always the verified Privy user; request bodies carry no user, club-membership or qualification fields.
+- Chat text is plain (control characters refused, ≤ 500 chars) and rendered as text, never HTML or links.
+- Uniqueness in the database: one membership per person per club, one squad per person per drop, one check-in per
+  person per drop, unique club slug, invite code, squad code and event code. Squad seats are taken under a row lock.
+- Rate limits: 20 messages/min, 3 clubs/day, 5 squads/day, 10 check-ins/hour per person, plus the D-16 limits.
+- Event codes are 24 random bytes from the server, rotatable; no location data.
+- People appear by username or a shortened wallet only; private clubs are 404 to non-members without the invite.
+- Not yet: message reports and extra moderator roles (owner deletes only), automated content moderation.

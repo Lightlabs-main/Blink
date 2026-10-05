@@ -200,3 +200,9 @@ Built by hand from the official IDL (`skr-staking/program/idl.json`); no generat
 
 `@expo-google-fonts/instrument-serif`, `@expo-google-fonts/newsreader`, `@expo-google-fonts/ibm-plex-mono`
 (`^0.4.1`, SIL Open Font License), the same faces as blinksol.site.
+
+## Social update (D-40, 2026-10-05)
+
+No new packages. Chat uses polling over the existing Fastify API (no WebSocket/SSE library was added). Receipts keep
+`react-native-view-shot` + `expo-sharing` (D-38); event QR codes use the installed `react-native-qrcode-svg`; the
+scanner uses the installed `expo-camera`. Status: VERIFIED (installed versions in apps/mobile/package.json).

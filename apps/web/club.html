@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Club invite · Blink-to-Stock</title>
+    <meta name="description" content="Join this club on Blink: chat, compete and earn tokenized stock together." />
+    <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0b" media="(prefers-color-scheme: dark)" />
+    <meta property="og:title" content="Club invite on Blink-to-Stock" />
+    <meta property="og:description" content="Join this club on Blink: chat, compete and earn tokenized stock together." />
+    <meta property="og:image" content="https://blinksol.site/icon.png" />
+    <link rel="icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Apply the reader's saved edition before paint (falls back to the system setting).
+      try {
+        const t = localStorage.getItem('blink-theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- D-40: served for /club/<slug>[?invite=CODE]. With the app installed, Android opens these links in Blink directly. -->
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="/"><img src="/icon.png" alt="" width="36" height="36" />Blink</a>
+        <div class="nav-end">
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch between light and dark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+            <span data-theme-label>Dark</span>
+          </button>
+          <a class="btn btn-ink" href="/download/blink-to-stock.apk"><span>Get the app</span></a>
+        </div>
+      </div>
+    </header>
+
+    <main class="campaign-page">
+      <div class="container">
+        <div class="certificate">
+          <div class="kicker">Club invite</div>
+          <p class="entitles" id="entitles">You were invited to join</p>
+          <h1 id="title">Club</h1>
+          <p class="entitles" id="headline">Chat with members, see the club’s drops and climb its leaderboard.</p>
+          <span class="stamp live" id="stamp">Invite</span>
+        </div>
+
+        <a class="btn btn-ink btn-block" id="open" href="#">Open in Blink</a>
+        <a class="btn btn-line btn-block" href="/download/blink-to-stock.apk">No app yet? Get Blink</a>
+
+        <div class="card">
+          <div class="kicker">How it works</div>
+          <ol class="steps-list">
+            <li>Install Blink for Android and open this link again — it opens straight in the app.</li>
+            <li>Sign in with your email. A secure wallet is created for you.</li>
+            <li>Tap “Join”. Joining is free.</li>
+          </ol>
+        </div>
+
+        <p class="small-print">
+          Clubs, chat and event check-ins are free and never touch your wallet. Blink stores no location. Clubs are run by
+          their members; a club named after a company is not run or endorsed by that company.
+        </p>
+      </div>
+    </main>
+
+    <script>
+      ;(function () {
+        const slug = location.pathname.replace(/^\/club\//, '').replace(/\/$/, '')
+        const inviteParam = new URLSearchParams(location.search).get('invite')
+        const invite = inviteParam && /^[A-Z0-9]{8}$/.test(inviteParam) ? inviteParam : null
+        const open = document.getElementById('open')
+        const title = document.getElementById('title')
+        if (!/^[a-z0-9-]{3,32}$/.test(slug)) {
+          title.textContent = 'Void'
+          document.getElementById('headline').textContent = 'This link doesn’t match a Blink club.'
+          document.getElementById('stamp').textContent = 'Not valid'
+          document.getElementById('stamp').className = 'stamp off'
+          open.style.display = 'none'
+          return
+        }
+        title.textContent = slug.replace(/-/g, ' ').replace(/\w/g, (c) => c.toUpperCase())
+        document.title = title.textContent + ' · Blink-to-Stock'
+        if (invite) document.getElementById('stamp').textContent = 'Private · invite included'
+        open.href = 'blinktostock://club/' + slug + (invite ? '?invite=' + invite : '')
+      })()
+    </script>
+    <script src="/theme.js" defer></script>
+  </body>
+</html>
