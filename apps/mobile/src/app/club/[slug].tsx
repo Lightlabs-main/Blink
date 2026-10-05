@@ -8,12 +8,13 @@ import { Icon } from '../../design/icons'
 import { color, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Chip, Divider, EmptyState, ListRow, Loading, NavBar, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
 import { ClubChat } from '../../features/clubs/chat'
+import { ClubRulesList } from '../../features/clubs/club-rules'
 import { ClubMark, memberLabel } from '../../features/clubs/club-ui'
 import { api, ApiError } from '../../lib/api'
 import { displayShares, useAssetMap } from '../../lib/data'
 import { CAMPAIGN_TYPE_LABEL, clubLink } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
-import { type CampaignSummary, CLUB_CATEGORY_LABEL, type ClubDetail } from '../../shared'
+import { type CampaignSummary, CLUB_CATEGORY_LABEL, type ClubDetail, type QuestEvaluation } from '../../shared'
 
 type Tab = 'chat' | 'drops' | 'leaderboard' | 'about'
 const TABS: { key: Tab; label: string }[] = [
@@ -116,6 +117,7 @@ function Leaderboard({ club }: { club: ClubDetail }) {
 }
 
 function About({ club, onLeave, leaving }: { club: ClubDetail; onLeave: () => void; leaving: boolean }) {
+  const router = useRouter()
   const link = clubLink(club.slug, club.visibility === 'PRIVATE' ? club.inviteCode : null)
   return (
     <View style={{ gap: space.lg }}>
@@ -142,6 +144,12 @@ function About({ club, onLeave, leaving }: { club: ClubDetail; onLeave: () => vo
           </Row>
         ) : null}
       </Card>
+      {club.rules.length ? <ClubRulesList rules={club.rules} /> : <T variant="caption">Anyone can join this club.</T>}
+      {club.role === 'OWNER' ? (
+        <Button icon="shield" onPress={() => router.push({ pathname: '/club-rules', params: { slug: club.slug } })} variant="secondary">
+          {club.rules.length ? 'Edit who can join' : 'Set who can join'}
+        </Button>
+      ) : null}
       {club.visibility === 'PUBLIC' || club.inviteCode ? (
         <Button
           icon="share"
@@ -218,7 +226,11 @@ export default function ClubScreen() {
           </Button>
         )}
       </Row>
-      <Notice message={join.error ? join.error.message : null} />
+      {/* D-41: a refused join shows each rule with the person's own result and how to fix it. */}
+      {!c.joined && c.rules.length && tab !== 'about' ? (
+        <ClubRulesList evaluation={join.error instanceof ApiError && join.error.code === 'CLUB_RULES_NOT_MET' ? ((join.error.details as { evaluation?: QuestEvaluation })?.evaluation ?? null) : null} rules={c.rules} />
+      ) : null}
+      <Notice message={join.error && !(join.error instanceof ApiError && join.error.code === 'CLUB_RULES_NOT_MET') ? join.error.message : null} />
       <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <Chip key={t.key} label={t.label} onPress={() => setTab(t.key)} selected={tab === t.key} />

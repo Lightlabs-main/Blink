@@ -1,7 +1,8 @@
 import { randomBytes, randomInt } from 'node:crypto'
 
-import type { ClubCategory, ClubRole, ClubVisibility } from '@blink/domain'
+import type { ClubCategory, ClubRole, ClubVisibility, QuestGroup } from '@blink/domain'
 
+import { Prisma as Db } from './generated/prisma/client.ts'
 import type { createPrismaClient } from './prisma-campaign-repo.ts'
 
 /*
@@ -28,6 +29,8 @@ export interface StoredClub {
   visibility: ClubVisibility
   inviteCode: string
   ownerPrivyUserId: string | null
+  /** D-41: join rules; empty = anyone. */
+  rules: QuestGroup[]
   createdAt: Date
 }
 
@@ -85,6 +88,7 @@ export interface SocialStore {
   /** Creates the club and, when there is an owner, their OWNER membership. Throws SlugTakenError. */
   createClub(club: Omit<StoredClub, 'createdAt'>, owner: { privyUserId: string; publicWallet: string | null } | null): Promise<StoredClub>
   findClub(idOrSlug: string): Promise<StoredClub | null>
+  setRules(clubId: string, rules: QuestGroup[]): Promise<void>
   findClubByInvite(code: string): Promise<StoredClub | null>
   /** Public clubs plus the caller's own (private ones included), newest first, at most `limit`. */
   listClubs(opts: { privyUserId: string; q?: string; limit: number }): Promise<StoredClub[]>
@@ -165,6 +169,10 @@ export class InMemorySocialStore implements SocialStore {
   async findClub(idOrSlug: string) {
     const c = isUuid(idOrSlug) ? this.clubs.get(idOrSlug) : [...this.clubs.values()].find((x) => x.slug === idOrSlug)
     return c ? { ...c } : null
+  }
+  async setRules(clubId: string, rules: QuestGroup[]) {
+    const c = this.clubs.get(clubId)
+    if (c) c.rules = rules
   }
   async findClubByInvite(code: string) {
     return [...this.clubs.values()].find((c) => c.inviteCode === code) ?? null
@@ -317,8 +325,9 @@ export class InMemorySocialStore implements SocialStore {
 type Prisma = ReturnType<typeof createPrismaClient>
 const isUnique = (err: unknown) => (err as { code?: string }).code === 'P2002'
 
-function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; createdAt: Date }): StoredClub {
-  return { ...r, category: r.category as ClubCategory, visibility: r.visibility as ClubVisibility }
+function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; rulesJson: unknown; createdAt: Date }): StoredClub {
+  const { rulesJson, ...rest } = r
+  return { ...rest, category: r.category as ClubCategory, visibility: r.visibility as ClubVisibility, rules: Array.isArray(rulesJson) ? (rulesJson as QuestGroup[]) : [] }
 }
 const toMember = (r: { clubId: string; privyUserId: string; role: string; publicWallet: string | null; joinedAt: Date }): StoredMember => ({ ...r, role: r.role as ClubRole })
 
@@ -328,7 +337,8 @@ export class PrismaSocialStore implements SocialStore {
   async createClub(club: Omit<StoredClub, 'createdAt'>, owner: { privyUserId: string; publicWallet: string | null } | null) {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.club.create({ data: club })
+        const { rules, ...data } = club
+        const created = await tx.club.create({ data: { ...data, rulesJson: rules.length ? (rules as object[]) : undefined } })
         if (owner) await tx.clubMember.create({ data: { clubId: club.id, privyUserId: owner.privyUserId, role: 'OWNER', publicWallet: owner.publicWallet } })
         return created
       })
@@ -341,6 +351,9 @@ export class PrismaSocialStore implements SocialStore {
   async findClub(idOrSlug: string) {
     const row = await this.prisma.club.findUnique({ where: isUuid(idOrSlug) ? { id: idOrSlug } : { slug: idOrSlug } })
     return row ? toClub(row) : null
+  }
+  async setRules(clubId: string, rules: QuestGroup[]) {
+    await this.prisma.club.update({ where: { id: clubId }, data: { rulesJson: rules.length ? (rules as object[]) : Db.DbNull } })
   }
   async findClubByInvite(code: string) {
     const row = await this.prisma.club.findUnique({ where: { inviteCode: code } })

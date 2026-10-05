@@ -97,6 +97,7 @@ export default function Drops() {
           const facts = [
             c.tapRush ? `${c.tapRush.goal.toLocaleString()} taps · ${c.tapRush.seconds >= 60 ? `${c.tapRush.seconds / 60} min` : `${c.tapRush.seconds}s`}` : null,
             reward ? `${reward} each` : null,
+            c.membersOnly ? 'Club members only' : null,
             ...[...new Set(conditions(c).filter((x) => x.verifier !== 'TAP_RUSH').map((x) => VERIFIERS[x.verifier].label))],
           ].filter(Boolean)
           return (

@@ -10,6 +10,7 @@ import { color, radius, space } from '../../design/tokens'
 import { Badge, Button, Card, Chip, EmptyState, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
 import { describeCondition } from '../../features/campaign/quest-panel'
 import { useMyClubs } from '../../features/clubs/club-ui'
+import { type TokenRule, tokenGroup, TokenRuleCard } from '../../features/rules/rule-builder'
 import { api, ApiError } from '../../lib/api'
 import { useAssets, useHoldings, useMe } from '../../lib/data'
 import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
@@ -31,7 +32,6 @@ import {
 
 type Conversion = { ok: true; raw: bigint; display: string } | { ok: false; error: string }
 type StepId = 'experience' | 'eligibility' | 'action' | 'reward' | 'limits' | 'review'
-type TokenRule = 'off' | 'hold' | 'stake' | 'either' | 'total'
 
 const STEP_TITLE: Record<StepId, string> = {
   experience: 'What do you want your community to do?',
@@ -150,17 +150,6 @@ function endsAtFrom(hours: number) {
   return hours > 0 ? new Date(Date.now() + hours * 3_600_000).toISOString() : undefined
 }
 
-/** One token rule → one requirement group ("either" becomes an ANY group). */
-function tokenGroup(token: 'SKR' | 'ORE', rule: TokenRule, minRaw: string): QuestGroup | null {
-  const held = token === 'SKR' ? 'SKR_BALANCE' : 'ORE_BALANCE'
-  const staked = token === 'SKR' ? 'SKR_STAKED' : 'ORE_STAKED'
-  if (rule === 'off') return null
-  if (rule === 'hold') return { mode: 'ALL', conditions: [{ verifier: held, minRaw }] }
-  if (rule === 'stake') return { mode: 'ALL', conditions: [{ verifier: staked, minRaw }] }
-  if (rule === 'total' && token === 'SKR') return { mode: 'ALL', conditions: [{ verifier: 'SKR_TOTAL', minRaw }] }
-  return { mode: 'ANY', conditions: [{ verifier: held, minRaw }, { verifier: staked, minRaw }] }
-}
-
 function Option({ on, disabled, icon, title, body, onPress, badge }: { on: boolean; disabled?: boolean; icon: IconName; title: string; body: string; onPress?: () => void; badge?: string }) {
   return (
     <Pressable disabled={disabled} onPress={onPress} style={[styles.option, on && styles.optionOn, disabled && { opacity: 0.5 }]}>
@@ -177,7 +166,17 @@ function Option({ on, disabled, icon, title, body, onPress, badge }: { on: boole
 }
 
 /** D-40: post the drop in one of your clubs (optional). Shown in Limits, and in Eligibility for "club members only". */
-function ClubPicker({ clubId, setClubId }: { clubId: string | null; setClubId: (id: string | null) => void }) {
+function ClubPicker({
+  clubId,
+  setClubId,
+  membersOnly,
+  setMembersOnly,
+}: {
+  clubId: string | null
+  setClubId: (id: string | null) => void
+  membersOnly: boolean
+  setMembersOnly: (v: boolean) => void
+}) {
   const clubs = useMyClubs()
   const mine = clubs.data?.clubs ?? []
   return (
@@ -193,43 +192,17 @@ function ClubPicker({ clubId, setClubId }: { clubId: string | null; setClubId: (
           ))}
         </Row>
       )}
-    </View>
-  )
-}
-
-function TokenRuleCard({ token, rule, setRule, min, setMin }: { token: 'SKR' | 'ORE'; rule: TokenRule; setRule: (r: TokenRule) => void; min: string; setMin: (v: string) => void }) {
-  const rules: [TokenRule, string][] =
-    token === 'SKR'
-      ? [['off', 'Off'], ['hold', 'Holds'], ['stake', 'Stakes'], ['either', 'Holds or stakes'], ['total', 'Held + staked']]
-      : [['off', 'Off'], ['hold', 'Holds'], ['stake', 'Stakes'], ['either', 'Holds or stakes']]
-  return (
-    <Card style={{ gap: space.md }}>
-      <Row>
-        <Icon name="layers" size={18} stroke={color.violet} />
-        <T variant="heading">{`${token} holders & stakers`}</T>
-      </Row>
-      <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
-        {rules.map(([r, label]) => (
-          <Chip key={r} label={label} onPress={() => setRule(r)} selected={rule === r} />
-        ))}
-      </Row>
-      {rule !== 'off' ? (
-        <View style={styles.amountWrap}>
-          <TextInput
-            inputMode="decimal"
-            onChangeText={(v) => setMin(v.replace(',', '.'))}
-            placeholder="Minimum"
-            placeholderTextColor={color.textMuted}
-            selectionColor={color.lime}
-            style={[styles.amountInput, font('display'), { fontSize: 30 }]}
-            value={min}
-          />
-          <T variant="heading" color={color.textDim}>
-            {token}
-          </T>
-        </View>
+      {clubId ? (
+        <>
+          <T variant="overline">Who can take part</T>
+          <Row gap={space.sm}>
+            <Chip label="Everyone" onPress={() => setMembersOnly(false)} selected={!membersOnly} />
+            <Chip icon="lock" label="Club members only" onPress={() => setMembersOnly(true)} selected={membersOnly} />
+          </Row>
+          <T variant="caption">{membersOnly ? 'Only members of this club can play, check in or claim. Other requirements still apply.' : 'Anyone can take part; it still shows in the club.'}</T>
+        </>
       ) : null}
-    </Card>
+    </View>
   )
 }
 
@@ -242,8 +215,8 @@ export default function Create() {
   const holdings = useHoldings()
   const params = useLocalSearchParams<{ clubId?: string }>()
   const [clubId, setClubId] = useState<string | null>(typeof params.clubId === 'string' && /^[0-9a-f-]{36}$/.test(params.clubId) ? params.clubId : null)
-  // D-40: club members only (eligibility) and an event check-in (action).
-  const [clubOnly, setClubOnly] = useState(false)
+  // D-41: club members only, for any drop type. D-40: an event check-in (action).
+  const [membersOnly, setMembersOnly] = useState(Boolean(clubId))
   const [questCheckin, setQuestCheckin] = useState(false)
 
   const [stepIndex, setStepIndex] = useState(0)
@@ -305,10 +278,6 @@ export default function Create() {
     try {
       const eligibility: QuestGroup[] = []
       if (seeker) eligibility.push({ mode: 'ALL', conditions: [{ verifier: 'SEEKER_SGT' }] })
-      if (clubOnly) {
-        if (!clubId) throw new Error('pick the club whose members can join')
-        eligibility.push({ mode: 'ALL', conditions: [{ verifier: 'CLUB_MEMBER' }] })
-      }
       const skr = skrRule === 'off' ? null : tokenGroup('SKR', skrRule, toMin(skrMin, 'SKR'))
       const ore = oreRule === 'off' ? null : tokenGroup('ORE', oreRule, toMin(oreMin, 'ORE'))
       if (skr) eligibility.push(skr)
@@ -326,7 +295,7 @@ export default function Create() {
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Check the minimums.' }
     }
-  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre, questX, xText, clubOnly, clubId, questCheckin])
+  }, [seeker, skrRule, skrMin, oreRule, oreMin, questTap, questOre, questX, xText, questCheckin])
 
   const create = useMutation({
     mutationFn: async () => {
@@ -343,6 +312,7 @@ export default function Create() {
           requirements: isQuest && quest.ok ? quest.requirements : undefined,
           endsAt: endsAtFrom(hours),
           clubId: clubId ?? undefined,
+          membersOnly: clubId ? membersOnly : undefined,
         },
         creatorWallet,
       )
@@ -393,14 +363,15 @@ export default function Create() {
 
   const canNext =
     (step === 'experience' && Boolean(type)) ||
-    (step === 'eligibility' && (!clubOnly || Boolean(clubId))) ||
+    step === 'eligibility' ||
     (step === 'action' && quest.ok) ||
     (step === 'reward' && Boolean(selected) && !selected?.paused && Boolean(conversion?.ok) && Boolean(reward?.ok) && !rewardError && (people ?? 0n) > 0n) ||
     step === 'limits'
 
   // Plain-English summary for the review step (update §11 step 6).
   const conditions: QuestCondition[] = isQuest && quest.ok ? quest.requirements.eligibility.flatMap((g) => g.conditions) : []
-  const who = conditions.length ? `People who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : 'Anyone'
+  const audience = clubId && membersOnly ? 'Club members' : 'People'
+  const who = conditions.length ? `${audience} who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : clubId && membersOnly ? 'Club members' : 'Anyone'
   const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}${isQuest && questX ? ' and post on X with their code' : ''}${isQuest && questCheckin ? ' and check in at your event' : ''}`
   const sentence =
     selected && reward?.ok && people !== null
@@ -471,17 +442,7 @@ export default function Create() {
           />
           <TokenRuleCard min={skrMin} rule={skrRule} setMin={setSkrMin} setRule={setSkrRule} token="SKR" />
           <TokenRuleCard min={oreMin} rule={oreRule} setMin={setOreMin} setRule={setOreRule} token="ORE" />
-          <Option
-            body="Only members of the club you post this drop in. Joining a club is free."
-            icon="users"
-            on={clubOnly}
-            onPress={() => {
-              haptics.tap()
-              setClubOnly((v) => !v)
-            }}
-            title="Club members only"
-          />
-          {clubOnly ? <ClubPicker clubId={clubId} setClubId={setClubId} /> : null}
+          <T variant="caption">To keep a drop to one club’s members, pick the club in Limits.</T>
           <T variant="caption">Checked onchain right before a reward is reserved. Blink never locks anyone’s tokens.</T>
         </View>
       ) : null}
@@ -647,7 +608,7 @@ export default function Create() {
             </Row>
           </Card>
           <Card style={{ gap: space.md }}>
-            <ClubPicker clubId={clubId} setClubId={setClubId} />
+            <ClubPicker clubId={clubId} membersOnly={membersOnly} setClubId={setClubId} setMembersOnly={setMembersOnly} />
           </Card>
           {type === 'TAP_RUSH' ? (
             <Card style={{ gap: space.md }}>

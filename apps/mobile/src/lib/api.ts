@@ -13,6 +13,7 @@ import type {
   ClaimSummary,
   HistoryItem,
   QuestEvaluation,
+  QuestGroup,
   QuestRequirements,
   ReferralSummary,
   TapRushRules,
@@ -27,6 +28,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** The whole error body (e.g. D-41 `evaluation` for CLUB_RULES_NOT_MET). */
+    readonly details?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -50,7 +53,7 @@ async function request<T>(path: string, init: RequestInit & { token?: string | n
   const json = text ? (JSON.parse(text) as unknown) : null
   if (!res.ok) {
     const err = (json as { error?: { code?: string; message?: string } } | null)?.error
-    throw new ApiError(res.status, err?.code ?? 'HTTP_ERROR', err?.message ?? `Request failed (${res.status})`)
+    throw new ApiError(res.status, err?.code ?? 'HTTP_ERROR', err?.message ?? `Request failed (${res.status})`, json)
   }
   return json as T
 }
@@ -192,6 +195,7 @@ export const api = {
       startsAt?: string
       endsAt?: string
       clubId?: string
+      membersOnly?: boolean
     },
     creatorWallet?: string,
   ) =>
@@ -241,8 +245,11 @@ export const api = {
   },
   club: (t: GetAccessToken, slug: string, invite?: string) =>
     authed<{ club: ClubDetail }>(t, `/v1/clubs/${encodeURIComponent(slug)}${invite ? `?invite=${encodeURIComponent(invite)}` : ''}`),
-  createClub: (t: GetAccessToken, body: { name: string; description: string; category: ClubCategory; tags: string[]; visibility: 'PUBLIC' | 'PRIVATE' }) =>
+  createClub: (t: GetAccessToken, body: { name: string; description: string; category: ClubCategory; tags: string[]; visibility: 'PUBLIC' | 'PRIVATE'; rules: QuestGroup[] }) =>
     authed<{ club: ClubSummary }>(t, '/v1/clubs', { method: 'POST', body: JSON.stringify(body) }),
+  /** D-41: owner only; applies to new joins. */
+  setClubRules: (t: GetAccessToken, slug: string, rules: QuestGroup[]) =>
+    authed<{ club: ClubSummary }>(t, `/v1/clubs/${encodeURIComponent(slug)}/rules`, { method: 'PUT', body: JSON.stringify({ rules }) }),
   joinClub: (t: GetAccessToken, slug: string, invite?: string) =>
     authed<{ club: ClubSummary }>(t, `/v1/clubs/${encodeURIComponent(slug)}/join`, { method: 'POST', body: JSON.stringify(invite ? { invite } : {}) }),
   leaveClub: (t: GetAccessToken, slug: string) => authed<{ club: ClubSummary }>(t, `/v1/clubs/${encodeURIComponent(slug)}/leave`, { method: 'POST', body: '{}' }),

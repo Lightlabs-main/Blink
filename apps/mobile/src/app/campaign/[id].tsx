@@ -42,6 +42,9 @@ export default function CampaignScreen() {
   const me = useMe()
   const assets = useAssetMap()
   const campaign = useQuery({ queryKey: ['campaign', id], queryFn: () => api.campaign(String(id)), enabled: Boolean(id) })
+  // D-41: members-only drops: is the viewer in the club?
+  const clubId = campaign.data?.campaign.clubId
+  const club = useQuery({ queryKey: ['club', clubId], queryFn: () => api.club(getAccessToken, clubId!), enabled: Boolean(user && clubId), retry: false })
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'))
   const resume = useMutation({
     mutationFn: () => api.resume(getAccessToken, String(id)),
@@ -125,12 +128,23 @@ export default function CampaignScreen() {
 
       {!preLive ? <LiveRoom campaign={c} /> : null}
 
-      {c.clubId ? (
+      {c.clubId && c.membersOnly && !isCreator && club.data && !club.data.club.joined ? (
+        <Card style={{ gap: space.md }} tone="raised">
+          <Row>
+            <Icon name="lock" size={20} stroke={color.lime} />
+            <T variant="heading">{`For ${club.data.club.name} members`}</T>
+          </Row>
+          <T variant="label">Join the club to take part. Joining is free{club.data.club.rules.length ? ', and the club has its own requirements' : ''}.</T>
+          <Button icon="users" onPress={() => router.push({ pathname: '/club/[slug]', params: { slug: club.data.club.slug } })}>
+            Open the club
+          </Button>
+        </Card>
+      ) : c.clubId ? (
         <ListRow
           leading={<Icon name="users" size={20} stroke={color.lime} />}
-          onPress={() => router.push({ pathname: '/club/[slug]', params: { slug: c.clubId! } })}
-          subtitle="Chat, leaderboard and more drops"
-          title="Posted in a club"
+          onPress={() => router.push({ pathname: '/club/[slug]', params: { slug: club.data?.club.slug ?? c.clubId! } })}
+          subtitle={c.membersOnly ? 'Club members only · chat and leaderboard' : 'Chat, leaderboard and more drops'}
+          title={club.data ? `Posted in ${club.data.club.name}` : 'Posted in a club'}
         />
       ) : null}
 

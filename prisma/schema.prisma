@@ -74,6 +74,8 @@ model Campaign {
   pauseReason          String?
   /// D-40: the club this drop is posted in (offchain).
   clubId               String?        @db.Uuid
+  /// D-41: only members of clubId can take part.
+  membersOnly          Boolean        @default(false)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -303,6 +305,8 @@ model Club {
   inviteCode       String   @unique
   /// null = run by Blink (seeded clubs).
   ownerPrivyUserId String?
+  /// D-41: join rules (QuestGroup[]); null/empty = anyone.
+  rulesJson        Json?
   createdAt        DateTime @default(now())
 
   @@index([ownerPrivyUserId, createdAt])

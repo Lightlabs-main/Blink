@@ -30,7 +30,7 @@ const prisma = createPrismaClient(process.env.DATABASE_URL!)
 const store = new PrismaSocialStore(prisma)
 for (const c of CLUBS) {
   try {
-    await store.createClub({ id: randomUUID(), ...c, visibility: 'PUBLIC', inviteCode: newCode(8), ownerPrivyUserId: null }, null)
+    await store.createClub({ id: randomUUID(), ...c, visibility: 'PUBLIC', inviteCode: newCode(8), ownerPrivyUserId: null, rules: [] }, null)
     console.log(`created ${c.slug}`)
   } catch (err) {
     if (err instanceof SlugTakenError) console.log(`exists  ${c.slug}`)

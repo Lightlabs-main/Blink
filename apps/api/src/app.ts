@@ -611,6 +611,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       startsAt: body.startsAt ? new Date(body.startsAt) : null,
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
       clubId: body.clubId ?? null,
+      membersOnly: Boolean(body.membersOnly),
     })
     return reply.status(201).send({ campaign: toSummary(stored) })
   })
@@ -702,7 +703,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   function requireClaims(): ClaimService {
     if (!deps.claims) throw new ClaimError('CLAIMS_UNAVAILABLE', 'claiming is not enabled on this server', 503)
-    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility, quests: deps.quests, profiles: deps.profiles })
+    return new ClaimService({ env: deps.env, auth: deps.auth, campaigns: deps.campaigns, claims: deps.claims, payouts: deps.payouts, log: app.log, limiter, seeker: deps.seeker, eligibility: deps.eligibility, quests: deps.quests, profiles: deps.profiles, social: deps.social })
   }
 
   async function claimResponse(claim: StoredClaim | null) {

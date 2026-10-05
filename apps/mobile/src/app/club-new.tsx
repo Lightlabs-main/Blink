@@ -7,6 +7,8 @@ import { StyleSheet, TextInput, View } from 'react-native'
 import { font } from '../design/fonts'
 import { color, radius, space } from '../design/tokens'
 import { Button, Chip, NavBar, Notice, Row, Screen, T } from '../design/ui'
+import { ClubRulesEditor, EMPTY_RULES } from '../features/clubs/club-rules'
+import { buildRuleGroups } from '../features/rules/rule-builder'
 import { api } from '../lib/api'
 import { haptics } from '../lib/haptics'
 import { CLUB_CATEGORIES, CLUB_CATEGORY_LABEL, CLUB_LIMITS, type ClubCategory } from '../shared'
@@ -28,10 +30,16 @@ export default function NewClub() {
   const [category, setCategory] = useState<ClubCategory>('ASSET')
   const [tags, setTags] = useState('')
   const [priv, setPriv] = useState(false)
+  // D-41: who can join (Seeker, SKR / ORE with custom minimums). Off = anyone.
+  const [rules, setRules] = useState(EMPTY_RULES)
+  const built = buildRuleGroups(rules)
   const tagList = [...new Set(tags.toLowerCase().split(/[\s,#]+/).map((t) => t.replace(/[^a-z0-9-]/g, '')).filter((t) => t.length >= 2))].slice(0, CLUB_LIMITS.maxTags)
 
   const create = useMutation({
-    mutationFn: () => api.createClub(getAccessToken, { name: name.trim(), description: description.trim(), category, tags: tagList, visibility: priv ? 'PRIVATE' : 'PUBLIC' }),
+    mutationFn: () => {
+      if (!built.ok) throw new Error(built.error)
+      return api.createClub(getAccessToken, { name: name.trim(), description: description.trim(), category, tags: tagList, visibility: priv ? 'PRIVATE' : 'PUBLIC', rules: built.groups })
+    },
     onSuccess: (res) => {
       haptics.success()
       void queryClient.invalidateQueries({ queryKey: ['clubs'] })
@@ -39,7 +47,7 @@ export default function NewClub() {
     },
     onError: () => haptics.error(),
   })
-  const ready = name.trim().length >= 3 && description.trim().length >= 10
+  const ready = name.trim().length >= 3 && description.trim().length >= 10 && built.ok
 
   return (
     <Screen>
@@ -82,6 +90,12 @@ export default function NewClub() {
           <Chip label="Invite only" onPress={() => setPriv(true)} selected={priv} />
         </Row>
         <T variant="caption">{priv ? 'Hidden from Discover. People join with your invite link.' : 'Anyone can find and join it.'}</T>
+      </View>
+      <View style={{ gap: space.sm }}>
+        <T variant="overline">Requirements (optional)</T>
+        <T variant="caption">Only people who meet every requirement you turn on can join.</T>
+        <ClubRulesEditor onChange={setRules} value={rules} />
+        {!built.ok ? <Notice message={built.error} tone="warn" /> : null}
       </View>
       <Notice message={create.error ? create.error.message : null} />
       <Button disabled={!ready} icon="users" loading={create.isPending} onPress={() => create.mutate()}>

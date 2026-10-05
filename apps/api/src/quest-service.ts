@@ -1,5 +1,6 @@
 import {
   combineQuest,
+  type QuestRequirements,
   type ConditionResult,
   type QuestCondition,
   type QuestEvaluation,
@@ -127,8 +128,19 @@ export class QuestService {
   }
 
   async evaluate(campaign: StoredCampaign, privyUserId: string): Promise<QuestOutcome> {
-    const requirements = campaign.requirements
-    if (!requirements) throw new Error('campaign has no requirements')
+    if (!campaign.requirements) throw new Error('campaign has no requirements')
+    const { evaluation, tapSessionId, embedded } = await this.run(campaign.requirements, privyUserId, campaign)
+    await this.deps.claims.putQuestVerification({ campaignId: campaign.id, privyUserId, evaluation, publicWallet: embedded[0] ?? null })
+    return { evaluation, tapSessionId: evaluation.qualified ? tapSessionId : null }
+  }
+
+  /** D-41: a club's join rules (eligibility groups only; read-only, nothing is stored). */
+  async checkRules(groups: QuestRequirements['eligibility'], privyUserId: string): Promise<QuestEvaluation> {
+    return (await this.run({ eligibility: groups, actions: [] }, privyUserId, null)).evaluation
+  }
+
+  /** Campaign-specific verifiers (Tap Rush, X, club, check-in) need `campaign`; without it they never pass. */
+  private async run(requirements: QuestRequirements, privyUserId: string, campaign: StoredCampaign | null) {
     const [external, embedded] = await Promise.all([
       this.deps.auth.getVerifiedExternalSolanaWallets(privyUserId),
       this.deps.auth.getEmbeddedSolanaWallets(privyUserId),
@@ -155,28 +167,32 @@ export class QuestService {
           return
         }
         try {
+          if ((c.verifier === 'TAP_RUSH' || c.verifier === 'X_QUEST' || c.verifier === 'CLUB_MEMBER' || c.verifier === 'QR_CHECKIN') && !campaign) {
+            throw new Error(`${c.verifier} needs a campaign`)
+          }
+          // Past the guard above, the campaign-specific verifiers always have a campaign.
           if (c.verifier === 'TAP_RUSH') {
-            const session = await this.deps.claims.findUnusedQualifiedSession(campaign.id, privyUserId)
+            const session = await this.deps.claims.findUnusedQualifiedSession(campaign!.id, privyUserId)
             if (session) tapSessionId = session.id
             results.set(c, { verifier: c.verifier, status: session ? 'PASSED' : 'NOT_STARTED' })
             return
           }
           if (c.verifier === 'X_QUEST') {
             // D-39: verified when the person submitted a post Blink checked (see the x-task route).
-            const task = this.deps.xTasks ? await this.deps.xTasks.get(campaign.id, privyUserId) : null
+            const task = this.deps.xTasks ? await this.deps.xTasks.get(campaign!.id, privyUserId) : null
             results.set(c, { verifier: c.verifier, status: task?.verifiedAt ? 'PASSED' : 'NOT_STARTED', detail: task?.authorHandle ? `@${task.authorHandle}` : undefined })
             return
           }
           if (c.verifier === 'CLUB_MEMBER') {
             // D-40: membership of the drop's own club (Blink state). It never replaces the xStocks eligibility gate.
             if (!this.deps.social) throw new Error('clubs not configured')
-            const member = campaign.clubId ? await this.deps.social.membership(campaign.clubId, privyUserId) : null
+            const member = campaign!.clubId ? await this.deps.social.membership(campaign!.clubId, privyUserId) : null
             results.set(c, { verifier: c.verifier, status: member ? 'PASSED' : 'FAILED', detail: member ? undefined : 'NOT_A_MEMBER' })
             return
           }
           if (c.verifier === 'QR_CHECKIN') {
             if (!this.deps.social) throw new Error('event check-in not configured')
-            const done = await this.deps.social.hasCheckedIn(campaign.id, privyUserId)
+            const done = await this.deps.social.hasCheckedIn(campaign!.id, privyUserId)
             results.set(c, { verifier: c.verifier, status: done ? 'PASSED' : 'NOT_STARTED' })
             return
           }
@@ -216,14 +232,13 @@ export class QuestService {
           })
         } catch (err) {
           // Fail closed: an unreadable condition never passes.
-          this.deps.log?.warn({ err, verifier: c.verifier, campaignId: campaign.id }, 'quest condition could not be verified')
+          this.deps.log?.warn({ err, verifier: c.verifier, campaignId: campaign?.id }, 'quest condition could not be verified')
           results.set(c, { verifier: c.verifier, status: 'ERROR', detail: 'UNAVAILABLE_RIGHT_NOW' })
         }
       }),
     )
 
     const evaluation = combineQuest(requirements, (c) => results.get(c)!, new Date().toISOString())
-    await this.deps.claims.putQuestVerification({ campaignId: campaign.id, privyUserId, evaluation, publicWallet: embedded[0] ?? null })
-    return { evaluation, tapSessionId: evaluation.qualified ? tapSessionId : null }
+    return { evaluation, tapSessionId: tapSessionId as string | null, embedded }
   }
 }

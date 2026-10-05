@@ -217,3 +217,54 @@ describe('squads (D-40)', () => {
     expect((await get('bob', url)).json().mine).toBeNull()
   })
 })
+
+describe('club join rules and members-only drops (D-41)', () => {
+  it('checks custom SKR / Seeker rules on join and lets only the owner change them', async () => {
+    const staked = new Map<string, bigint>()
+    const chain = {
+      skrBalance: async () => 0n,
+      skrStaked: async (w: string) => staked.get(w) ?? 0n,
+      oreBalance: async () => 0n,
+      oreStaked: async () => 0n,
+      oreMinerRound: async () => 0n,
+      oreBoardRound: async () => 1n,
+    }
+    const rows: { id: string; clubId: string | null; createdAt: Date }[] = []
+    const store = new InMemorySocialStore(() => rows)
+    const a = buildApp({ env, auth, campaigns, claims, social: store, rpc: {} as Rpc<GetAccountInfoApi>, assets: [], quests: new QuestService({ auth, claims, social: store, chain }) })
+    const p = (u: string, url: string, payload: object = {}) => a.inject({ method: 'POST', url, headers: as(u), payload })
+    const rules = [{ mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED', minRaw: '500000000' }] }]
+
+    expect((await p('alice', '/v1/clubs', { name: 'Tap club', description: 'Rules must be identity checks.', category: 'COMMUNITY', rules: [{ mode: 'ALL', conditions: [{ verifier: 'TAP_RUSH' }] }] })).statusCode).toBe(400)
+    const club = (await p('alice', '/v1/clubs', { name: 'SKR Stakers', description: 'Stake at least 500 SKR to join.', category: 'ECOSYSTEM', rules })).json().club
+    expect(club.rules).toEqual(rules)
+
+    const refused = await p('bob', `/v1/clubs/${club.slug}/join`)
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error.code).toBe('CLUB_RULES_NOT_MET')
+    expect(refused.json().evaluation.eligibility[0].results[0]).toMatchObject({ verifier: 'SKR_STAKED', status: 'FAILED', actualRaw: '0', requiredRaw: '500000000' })
+
+    staked.set((await auth.getEmbeddedSolanaWallets('did:privy:bob'))[0]!, 600_000_000n)
+    expect((await p('bob', `/v1/clubs/${club.slug}/join`)).json().club.joined).toBe(true)
+
+    // Only the owner edits rules; a Seeker-or-stake rule is fine; members stay.
+    const put = (u: string, body: object) => a.inject({ method: 'PUT', url: `/v1/clubs/${club.slug}/rules`, headers: as(u), payload: body })
+    expect((await put('bob', { rules: [] })).statusCode).toBe(403)
+    const anyRule = [{ mode: 'ANY', conditions: [{ verifier: 'SEEKER_SGT' }, { verifier: 'ORE_STAKED', minRaw: '1' }] }]
+    expect((await put('alice', { rules: anyRule })).json().club).toMatchObject({ rules: anyRule, memberCount: 2 })
+    await a.close()
+  })
+
+  it('keeps any kind of members-only drop to club members', async () => {
+    const club = (await post('alice', '/v1/clubs', { name: 'Members Drop Club', description: 'Drops for members only.', category: 'COMMUNITY' })).json().club
+    const body = { type: 'TAP_RUSH', mint: SUPPORTED_XSTOCKS[0]!.mint, allowanceRaw: '100', rewardPerClaimRaw: '10', membersOnly: true }
+    expect((await post('alice', '/v1/campaigns', body)).json().error.message).toMatch(/club/)
+    const c = await liveCampaign({ clubId: club.id, membersOnly: true })
+    expect((await get('bob', `/v1/campaigns/${c.id}`)).json().campaign).toMatchObject({ clubId: club.id, membersOnly: true })
+    expect((await post('bob', `/v1/campaigns/${c.id}/tap-rush/start`)).json().error.code).toBe('NOT_A_MEMBER')
+    expect((await post('bob', `/v1/campaigns/${c.id}/claim`)).json().error.code).toBe('NOT_A_MEMBER')
+    await post('bob', `/v1/clubs/${club.slug}/join`)
+    // A member gets past the club gate (and then meets the normal checks: no payouts configured in this test).
+    expect((await post('bob', `/v1/campaigns/${c.id}/tap-rush/start`)).json().error.code).not.toBe('NOT_A_MEMBER')
+  })
+})
