@@ -404,6 +404,7 @@ describe('xStock gifts in club chat (D-44)', () => {
     expect((await p('carol', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '7' })).json().error.code).toBe('MUTED')
     const lastId = (await g('carol', `${base}/messages`)).json().messages.at(-1).id
     expect((await p('carol', `${base}/messages/${lastId}/reactions`, { emoji: '🔥' })).json().error.code).toBe('MUTED')
+    expect((await p('carol', `${base}/messages/${lastId}/report`)).json().error.code).toBe('MUTED')
     expect((await g('carol', `${base}/messages`)).statusCode).toBe(200)
     await p('alice', `${base}/members/${carolId}/mute`, { minutes: 0 })
     expect((await p('carol', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '7' })).statusCode).toBe(200)

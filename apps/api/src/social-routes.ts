@@ -176,7 +176,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     if (club.adminsOnly && !isAdmin(member)) throw new ClaimError('ADMINS_ONLY', 'only admins can send messages in this club right now', 403)
   }
 
-  /** Owner decision 2026-10-05: a muted member can only read — no messages, voice notes, reactions or gifts. */
+  /** Owner decision 2026-10-05: a muted member can only read — no messages, voice notes, reactions, gifts or reports. */
   function requireNotMuted(member: { role: string; mutedUntil: Date | null }) {
     if (member.mutedUntil && member.mutedUntil.getTime() > Date.now() && member.role !== 'OWNER') {
       throw new ClaimError('MUTED', `an admin muted you until ${member.mutedUntil.toISOString()}`, 403)
@@ -407,7 +407,8 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/report', async (req, reply) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    const { club, social } = await memberOnly(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    requireNotMuted(member)
     const id = cursor(req.params.mid)
     const [m] = id !== undefined ? await social.messagesByIds([id]) : []
     if (!m || m.clubId !== club.id) return send(reply, 404, 'NOT_FOUND', 'message not found')
