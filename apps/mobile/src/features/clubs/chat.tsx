@@ -1,5 +1,5 @@
 import { usePrivy } from '@privy-io/expo'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 
@@ -9,7 +9,7 @@ import { color, radius, space } from '../../design/tokens'
 import { Avatar, Button, IconButton, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, apiUrl } from '../../lib/api'
 import { haptics } from '../../lib/haptics'
-import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction } from '../../shared'
+import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction, formatRaw } from '../../shared'
 import { useVoicePlayback, VoiceBubble, VoiceRecorder } from './voice'
 
 const POLL_MS = 3500
@@ -69,6 +69,7 @@ export function ClubChat({
   onPinChange?: () => void
 }) {
   const { getAccessToken } = usePrivy()
+  const router = useRouter()
   const playback = useVoicePlayback()
   const [recording, setRecording] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -228,7 +229,7 @@ export function ClubChat({
     }
   }
 
-  const preview = (m: { body: string; kind?: string }) => (m.kind === 'VOICE' ? '🎤 Voice note' : m.body)
+  const preview = (m: { body: string; kind?: string }) => (m.kind === 'VOICE' ? '🎤 Voice note' : m.kind === 'GIFT' ? '🎁 Gift' : m.body)
   const data = [...messages].reverse()
 
   return (
@@ -293,6 +294,16 @@ export function ClubChat({
                   ) : null}
                   {m.deleted ? (
                     <T style={{ ...font('body'), fontStyle: 'italic', fontSize: 14, color: color.textMuted }}>Message deleted</T>
+                  ) : m.kind === 'GIFT' && m.gift ? (
+                    <View style={styles.gift}>
+                      <T style={{ fontSize: 22 }}>🎁</T>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <T style={{ ...font('bodySemi'), fontSize: 14.5, color: color.text }}>{`Sent ${m.gift.to.label} ${formatRaw(BigInt(m.gift.amountRaw), m.gift.decimals, 6)} ${m.gift.symbol}`}</T>
+                        <T variant="caption" color={color.lime}>
+                          Confirmed on Solana ✓
+                        </T>
+                      </View>
+                    </View>
                   ) : m.kind === 'VOICE' && m.voice ? (
                     <VoiceBubble durationMs={m.voice.durationMs} id={m.id} mine={m.mine} playback={playback} url={m.voice.url} />
                   ) : (
@@ -324,6 +335,18 @@ export function ClubChat({
                       >
                         <Icon name="reply" size={16} stroke={color.text} />
                       </Pressable>
+                      {!m.mine && m.authorId ? (
+                        <Pressable
+                          accessibilityLabel="Gift stock"
+                          onPress={() => {
+                            setSelected(null)
+                            router.push({ pathname: '/club-gift', params: { slug, to: m.authorId!, name: m.author.label } })
+                          }}
+                          style={styles.reaction}
+                        >
+                          <T style={{ fontSize: 13 }}>🎁 Gift</T>
+                        </Pressable>
+                      ) : null}
                       {canModerate ? (
                         <Pressable accessibilityLabel={pinned?.id === m.id ? 'Unpin message' : 'Pin message'} onPress={() => void togglePin(m, pinned?.id !== m.id)} style={styles.reaction}>
                           <Icon name="pin" size={16} stroke={pinned?.id === m.id ? color.lime : color.text} />
@@ -408,6 +431,7 @@ const styles = StyleSheet.create({
   quote: { borderLeftWidth: 2, borderColor: color.limeLine, paddingLeft: space.sm },
   reaction: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: color.surface3, borderWidth: 1, borderColor: color.border },
   reactionMine: { borderColor: color.limeLine, backgroundColor: color.limeSoft },
+  gift: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: color.limeSoft, borderWidth: 1, borderColor: color.limeLine },
   pinned: { paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.surface2, borderWidth: 1, borderColor: color.limeLine, marginBottom: space.sm },
   replyBar: { paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: color.surface2 },
   input: {

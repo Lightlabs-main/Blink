@@ -27,6 +27,8 @@ import {
   voiceMessageRequest,
   createClubRequest,
   createSquadRequest,
+  giftPrepareRequest,
+  giftSubmitRequest,
   joinClubRequest,
   joinSquadRequest,
   questHasTapRush,
@@ -41,6 +43,10 @@ import { type CampaignRepository, type StoredCampaign, toSummary } from './campa
 import type { ClaimRepository } from './claim-repo.ts'
 import { ClaimError } from './payout-service.ts'
 import type { QuestService } from './quest-service.ts'
+import type { Asset } from './assets.ts'
+import type { EligibilityService } from './eligibility.ts'
+import { NOOP_NOTIFIER, type Notifier } from './push.ts'
+import type { SendService } from './send-service.ts'
 import { avatarPath, type ProfileStore } from './profile.ts'
 import type { RateLimiter } from './rate-limit.ts'
 import { AlreadyInSquadError, newCode, SlugTakenError, type SocialStore, type StoredClub, type StoredMessage, type StoredSquad } from './social-store.ts'
@@ -59,6 +65,12 @@ export interface SocialDeps {
   social?: SocialStore
   /** D-41: club join rules use the Verified Quest readers (mainnet, the person's verified wallets). */
   quests?: QuestService
+  /** D-44: gifts reuse the D-32 Send flow (Blink pays the fee) and the D-20 gate for both people. */
+  env?: { SOLANA_CLUSTER: string; XSTOCK_COMPLIANCE: string }
+  assets?: Asset[]
+  send?: Pick<SendService, 'prepare' | 'submit'>
+  eligibility?: Pick<EligibilityService, 'isEligibleStored'>
+  notifier?: Notifier
 }
 
 interface Ctx {
@@ -289,7 +301,15 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const replyIds = [...new Set(messages.map((m) => m.replyToId).filter((x): x is bigint => x !== null))]
     const replies = new Map((await social.messagesByIds(replyIds)).map((m) => [m.id, m]))
     const reactions = await social.reactions(messages.map((m) => m.id))
-    const who = await people([...messages.map((m) => m.authorPrivyUserId), ...[...replies.values()].map((m) => m.authorPrivyUserId)])
+    const gifts = new Map((await social.giftsByIds(messages.map((m) => m.giftId).filter((x): x is string => Boolean(x)))).map((g) => [g.id, g]))
+    const giftWallets = new Map(
+      await Promise.all([...gifts.values()].map(async (g) => [g.recipientPrivyUserId, (await social.membership(g.clubId, g.recipientPrivyUserId))?.publicWallet ?? null] as const)),
+    )
+    const who = await people([
+      ...messages.map((m) => m.authorPrivyUserId),
+      ...[...replies.values()].map((m) => m.authorPrivyUserId),
+      ...[...gifts.values()].map((g) => g.recipientPrivyUserId),
+    ])
     return messages.map((m) => {
       const mine = reactions.filter((r) => r.messageId === m.id)
       const reply = m.replyToId !== null ? replies.get(m.replyToId) : undefined
@@ -298,10 +318,17 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
         author: who(m.authorPrivyUserId, m.authorWallet),
         mine: m.authorPrivyUserId === privyUserId,
         body: m.deletedAt ? '' : m.body,
-        kind: m.kind === 'VOICE' ? ('VOICE' as const) : ('TEXT' as const),
+        kind: m.kind === 'VOICE' ? ('VOICE' as const) : m.kind === 'GIFT' ? ('GIFT' as const) : ('TEXT' as const),
         voice: m.kind === 'VOICE' && m.voiceId && !m.deletedAt ? { url: `/v1/voice/${m.voiceId}`, durationMs: m.voiceMs ?? 0 } : null,
+        gift: (() => {
+          const g = m.kind === 'GIFT' && m.giftId && !m.deletedAt ? gifts.get(m.giftId) : undefined
+          return g
+            ? { to: who(g.recipientPrivyUserId, giftWallets.get(g.recipientPrivyUserId) ?? null), mint: g.mint, symbol: g.symbol, decimals: g.decimals, amountRaw: g.amountRaw.toString(), signature: g.signature, cluster: g.cluster }
+            : null
+        })(),
+        authorId: m.deletedAt ? null : memberRef(m.clubId, m.authorPrivyUserId),
         replyTo: reply
-          ? { id: reply.id.toString(), author: who(reply.authorPrivyUserId, reply.authorWallet), body: reply.deletedAt ? '' : reply.kind === 'VOICE' ? '🎤 Voice note' : reply.body.slice(0, 140) }
+          ? { id: reply.id.toString(), author: who(reply.authorPrivyUserId, reply.authorWallet), body: reply.deletedAt ? '' : reply.kind === 'VOICE' ? '🎤 Voice note' : reply.kind === 'GIFT' ? '🎁 Gift' : reply.body.slice(0, 140) }
           : null,
         reactions: CLUB_REACTIONS.map((emoji) => ({
           emoji,
@@ -532,6 +559,76 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/pin', (req) => pin(req, true))
   app.delete<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/pin', (req) => pin(req, false))
 
+  // ---- D-44: xStock gifts between club members (the D-32 Send flow; Blink pays the fee) ----
+
+  const giftPending = new Map<string, { clubId: string; slug: string; recipient: string; mint: string; symbol: string; decimals: number; amountRaw: bigint; expiresAt: number }>()
+  const notifier = deps.notifier ?? NOOP_NOTIFIER
+
+  app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/gifts/prepare', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    requireCanPost(club, member)
+    if (!deps.send) throw new ClaimError('SEND_UNAVAILABLE', 'gifts are not available right now', 503)
+    const parsed = giftPrepareRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid gift')
+    // Same daily cap as Send (Blink pays these fees).
+    if (!limiter.hit(`send:${auth.privyUserId}`, 20, DAY)) return send(reply, 429, 'RATE_LIMITED', 'you have reached today’s sending limit — try again tomorrow')
+    const asset = deps.assets?.find((a) => a.mint === parsed.data.asset)
+    if (!asset) return send(reply, 400, 'UNSUPPORTED_ASSET', 'only Blink’s supported stocks can be gifted')
+    const target = (await social.members(club.id, 5000)).find((m) => memberRef(club.id, m.privyUserId) === parsed.data.to)
+    if (!target) return send(reply, 404, 'NOT_FOUND', 'that person is not in this club')
+    if (target.privyUserId === auth.privyUserId) return send(reply, 400, 'SELF_GIFT', 'you can’t gift yourself')
+    // D-20: receiving xStocks needs a current, eligible decision too (the sender is checked inside Send).
+    if (!asset.isTest && deps.env?.XSTOCK_COMPLIANCE === 'enforce') {
+      if (!deps.eligibility) throw new ClaimError('ELIGIBILITY_UNAVAILABLE', 'eligibility checks are not available right now', 503)
+      if (!(await deps.eligibility.isEligibleStored(target.privyUserId))) {
+        return send(reply, 403, 'RECIPIENT_NOT_ELIGIBLE', 'this person can’t receive xStocks yet (they need to confirm eligibility in Blink)')
+      }
+    }
+    const [to] = await deps.auth.getEmbeddedSolanaWallets(target.privyUserId)
+    if (!to) return send(reply, 409, 'NO_STOCK_WALLET', 'their Blink wallet isn’t ready yet')
+    const prepared = await deps.send.prepare(auth.privyUserId, req.ip, { asset: asset.mint, to, amountRaw: BigInt(parsed.data.amountRaw) })
+    giftPending.set(auth.privyUserId, {
+      clubId: club.id, slug: club.slug, recipient: target.privyUserId, mint: asset.mint, symbol: asset.symbol, decimals: asset.decimals,
+      amountRaw: BigInt(parsed.data.amountRaw), expiresAt: Date.now() + 5 * 60_000,
+    })
+    // The recipient's address is inside the transaction the wallet signs (it is public onchain), but never shown in the app.
+    return { prepared: { transaction: prepared.transaction, createsRecipientAccount: prepared.createsRecipientAccount } }
+  })
+
+  app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/gifts/submit', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!deps.send) throw new ClaimError('SEND_UNAVAILABLE', 'gifts are not available right now', 503)
+    const parsed = giftSubmitRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'invalid transaction')
+    const pending = giftPending.get(auth.privyUserId)
+    if (!pending || pending.clubId !== club.id || pending.expiresAt < Date.now()) return send(reply, 409, 'EXPIRED', 'this gift expired — please try again')
+    giftPending.delete(auth.privyUserId)
+    // Send checks the signed transaction is exactly the one prepared for this user, then sends and confirms it.
+    const { signature, confirmed } = await deps.send.submit(auth.privyUserId, parsed.data.signedTransaction)
+    const gift = await social.createGift({
+      id: randomUUID(), clubId: club.id, senderPrivyUserId: auth.privyUserId, recipientPrivyUserId: pending.recipient, senderWallet: member.publicWallet,
+      mint: pending.mint, symbol: pending.symbol, decimals: pending.decimals, amountRaw: pending.amountRaw, cluster: deps.env?.SOLANA_CLUSTER ?? 'devnet',
+      signature, status: confirmed ? 'CONFIRMED' : 'PENDING',
+    })
+    // Only a confirmed transfer appears in the chat and notifies the recipient (never "received" before it is).
+    let message: ChatMessage | null = null
+    if (confirmed) {
+      const m = await social.addMessage({ clubId: club.id, authorPrivyUserId: auth.privyUserId, authorWallet: member.publicWallet, body: '', replyToId: null, kind: 'GIFT', giftId: gift.id })
+      message = (await chatView([m], auth.privyUserId))[0] ?? null
+      const sender = (await people([auth.privyUserId]))(auth.privyUserId, member.publicWallet)
+      void notifier.notify(pending.recipient, {
+        title: 'You got a gift 🎁',
+        body: `${sender.label} sent you ${pending.symbol} in ${club.name}.`,
+        url: `/club/${pending.slug}`,
+      })
+    }
+    return { gift: { id: gift.id, signature, status: gift.status }, message }
+  })
+
   // ---- Club leaderboard: points from real, explainable records only (never balances or wealth) ----
 
   app.get<{ Params: { slug: string }; Querystring: { period?: string } }>('/v1/clubs/:slug/leaderboard', async (req) => {
@@ -749,6 +846,13 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const memberships = social ? await social.membershipsOf(auth.privyUserId) : []
     const firstJoin = memberships.at(-1)
     if (firstJoin) badges.push({ id: 'FIRST_CLUB', title: 'First club', detail: memberships.length > 1 ? `Member of ${memberships.length} clubs` : 'Joined a club', at: firstJoin.joinedAt.toISOString() })
+    // D-44: first gift sent and first gift received (confirmed transfers).
+    if (social) {
+      const firstSent = (await social.giftsSent(auth.privyUserId, 200)).filter((g) => g.status === 'CONFIRMED').at(-1)
+      const firstGot = (await social.giftsReceived(auth.privyUserId, 200)).filter((g) => g.status === 'CONFIRMED').at(-1)
+      if (firstSent) badges.push({ id: 'FIRST_GIFT_SENT', title: 'First gift sent', detail: `Gave ${firstSent.symbol} to a club member`, at: firstSent.createdAt.toISOString() })
+      if (firstGot) badges.push({ id: 'FIRST_GIFT_RECEIVED', title: 'Gift received', detail: `Got ${firstGot.symbol} from a club member`, at: firstGot.createdAt.toISOString() })
+    }
     let squadWins = 0
     if (social) {
       for (const s of await social.squadsOf(auth.privyUserId)) {

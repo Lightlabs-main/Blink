@@ -34,6 +34,8 @@ export function receiptTitle(item: HistoryItem): string {
       return 'Event check-in'
     case 'CLUB_JOINED':
       return 'Joined a club'
+    case 'GIFT_RECEIVED':
+      return item.title ? `Gift from ${item.title}` : 'Gift received'
   }
 }
 
@@ -64,6 +66,7 @@ const STATUS_TEXT: Record<HistoryItem['status'], string> = { CONFIRMED: 'Confirm
 /** Never says a reward arrived before the network confirmed it. */
 function statusText(item: HistoryItem) {
   if (isOffchain(item)) return 'Recorded by Blink ✓'
+  if (item.kind === 'GIFT_RECEIVED') return 'Gift received ✓'
   if (item.kind === 'REWARD' || item.kind === 'INVITE_BONUS') return item.status === 'CONFIRMED' ? 'Reward settled ✓' : item.status === 'PENDING' ? 'Completed · reward sending' : 'Completed · payout failed'
   return STATUS_TEXT[item.status]
 }
@@ -133,6 +136,8 @@ export function postReceiptOnX(item: HistoryItem, asset: XStockListing | undefin
       ? `Checked in at a ${item.title ?? item.symbol} event on Blink ✓`
       : item.kind === 'CLUB_JOINED'
         ? `I just joined ${item.title ?? 'a club'} on Blink — tokenized stocks, made social.`
+        : item.kind === 'GIFT_RECEIVED'
+          ? `Just got ${amount} as a gift on Blink 🎁 tokenized stocks, made social.`
         : item.kind === 'SENT'
       ? `Just sent ${amount} on Blink — tokenized stocks, made social.`
       : item.kind === 'FUNDED'

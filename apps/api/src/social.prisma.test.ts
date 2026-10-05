@@ -139,6 +139,16 @@ describe.skipIf(!url)('social features on Postgres (D-40)', () => {
     expect((await post('dave', `/v1/clubs/${club.slug}/join`)).statusCode).toBe(200)
     await app.inject({ method: 'PUT', url: `/v1/clubs/${club.slug}/settings`, headers: h('alice'), payload: { adminsOnly: false } })
 
+    // D-44: gift rows keep exact raw amounts (Decimal ↔ bigint) and are found by recipient and sender.
+    const giftRow = await social.createGift({
+      id: randomUUID(), clubId: club.id, senderPrivyUserId: `did:privy:${run}:alice`, recipientPrivyUserId: `did:privy:${run}:bob`, senderWallet: null,
+      mint: SUPPORTED_XSTOCKS[0]!.mint, symbol: 'NVDAx', decimals: 8, amountRaw: 18_446_744_073_709_551_615n, cluster: 'devnet', signature: `sig-${run}`, status: 'CONFIRMED',
+    })
+    expect((await social.giftsReceived(`did:privy:${run}:bob`, 5))[0]).toMatchObject({ id: giftRow.id, amountRaw: 18_446_744_073_709_551_615n, status: 'CONFIRMED' })
+    expect((await social.giftsSent(`did:privy:${run}:alice`, 5)).map((x) => x.id)).toEqual([giftRow.id])
+    const giftMsg = await social.addMessage({ clubId: club.id, authorPrivyUserId: `did:privy:${run}:alice`, authorWallet: null, body: '', replyToId: null, kind: 'GIFT', giftId: giftRow.id })
+    expect((await get('bob', `/v1/clubs/${club.slug}/messages?after=${BigInt(giftMsg.id) - 1n}`)).json().messages[0]).toMatchObject({ kind: 'GIFT', gift: { amountRaw: '18446744073709551615' } })
+
     // Captain leaving disbands; members can leave the club; owners cannot.
     expect((await post('bob', `/v1/squads/${squad.id}/leave`)).json().disbanded).toBe(true)
     expect((await post('alice', `/v1/clubs/${club.slug}/leave`)).json().error.code).toBe('OWNER_CANNOT_LEAVE')

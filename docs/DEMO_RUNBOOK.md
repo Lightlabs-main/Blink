@@ -45,6 +45,7 @@ received yet (OQ-10), so this version covers what exists today.
 | 24 | Phone A (owner): About → Members → make phone B an admin; phone B mutes phone C for 1 hour | Phone C sees "An admin muted you…" and can't post; Unmute restores it |
 | 25 | Phone A: About → Admin settings → Only admins; pin a message | Members can't post; the pinned message shows above the chat |
 | 26 | Phone B (admin): remove phone C; phone C taps Join | "An admin removed you"; Members → Removed → Let back in, then Join works |
+| 27 | Phone A (holding tNVDAx): tap a phone B message → 🎁 Gift → 0.01 → Gift | Wallet signs; "Gift sent ✓"; a gift card appears in the chat; phone B gets a push and a "Gift received" receipt |
 
 ## Known limits to mention in a demo
 

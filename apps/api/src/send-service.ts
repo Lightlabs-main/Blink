@@ -147,7 +147,7 @@ export class SendService {
     return { transaction: plan.transaction, from, createsRecipientAccount: plan.createsRecipientAccount }
   }
 
-  async submit(privyUserId: string, signedTransactionBase64: string): Promise<{ signature: string }> {
+  async submit(privyUserId: string, signedTransactionBase64: string): Promise<{ signature: string; confirmed: boolean }> {
     const pending = this.pending.get(privyUserId)
     this.pending.delete(privyUserId)
     if (!pending || pending.expiresAt < Date.now()) throw new ClaimError('EXPIRED', 'this transfer expired — please try again', 409)
@@ -199,13 +199,13 @@ export class SendService {
       if (s?.confirmationStatus === 'confirmed' || s?.confirmationStatus === 'finalized') {
         await this.deps.ledger.settle(ledgerKey, 'SPENT', signature)
         await this.remember(privyUserId, pending.record, signature, 'CONFIRMED')
-        return { signature }
+        return { signature, confirmed: true }
       }
       await new Promise((r) => setTimeout(r, 1500))
     }
     // Still pending: report the signature; the explorer link shows the final state.
     await this.remember(privyUserId, pending.record, signature, 'PENDING')
-    return { signature }
+    return { signature, confirmed: false }
   }
 
   /** History is best-effort: a failed write never turns a completed transfer into an error. */

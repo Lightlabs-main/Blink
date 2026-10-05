@@ -352,3 +352,16 @@ export const clubSettingsRequest = z
 
 export const memberRoleRequest = z.object({ role: z.enum(['MOD', 'MEMBER']) }).strict()
 export const muteRequest = z.object({ minutes: z.union(CLUB_MUTE_MINUTES.map((m) => z.literal(m)) as [z.ZodLiteral<0>, ...z.ZodLiteral<number>[]]) }).strict()
+
+/* ───────────── D-44: xStock gifts in club chat ───────────── */
+
+export const giftPrepareRequest = z
+  .object({
+    /** The recipient's opaque per-club member id. */
+    to: z.string().regex(/^[0-9a-f]{16}$/, 'pick a member'),
+    asset: solanaAddress,
+    amountRaw: positiveRawAmount('enter an amount above zero'),
+  })
+  .strict()
+
+export const giftSubmitRequest = z.object({ signedTransaction: z.string().min(100).max(4000) }).strict()
