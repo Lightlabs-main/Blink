@@ -7,14 +7,13 @@ import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Avatar, Button, IconButton, Notice, Row, T } from '../../design/ui'
-import { api, ApiError } from '../../lib/api'
+import { api, ApiError, apiUrl } from '../../lib/api'
 import { haptics } from '../../lib/haptics'
 import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction } from '../../shared'
 
 const POLL_MS = 3500
 /** Every few polls, reload the newest page too, so reactions and deletions on recent messages catch up. */
 const RESYNC_EVERY = 5
-const base = process.env.EXPO_PUBLIC_BLINK_API_URL ?? ''
 
 function time(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
@@ -217,7 +216,7 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
           renderItem={({ item: m }) => (
             <Pressable onPress={() => setSelected((s) => (s === m.id ? null : m.id))} style={[styles.msg, m.mine && styles.mine]}>
               <Row style={{ alignItems: 'flex-start' }} gap={space.sm}>
-                <Avatar label={m.author.username ?? m.author.label} size={30} uri={m.author.avatarUrl ? `${base}${m.author.avatarUrl}` : null} />
+                <Avatar label={m.author.username ?? m.author.label} size={30} uri={apiUrl(m.author.avatarUrl)} />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Row gap={6}>
                     <T style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }}>{m.author.label}</T>

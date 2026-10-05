@@ -23,7 +23,8 @@ import {
   StockAvatar,
   T,
 } from '../../design/ui'
-import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions } from '../../lib/data'
+import { apiUrl } from '../../lib/api'
+import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions, useProfile } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, greeting, networkLabel, shortAddress } from '../../lib/format'
 import { ClubTile, useMyClubs } from '../../features/clubs/club-ui'
 import { userEmail } from '../../lib/privy-user'
@@ -76,8 +77,10 @@ export default function Home() {
   const { positions, isLoading: positionsLoading } = usePositions()
   const [refreshing, setRefreshing] = useState(false)
 
+  const profile = useProfile()
   const email = userEmail(user)
-  const name = email ? email.split('@')[0]! : me.data?.verifiedCreatorWallets[0] ? shortAddress(me.data.verifiedCreatorWallets[0]) : 'there'
+  const username = profile.data?.profile.username
+  const name = username ? `@${username}` : email ? email.split('@')[0]! : me.data?.verifiedCreatorWallets[0] ? shortAddress(me.data.verifiedCreatorWallets[0]) : 'there'
   const net = networkLabel(network.data?.cluster)
   const isCreator = (me.data?.verifiedCreatorWallets.length ?? 0) > 0
   const myCampaigns = mine.data?.campaigns ?? []
@@ -95,7 +98,9 @@ export default function Home() {
       {/* Header */}
       <Row style={{ justifyContent: 'space-between' }}>
         <Row>
-          <Avatar label={name} size={44} />
+          <Pressable accessibilityLabel="Edit profile" onPress={() => router.push('/profile-edit')}>
+            <Avatar label={username ?? name} size={44} uri={apiUrl(profile.data?.profile.avatarUrl)} />
+          </Pressable>
           <View>
             <T variant="caption">{greeting()}</T>
             <T variant="heading" numberOfLines={1}>
