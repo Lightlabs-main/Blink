@@ -567,8 +567,8 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/gifts/prepare', async (req, reply) => {
     const auth = await requireAuth(req)
     throttle(req, auth)
-    const { club, member, social } = await memberOnly(req, auth)
-    requireCanPost(club, member)
+    // Any member can gift — muting and admins-only chats limit messages, not gifts (owner decision 2026-10-05).
+    const { club, social } = await memberOnly(req, auth)
     if (!deps.send) throw new ClaimError('SEND_UNAVAILABLE', 'gifts are not available right now', 503)
     const parsed = giftPrepareRequest.safeParse(req.body)
     if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid gift')

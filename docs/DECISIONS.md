@@ -610,8 +610,8 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
   the server finds the recipient's Blink (embedded) wallet itself (never shown in the app) and builds the transfer
   through the D-32 Send service; the wallet signs in the app; Blink's fee payer pays the fee and, the first time, the
   recipient's token-account rent (mainnet budget cap applies). Same 20 sends/day cap and the global kill switch.
-- **Checks:** both people must be members of the club; muted members (and non-admins in an admins-only chat) can't
-  gift; no self-gifts; only Blink's supported assets; real xStocks need the sender's live eligibility check (inside
+- **Checks:** both people must be members of the club — any member can gift, including muted members and in an
+  admins-only chat (owner decision 2026-10-05: muting and admins-only limit messages, not gifts); no self-gifts; only Blink's supported assets; real xStocks need the sender's live eligibility check (inside
   Send) and the recipient's stored, current eligible decision (`isEligibleStored`) — otherwise
   `RECIPIENT_NOT_ELIGIBLE` before anything is signed.
 - **Truthful states:** a gift is posted in the chat, notified to the recipient (push) and shown as "Gift received" in

@@ -396,12 +396,21 @@ describe('xStock gifts in club chat (D-44)', () => {
     expect((await g('bob', '/v1/me/passport')).json().passport.badges.map((b: { title: string }) => b.title)).toContain('Gift received')
     expect((await g('bob', `${base}/messages`)).json().messages.at(-1).authorId).toBe(aliceId)
 
+    // Any member can gift: even muted, and even when only admins can send messages.
+    await a.inject({ method: 'PUT', url: `${base}/settings`, headers: as('alice'), payload: { adminsOnly: true } })
+    await p('alice', `${base}/members/${carolId}/mute`, { minutes: 60 })
+    eligible.add('did:privy:alice')
+    expect((await p('carol', `${base}/messages`, { body: 'hi' })).json().error.code).toBe('MUTED')
+    expect((await p('carol', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '7' })).statusCode).toBe(200)
+    expect((await p('carol', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json().message.kind).toBe('GIFT')
+    expect(notes).toHaveLength(2)
+
     // Still confirming: recorded, but nothing appears in chat and nobody is told it arrived.
     confirm = false
     await p('alice', `${base}/gifts/prepare`, { to: bobId, asset: real.mint, amountRaw: '5' })
     const pend = (await p('alice', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json()
     expect(pend).toMatchObject({ gift: { status: 'PENDING' }, message: null })
-    expect(notes).toHaveLength(1)
+    expect(notes).toHaveLength(2)
     await a.close()
   })
 })
