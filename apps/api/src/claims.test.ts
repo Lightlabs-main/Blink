@@ -345,7 +345,7 @@ describe('Tap Rush', () => {
       payload: { type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100' },
     })
     expect(res.statusCode).toBe(201)
-    expect(res.json().campaign.tapRush).toEqual({ goal: 50, seconds: 10 })
+    expect(res.json().campaign.tapRush).toEqual({ goal: 1000, seconds: 120 })
   })
 })
 
@@ -748,7 +748,7 @@ describe('Verified Quest (D-21)', () => {
       app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100', requirements } })
     const ok = await make(SEEKER_SKR_TAP)
     expect(ok.statusCode).toBe(201)
-    expect(ok.json().campaign).toMatchObject({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: { goal: 50, seconds: 10 } })
+    expect(ok.json().campaign).toMatchObject({ type: 'VERIFIED_QUEST', requirements: SEEKER_SKR_TAP, tapRush: { goal: 1000, seconds: 120 } })
     const stored = await campaigns.findById(ok.json().campaign.id)
     expect(stored!.requirementsHash).toMatch(/^[0-9a-f]{64}$/)
 

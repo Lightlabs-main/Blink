@@ -39,6 +39,7 @@ export function toStored(row: Campaign): StoredCampaign {
     requirementsHash: row.requirementsHash,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
+    clubId: row.clubId,
     createdAt: row.createdAt,
   }
 }
@@ -70,6 +71,7 @@ export class PrismaCampaignRepository implements CampaignRepository {
         requirementsHash: c.requirementsHash ?? null,
         startsAt: c.startsAt ?? null,
         endsAt: c.endsAt ?? null,
+        clubId: c.clubId ?? null,
       },
     })
     return toStored(row)

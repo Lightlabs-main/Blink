@@ -5,6 +5,9 @@
 import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_TYPES,
+  CLUB_CATEGORIES,
+  CLUB_LIMITS,
+  CLUB_REACTIONS,
   isClaimableType,
   QUEST_LIMITS,
   type QuestRequirements,
@@ -119,9 +122,14 @@ export const createCampaignRequest = z
     /** D-21: optional campaign window. */
     startsAt: z.iso.datetime().optional(),
     endsAt: z.iso.datetime().optional(),
+    /** D-40: post the drop in a club the creator belongs to. */
+    clubId: z.uuid().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (v.requirements && questUses(v.requirements, 'CLUB_MEMBER') && !v.clubId) {
+      ctx.addIssue({ code: 'custom', path: ['clubId'], message: 'pick the club whose members can join' })
+    }
     if (isClaimableType(v.type) && v.rewardPerClaimRaw === undefined) {
       ctx.addIssue({ code: 'custom', path: ['rewardPerClaimRaw'], message: 'amount per person is required' })
     }
@@ -262,3 +270,41 @@ export const sendPrepareRequest = z
   .strict()
 
 export const sendSubmitRequest = z.object({ signedTransaction: z.string().min(100).max(4000) }).strict()
+
+/* ───────────── D-40: clubs, chat, squads, event check-in ───────────── */
+
+/** One line of plain text: no control characters at all. */
+const ONE_LINE_RE = /^[^\p{Cc}]*$/u
+/** Plain text that may contain line breaks (no other control characters). */
+const PLAIN_TEXT_RE = /^(?:[^\p{Cc}]|\n)*$/u
+const plainLine = (min: number, max: number) => z.string().trim().min(min).max(max).regex(ONE_LINE_RE, 'one line of plain text')
+
+export const CLUB_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/
+
+export const createClubRequest = z
+  .object({
+    name: plainLine(3, CLUB_LIMITS.nameMax),
+    slug: z.string().regex(CLUB_SLUG_RE, 'use 3–32 lowercase letters, numbers or -').optional(),
+    description: z.string().trim().min(10).max(CLUB_LIMITS.descriptionMax).regex(PLAIN_TEXT_RE, 'plain text only'),
+    category: z.enum(CLUB_CATEGORIES),
+    tags: z.array(z.string().regex(/^[a-z0-9-]{2,20}$/, 'tags are 2–20 lowercase letters, numbers or -')).max(CLUB_LIMITS.maxTags).default([]),
+    visibility: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC'),
+  })
+  .strict()
+export type CreateClubRequest = z.infer<typeof createClubRequest>
+
+export const joinClubRequest = z.object({ invite: z.string().regex(/^[A-Z0-9]{8}$/).optional() }).strict()
+
+export const chatMessageRequest = z
+  .object({
+    body: z.string().trim().min(1).max(CLUB_LIMITS.messageMax).regex(PLAIN_TEXT_RE, 'plain text only'),
+    replyTo: z.string().regex(/^\d{1,19}$/).optional(),
+  })
+  .strict()
+
+export const reactionRequest = z.object({ emoji: z.enum(CLUB_REACTIONS) }).strict()
+
+export const createSquadRequest = z.object({ name: plainLine(2, 24) }).strict()
+export const joinSquadRequest = z.object({ code: z.string().regex(/^[A-Z0-9]{6}$/, 'squad codes are 6 letters or numbers') }).strict()
+
+export const checkinRequest = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/, 'not a Blink event code') }).strict()

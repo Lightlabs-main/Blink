@@ -20,6 +20,8 @@ export interface NewCampaign {
   /** D-21: optional campaign window. */
   startsAt?: Date | null
   endsAt?: Date | null
+  /** D-40: the club this drop is posted in. */
+  clubId?: string | null
 }
 
 export interface StoredCampaign extends NewCampaign {
@@ -74,6 +76,7 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     requirements: c.requirements ?? null,
     startsAt: c.startsAt?.toISOString() ?? null,
     endsAt: c.endsAt?.toISOString() ?? null,
+    clubId: c.clubId ?? null,
     createdAt: c.createdAt.toISOString(),
   }
 }

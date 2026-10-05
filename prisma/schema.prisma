@@ -72,12 +72,15 @@ model Campaign {
   startsAt             DateTime?
   endsAt               DateTime?
   pauseReason          String?
+  /// D-40: the club this drop is posted in (offchain).
+  clubId               String?        @db.Uuid
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
   @@unique([cluster, campaignTokenAccount])
   @@unique([creatorWallet, campaignSeed])
   @@index([status])
+  @@index([clubId])
 }
 
 /// MASTER_PROMPT §7 — every Blink-funded lamport, reserved before send and settled after confirmation.
@@ -285,4 +288,107 @@ model UsernameClaim {
   createdAt   DateTime @default(now())
 
   @@index([privyUserId])
+}
+
+/// D-40: clubs. Everything here is offchain Blink state; nothing is written to Solana.
+model Club {
+  id               String   @id @db.Uuid
+  slug             String   @unique
+  name             String
+  description      String
+  category         String
+  tags             String[]
+  visibility       String   @default("PUBLIC")
+  /// Joining a PRIVATE club needs this code.
+  inviteCode       String   @unique
+  /// null = run by Blink (seeded clubs).
+  ownerPrivyUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([ownerPrivyUserId, createdAt])
+}
+
+model ClubMember {
+  clubId       String   @db.Uuid
+  privyUserId  String
+  /// OWNER | MOD | MEMBER
+  role         String   @default("MEMBER")
+  /// Truncated label source for members without a username; never shown in full.
+  publicWallet String?
+  joinedAt     DateTime @default(now())
+
+  @@id([clubId, privyUserId])
+  @@index([privyUserId, joinedAt])
+}
+
+model ClubMessage {
+  id                BigInt    @id @default(autoincrement())
+  clubId            String    @db.Uuid
+  authorPrivyUserId String
+  authorWallet      String?
+  body              String
+  replyToId         BigInt?
+  deletedAt         DateTime?
+  deletedBy         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([clubId, id])
+}
+
+model ClubMessageReaction {
+  messageId   BigInt
+  privyUserId String
+  emoji       String
+  createdAt   DateTime @default(now())
+
+  @@id([messageId, privyUserId, emoji])
+}
+
+/// D-40: the random, server-issued code behind an event drop's QR (one per campaign; the creator can rotate it).
+model EventCode {
+  campaignId String   @id @db.Uuid
+  token      String   @unique
+  createdAt  DateTime @default(now())
+}
+
+model EventCheckin {
+  campaignId  String   @db.Uuid
+  privyUserId String
+  createdAt   DateTime @default(now())
+
+  @@id([campaignId, privyUserId])
+  @@index([privyUserId, createdAt])
+}
+
+/// D-40: squads of up to CLUB_LIMITS.squadSize people in one drop; one squad per person per drop.
+model Squad {
+  id                 String   @id @db.Uuid
+  campaignId         String   @db.Uuid
+  name               String
+  code               String   @unique
+  captainPrivyUserId String
+  maxSize            Int
+  createdAt          DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model SquadMember {
+  squadId      String   @db.Uuid
+  campaignId   String   @db.Uuid
+  privyUserId  String
+  publicWallet String?
+  joinedAt     DateTime @default(now())
+
+  @@id([squadId, privyUserId])
+  @@unique([campaignId, privyUserId])
+}
+
+/// D-40: one report per person per message; enough distinct reports hide the message (CLUB_LIMITS.reportsToHide).
+model ClubMessageReport {
+  messageId   BigInt
+  privyUserId String
+  createdAt   DateTime @default(now())
+
+  @@id([messageId, privyUserId])
 }

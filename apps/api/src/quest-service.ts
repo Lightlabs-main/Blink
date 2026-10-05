@@ -28,6 +28,7 @@ import type { AuthVerifier } from './auth.ts'
 import type { StoredCampaign } from './campaign-repo.ts'
 import type { ClaimRepository } from './claim-repo.ts'
 import type { SeekerVerifier } from './claim-service.ts'
+import type { SocialStore } from './social-store.ts'
 import type { XTaskStore } from './x-quest.ts'
 
 /** Mainnet-only protocol reads for Verified Quest (SKR, ORE). */
@@ -113,6 +114,8 @@ export class QuestService {
       seeker?: SeekerVerifier
       /** D-39: verified X posts. */
       xTasks?: XTaskStore
+      /** D-40: club membership and event check-ins. */
+      social?: SocialStore
       log?: { warn: (o: object, msg: string) => void }
     },
   ) {}
@@ -162,6 +165,19 @@ export class QuestService {
             // D-39: verified when the person submitted a post Blink checked (see the x-task route).
             const task = this.deps.xTasks ? await this.deps.xTasks.get(campaign.id, privyUserId) : null
             results.set(c, { verifier: c.verifier, status: task?.verifiedAt ? 'PASSED' : 'NOT_STARTED', detail: task?.authorHandle ? `@${task.authorHandle}` : undefined })
+            return
+          }
+          if (c.verifier === 'CLUB_MEMBER') {
+            // D-40: membership of the drop's own club (Blink state). It never replaces the xStocks eligibility gate.
+            if (!this.deps.social) throw new Error('clubs not configured')
+            const member = campaign.clubId ? await this.deps.social.membership(campaign.clubId, privyUserId) : null
+            results.set(c, { verifier: c.verifier, status: member ? 'PASSED' : 'FAILED', detail: member ? undefined : 'NOT_A_MEMBER' })
+            return
+          }
+          if (c.verifier === 'QR_CHECKIN') {
+            if (!this.deps.social) throw new Error('event check-in not configured')
+            const done = await this.deps.social.hasCheckedIn(campaign.id, privyUserId)
+            results.set(c, { verifier: c.verifier, status: done ? 'PASSED' : 'NOT_STARTED' })
             return
           }
           if (c.verifier === 'SEEKER_SGT') {
