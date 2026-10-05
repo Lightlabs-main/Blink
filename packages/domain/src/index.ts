@@ -678,6 +678,25 @@ export interface Passport {
   checkins: number
   clubs: number
   squadWins: number
+  /** "BLK-7F3K-92QD": stable per account, derived one-way from the account id (reveals nothing). */
+  number: string
+  /** Earliest stamp or club join (ISO); null for a brand-new passport. */
+  memberSince: string | null
+  level: PassportLevel
+}
+
+/** D-42: levels by stamp count only (explainable; never by holdings). */
+export const PASSPORT_LEVELS = [
+  { level: 'NEWCOMER', label: 'Newcomer', min: 0 },
+  { level: 'EXPLORER', label: 'Explorer', min: 1 },
+  { level: 'REGULAR', label: 'Regular', min: 3 },
+  { level: 'PRO', label: 'Pro', min: 6 },
+  { level: 'LEGEND', label: 'Legend', min: 10 },
+] as const
+export type PassportLevel = (typeof PASSPORT_LEVELS)[number]['level']
+
+export function passportLevel(stamps: number): (typeof PASSPORT_LEVELS)[number] {
+  return [...PASSPORT_LEVELS].reverse().find((l) => stamps >= l.min) ?? PASSPORT_LEVELS[0]
 }
 
 /** What a Blink QR code (or link) points at. */

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import {
   type CampaignType,
@@ -11,6 +11,7 @@ import {
   type ClubReaction,
   type ClubSummary,
   type Passport,
+  passportLevel,
   type PassportBadge,
   type PublicParticipant,
   publicLabel,
@@ -585,7 +586,20 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
       }
     }
     badges.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    const passport: Passport = { badges, rewards: claims.length, checkins: checkins.length, clubs: memberships.length, squadWins }
+    // D-42: one-way passport number from the account id; 32-symbol alphabet without look-alikes.
+    const digest = createHash('sha256').update(`blink-passport:${auth.privyUserId}`).digest()
+    const sym = [...digest.subarray(0, 8)].map((b) => '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[b % 32]).join('')
+    const dates = [...badges.map((b) => Date.parse(b.at)), ...memberships.map((m) => m.joinedAt.getTime())]
+    const passport: Passport = {
+      badges,
+      rewards: claims.length,
+      checkins: checkins.length,
+      clubs: memberships.length,
+      squadWins,
+      number: `BLK-${sym.slice(0, 4)}-${sym.slice(4)}`,
+      memberSince: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+      level: passportLevel(badges.length).level,
+    }
     return { passport }
   })
 }
