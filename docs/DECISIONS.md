@@ -566,3 +566,17 @@ Everything below is offchain Blink state (Postgres). None of it spends SOL or wr
   next build). The website has no pages for those paths yet: that needs a Caddy rule on the shared VPS (owner OK).
 - **Not changed:** Android package/scheme, Privy, payout rail, compliance gate, Tap Rush anti-cheat, the D-36 Tap
   Rush defaults (50 taps / 10 s server default; the creator picks up to 1,000 taps / 2 min).
+
+## D-41 — Club join rules and members-only drops (2026-10-05, Maris)
+
+- **Who can join a club:** the creator (and later the owner, from the club's About tab) turns on any of: Solana Seeker
+  owners (SGT), SKR holds / stakes / holds or stakes / held + staked, ORE holds / stakes / holds or stakes — each with a
+  custom minimum. Stored as `Club.rulesJson` (QuestGroup[]), only `CLUB_RULE_VERIFIERS` are accepted. Joining runs the
+  Verified Quest readers on mainnet against the person's Privy-verified wallets (fails closed; 10 checks/min/person); a
+  refusal returns `CLUB_RULES_NOT_MET` with the evaluation so the app shows each rule, the person's amount and a fix
+  (verify a wallet, stake SKR, connect the Seeker). Rules apply to new joins; current members stay; there is no
+  re-check sweep. Email-only accounts have no wallet to check and are refused until they link one.
+- **Members-only drops:** `Campaign.membersOnly` (needs `clubId`) for every mechanic. Enforced server-side wherever
+  someone takes part: Tap Rush start, quest verify, claim, referral, bonus retry and event check-in. It never replaces
+  the xStocks gate. In Create it sits with the club picker ("Everyone" / "Club members only"); the quest-only
+  "Club members only" toggle was folded into it.

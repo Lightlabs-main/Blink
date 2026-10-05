@@ -39,6 +39,8 @@ received yet (OQ-10), so this version covers what exists today.
 | 18 | Phone A: Create → **QR Event** → fund; show the Event check-in QR | Phone B scans it in Blink → confirm → "Checked in ✓"; scanning again says already checked in |
 | 19 | Phone B: You → Stock Passport, and Receipts & Activity → filters | Real stamps only (reward settled, check-in, first club); check-in and club join have receipts |
 | 20 | Club → Leaderboard | Points match the rule shown (10 won / 5 qualified / 5 check-in) |
+| 21 | Phone A: Start a club → turn on "SKR stakes" with a minimum → phone B (no stake) taps Join | Refused; each rule shows phone B's amount and "Stake SKR in Blink" |
+| 22 | Phone A: club → Drops → post a Tap Rush with "Club members only"; phone C (not a member) opens it | "For <club> members" card; playing is refused until phone C joins |
 
 ## Known limits to mention in a demo
 

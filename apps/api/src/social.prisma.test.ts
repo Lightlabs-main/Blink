@@ -99,6 +99,27 @@ describe.skipIf(!url)('social features on Postgres (D-40)', () => {
     const kinds = (await get('bob', '/v1/me/history')).json().items.map((i: { kind: string }) => i.kind)
     expect(kinds).toEqual(expect.arrayContaining(['CHECKIN', 'CLUB_JOINED']))
 
+    // D-41: rules are stored as JSON, read back, cleared (DbNull) and enforced on join (no chain here → can't pass).
+    const rules = [{ mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED', minRaw: '500000000' }] }]
+    const gated = (await post('alice', '/v1/clubs', { name: `Gated ${run}`, description: 'Stakers only, Postgres test.', category: 'ECOSYSTEM', rules })).json().club
+    expect((await get('bob', `/v1/clubs/${gated.slug}`)).json().club.rules).toEqual(rules)
+    expect((await post('bob', `/v1/clubs/${gated.slug}/join`)).json().error.code).toBe('CLUB_RULES_NOT_MET')
+    expect((await app.inject({ method: 'PUT', url: `/v1/clubs/${gated.slug}/rules`, headers: h('alice'), payload: { rules: [] } })).json().club.rules).toEqual([])
+    expect((await post('bob', `/v1/clubs/${gated.slug}/join`)).json().club.joined).toBe(true)
+
+    // D-41: members-only flag round-trips and blocks non-members.
+    const mo = randomUUID()
+    await campaigns.create({
+      id: mo, type: 'TAP_RUSH', cluster: 'devnet', creatorPrivyUserId: `did:privy:${run}:alice`, creatorWallet: '11111111111111111111111111111112',
+      mint: SUPPORTED_XSTOCKS[0]!.mint, xstockSymbol: 'NVDAx', campaignSeed: `m${run}`, campaignTokenAccount: `acct-m-${run}`, allowanceRaw: 100n, rewardPerClaimRaw: 10n,
+      tapRush: { goal: 100, seconds: 30 }, clubId: gated.id, membersOnly: true,
+    })
+    await campaigns.transitionStatus(mo, 'DRAFT', 'AWAITING_FUNDING')
+    await campaigns.transitionStatus(mo, 'AWAITING_FUNDING', 'AWAITING_DELEGATION')
+    await campaigns.transitionStatus(mo, 'AWAITING_DELEGATION', 'LIVE')
+    expect((await get('zed', `/v1/campaigns/${mo}`)).json().campaign.membersOnly).toBe(true)
+    expect((await post('zed', `/v1/campaigns/${mo}/tap-rush/start`)).json().error.code).toBe('NOT_A_MEMBER')
+
     // Captain leaving disbands; members can leave the club; owners cannot.
     expect((await post('bob', `/v1/squads/${squad.id}/leave`)).json().disbanded).toBe(true)
     expect((await post('alice', `/v1/clubs/${club.slug}/leave`)).json().error.code).toBe('OWNER_CANNOT_LEAVE')

@@ -22,6 +22,8 @@ export interface NewCampaign {
   endsAt?: Date | null
   /** D-40: the club this drop is posted in. */
   clubId?: string | null
+  /** D-41: only members of clubId can take part. */
+  membersOnly?: boolean
 }
 
 export interface StoredCampaign extends NewCampaign {
@@ -77,6 +79,7 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     startsAt: c.startsAt?.toISOString() ?? null,
     endsAt: c.endsAt?.toISOString() ?? null,
     clubId: c.clubId ?? null,
+    membersOnly: Boolean(c.membersOnly && c.clubId),
     createdAt: c.createdAt.toISOString(),
   }
 }

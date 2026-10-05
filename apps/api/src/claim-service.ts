@@ -20,6 +20,7 @@ import type { EligibilityService } from './eligibility.ts'
 import type { QuestService } from './quest-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { RateLimiter } from './rate-limit.ts'
+import type { SocialStore } from './social-store.ts'
 import { avatarPath, type ProfileStore } from './profile.ts'
 
 /** D-17: finds a genuine Seeker Genesis Token (mainnet) held by a wallet; returns its mint (the device identity). */
@@ -77,6 +78,8 @@ export class ClaimService {
       quests?: QuestService
       /** D-37: usernames and pictures in the live room. */
       profiles?: ProfileStore
+      /** D-41: members-only drops. */
+      social?: SocialStore
     },
   ) {}
 
@@ -367,6 +370,13 @@ export class ClaimService {
       throw new ClaimError('NOT_CLAIMABLE', 'this drop does not support claiming yet')
     }
     if (campaign.creatorPrivyUserId === auth.privyUserId) throw new ClaimError('OWN_CAMPAIGN', 'you cannot claim your own drop', 403)
+    // D-41: members-only drops (any mechanic): checked on every play, verify and claim. Never replaces the xStocks gate.
+    if (campaign.membersOnly && campaign.clubId) {
+      if (!this.deps.social) throw new ClaimError('CLUBS_UNAVAILABLE', 'club checks are not available right now', 503)
+      if (!(await this.deps.social.membership(campaign.clubId, auth.privyUserId))) {
+        throw new ClaimError('NOT_A_MEMBER', 'this drop is for club members — join the club first', 403)
+      }
+    }
     return campaign
   }
 

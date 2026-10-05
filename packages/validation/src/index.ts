@@ -6,6 +6,7 @@ import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_TYPES,
   CLUB_CATEGORIES,
+  CLUB_RULE_VERIFIERS,
   CLUB_LIMITS,
   CLUB_REACTIONS,
   isClaimableType,
@@ -124,9 +125,12 @@ export const createCampaignRequest = z
     endsAt: z.iso.datetime().optional(),
     /** D-40: post the drop in a club the creator belongs to. */
     clubId: z.uuid().optional(),
+    /** D-41: only that club's members can take part. */
+    membersOnly: z.boolean().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (v.membersOnly && !v.clubId) ctx.addIssue({ code: 'custom', path: ['membersOnly'], message: 'pick the club whose members can take part' })
     if (v.requirements && questUses(v.requirements, 'CLUB_MEMBER') && !v.clubId) {
       ctx.addIssue({ code: 'custom', path: ['clubId'], message: 'pick the club whose members can join' })
     }
@@ -281,6 +285,22 @@ const plainLine = (min: number, max: number) => z.string().trim().min(min).max(m
 
 export const CLUB_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/
 
+/** D-41: a club's join rules: up to 4 groups of identity/holding checks with custom minimums. */
+export const clubRules = z
+  .array(questGroup)
+  .max(QUEST_LIMITS.maxGroups)
+  .superRefine((groups, ctx) => {
+    for (const g of groups) {
+      for (const c of g.conditions) {
+        if (!(CLUB_RULE_VERIFIERS as readonly string[]).includes(c.verifier)) {
+          ctx.addIssue({ code: 'custom', message: `${VERIFIERS[c.verifier].label} can’t be a club rule` })
+        }
+      }
+    }
+  })
+
+export const updateClubRulesRequest = z.object({ rules: clubRules }).strict()
+
 export const createClubRequest = z
   .object({
     name: plainLine(3, CLUB_LIMITS.nameMax),
@@ -289,6 +309,7 @@ export const createClubRequest = z
     category: z.enum(CLUB_CATEGORIES),
     tags: z.array(z.string().regex(/^[a-z0-9-]{2,20}$/, 'tags are 2–20 lowercase letters, numbers or -')).max(CLUB_LIMITS.maxTags).default([]),
     visibility: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC'),
+    rules: clubRules.default([]),
   })
   .strict()
 export type CreateClubRequest = z.infer<typeof createClubRequest>

@@ -26,6 +26,7 @@ import {
   questHasTapRush,
   questUses,
   reactionRequest,
+  updateClubRulesRequest,
 } from '@blink/validation'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
@@ -33,6 +34,7 @@ import type { AuthContext, AuthVerifier } from './auth.ts'
 import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
 import type { ClaimRepository } from './claim-repo.ts'
 import { ClaimError } from './payout-service.ts'
+import type { QuestService } from './quest-service.ts'
 import { avatarPath, type ProfileStore } from './profile.ts'
 import type { RateLimiter } from './rate-limit.ts'
 import { AlreadyInSquadError, newCode, SlugTakenError, type SocialStore, type StoredClub, type StoredMessage, type StoredSquad } from './social-store.ts'
@@ -49,6 +51,8 @@ export interface SocialDeps {
   claims?: ClaimRepository
   profiles?: ProfileStore
   social?: SocialStore
+  /** D-41: club join rules use the Verified Quest readers (mainnet, the person's verified wallets). */
+  quests?: QuestService
 }
 
 interface Ctx {
@@ -131,6 +135,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
       owner: c.ownerPrivyUserId ? who(c.ownerPrivyUserId, ownerRows[i]?.publicWallet ?? null) : null,
       joined: mine.has(c.id),
       role: mine.get(c.id)?.role ?? null,
+      rules: c.rules,
       createdAt: c.createdAt.toISOString(),
     }))
   }
@@ -183,7 +188,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     }
     try {
       const club = await social.createClub(
-        { id: randomUUID(), slug, name: body.name, description: body.description, category: body.category, tags: body.tags, visibility: body.visibility, inviteCode: newCode(8), ownerPrivyUserId: auth.privyUserId },
+        { id: randomUUID(), slug, name: body.name, description: body.description, category: body.category, tags: body.tags, visibility: body.visibility, inviteCode: newCode(8), ownerPrivyUserId: auth.privyUserId, rules: body.rules },
         { privyUserId: auth.privyUserId, publicWallet: await myWallet(auth.privyUserId) },
       )
       return reply.status(201).send({ club: (await summaries([club], auth.privyUserId))[0] })
@@ -216,8 +221,29 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'that invite code is not valid')
     const { club, member, social } = await visibleClub(req, auth, parsed.data.invite)
     if (member) return send(reply, 409, 'ALREADY_MEMBER', 'you are already in this club')
+    // D-41: join rules are checked now, on mainnet, against the person's verified wallets (fails closed).
+    if (club.rules.length) {
+      if (!deps.quests) throw new ClaimError('RULES_UNAVAILABLE', 'this club’s rules can’t be checked right now', 503)
+      if (!limiter.hit(`club-rules:${auth.privyUserId}`, 10, 60_000)) return send(reply, 429, 'RATE_LIMITED', 'too many checks — wait a moment')
+      const evaluation = await deps.quests.checkRules(club.rules, auth.privyUserId)
+      if (!evaluation.qualified) {
+        return reply.status(403).send({ error: { code: 'CLUB_RULES_NOT_MET', message: 'you don’t meet this club’s rules yet' }, evaluation })
+      }
+    }
     await social.join(club.id, auth.privyUserId, await myWallet(auth.privyUserId))
     return { club: (await summaries([club], auth.privyUserId))[0] }
+  })
+
+  /** D-41: the owner changes who can join. Current members stay; the rules apply to new joins. */
+  app.put<{ Params: { slug: string } }>('/v1/clubs/:slug/rules', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await visibleClub(req, auth)
+    if (member?.role !== 'OWNER') return send(reply, 403, 'FORBIDDEN', 'only the club’s owner can change its rules')
+    const parsed = updateClubRulesRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid rules')
+    await social.setRules(club.id, parsed.data.rules)
+    return { club: (await summaries([{ ...club, rules: parsed.data.rules }], auth.privyUserId))[0] }
   })
 
   app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/leave', async (req, reply) => {
@@ -414,6 +440,9 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     // Unknown and rotated codes look the same: nothing to learn by guessing.
     if (!c || !c.requirements || !questUses(c.requirements, 'QR_CHECKIN')) return send(reply, 404, 'INVALID_CODE', 'this event code is not valid (it may have been replaced)')
     if (c.creatorPrivyUserId === auth.privyUserId) return send(reply, 403, 'OWN_CAMPAIGN', 'you created this event')
+    if (c.membersOnly && c.clubId && !(await social.membership(c.clubId, auth.privyUserId))) {
+      return send(reply, 403, 'NOT_A_MEMBER', 'this event is for club members — join the club first')
+    }
     if (c.status !== 'LIVE') return send(reply, 409, 'NOT_LIVE', 'this event isn’t open right now')
     const now = Date.now()
     if (c.startsAt && c.startsAt.getTime() > now) return send(reply, 409, 'NOT_STARTED', 'check-in hasn’t opened yet')

@@ -87,6 +87,8 @@ export interface CampaignSummary {
   endsAt: string | null
   /** D-40: the club this drop belongs to, if any. */
   clubId: string | null
+  /** D-41: only members of that club can take part (any mechanic). */
+  membersOnly: boolean
   createdAt: string
 }
 
@@ -602,8 +604,13 @@ export interface ClubSummary {
   owner: PublicParticipant | null
   joined: boolean
   role: ClubRole | null
+  /** D-41: who can join (all groups must pass; ALL/ANY inside a group). Empty = anyone. */
+  rules: QuestGroup[]
   createdAt: string
 }
+
+/** D-41: verifiers a club can require to join: identity and holdings only (no per-drop actions). */
+export const CLUB_RULE_VERIFIERS = ['SEEKER_SGT', 'SKR_BALANCE', 'SKR_STAKED', 'SKR_TOTAL', 'ORE_BALANCE', 'ORE_STAKED'] as const satisfies readonly VerifierType[]
 
 export interface ClubDetail extends ClubSummary {
   /** Members of a private club (and its owner/mods) see the invite code. */

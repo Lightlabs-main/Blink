@@ -199,3 +199,13 @@ All routes need `Authorization: Bearer <Privy token>`; identity always comes fro
 
 **Codex review requested:** `apps/api/src/social-store.ts` (Prisma queries, the squad seat lock), `social-routes.ts`,
 the migration.
+
+## API contract v9: club rules and members-only drops (owner: Claude, 2026-10-05, D-41)
+
+- `POST /v1/clubs` accepts `rules: QuestGroup[]` (verifiers: SEEKER_SGT, SKR_BALANCE, SKR_STAKED, SKR_TOTAL, ORE_BALANCE,
+  ORE_STAKED). `ClubSummary.rules`. `PUT /v1/clubs/:slug/rules` `{ rules }` (owner only, 403 otherwise).
+- `POST /v1/clubs/:slug/join` → 403 `{ error: { code: 'CLUB_RULES_NOT_MET' }, evaluation }` when rules fail; 503
+  `RULES_UNAVAILABLE` without the quest service.
+- `POST /v1/campaigns` accepts `membersOnly` (requires `clubId`); `CampaignSummary.membersOnly`. Participation routes
+  return 403 `NOT_A_MEMBER` for non-members.
+- Migration `20261005150000_club_rules` (additive: `Club.rulesJson`, `Campaign.membersOnly` default false).
