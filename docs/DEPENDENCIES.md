@@ -214,3 +214,15 @@ app.json with `microphonePermission` and `enableBackgroundPlayback: false`; it a
 (checked in the installed type definitions): `useAudioRecorder`, `useAudioRecorderState`, `RecordingPresets`,
 `requestRecordingPermissionsAsync`, `setAudioModeAsync`, `useAudioPlayer`, `useAudioPlayerStatus`, `AudioPlayer.replace /
 play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet verified. Needs a new native build.
+
+### 2026-10-05 — Release APK build (final social update)
+
+- **Build:** EAS Build `c5dc737a-263d-4ff3-84fd-8552a5f5f131` (profile `preview`), FINISHED. An earlier build of this
+  batch (`a71c5345…`) was cancelled in the queue so OG marks could be included.
+- **What changed:** D-40 to D-45 — five-tab nav, clubs, chat with voice notes, admin controls, gifts, squads, QR event
+  check-in, Passport ID card + sharing, Receipts & Activity, club rules, members-only drops, OG marks; `expo-audio`
+  (microphone permission); App Links for `/e/` and `/club/`.
+- **Hosting:** `https://blinksol.site/download/blink-to-stock.apk` (178,539,633 bytes, SHA-256
+  `716d6b245b90863103fbabe966c2f7338faeb3fce3579aaeddd4d298178e4b60`); the previous APK is kept beside it.
+- **Signing:** same EAS keystore as build #4 (App Links certificate unchanged).
+- **Not yet verified on a device.**
