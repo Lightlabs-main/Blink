@@ -85,7 +85,7 @@
           open.style.display = 'none'
           return
         }
-        title.textContent = slug.replace(/-/g, ' ').replace(/\w/g, (c) => c.toUpperCase())
+        title.textContent = slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         document.title = title.textContent + ' · Blink-to-Stock'
         if (invite) document.getElementById('stamp').textContent = 'Private · invite included'
         open.href = 'blinktostock://club/' + slug + (invite ? '?invite=' + invite : '')
