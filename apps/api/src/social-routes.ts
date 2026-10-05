@@ -47,7 +47,7 @@ import type { Asset } from './assets.ts'
 import type { EligibilityService } from './eligibility.ts'
 import { NOOP_NOTIFIER, type Notifier } from './push.ts'
 import type { SendService } from './send-service.ts'
-import { avatarPath, type ProfileStore } from './profile.ts'
+import { profileExtras, type ProfileStore } from './profile.ts'
 import type { RateLimiter } from './rate-limit.ts'
 import { AlreadyInSquadError, newCode, SlugTakenError, type SocialStore, type StoredClub, type StoredMessage, type StoredSquad } from './social-store.ts'
 
@@ -122,7 +122,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const profiles = deps.profiles && ids.length ? await deps.profiles.getMany([...new Set(ids)]) : new Map()
     return (privyUserId: string, wallet: string | null): PublicParticipant => {
       const p = profiles.get(privyUserId)
-      return p?.username ? { label: `@${p.username}`, username: p.username, avatarUrl: avatarPath(p) } : { ...publicLabel(wallet), avatarUrl: avatarPath(p) }
+      return p?.username ? { label: `@${p.username}`, username: p.username, ...profileExtras(p) } : { ...publicLabel(wallet), ...profileExtras(p) }
     }
   }
 

@@ -10,6 +10,7 @@ import { api, apiUrl } from '../../lib/api'
 import { useProfile } from '../../lib/data'
 import { embeddedSolanaAddress } from '../../lib/privy-user'
 import { type CampaignSummary, type LiveEvent, publicLabel } from '../../shared'
+import { PersonName } from '../../design/og'
 
 /** Ticks once a second (inside an effect, so rendering stays pure). */
 function useClock(active: boolean) {
@@ -119,9 +120,7 @@ export function LiveRoom({ campaign }: { campaign: CampaignSummary }) {
                     {String(i + 1)}
                   </T>
                   <Avatar label={e.who.username ?? e.who.label} size={24} uri={apiUrl(e.who.avatarUrl)} />
-                  <T variant="bodyStrong" color={mine ? color.lime : color.text}>
-                    {mine ? 'You' : e.who.label}
-                  </T>
+                  <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: mine ? color.lime : color.text }} text={mine ? 'You' : e.who.label} who={e.who} />
                 </Row>
                 <T variant="numeric">{String(e.score)}</T>
               </Row>

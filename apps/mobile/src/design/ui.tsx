@@ -418,7 +418,8 @@ export function ListRow({
   chevron = Boolean(onPress),
 }: {
   leading?: ReactNode
-  title: string
+  /** A string, or a node (e.g. a name with OG marks). */
+  title: string | ReactNode
   subtitle?: string
   trailing?: ReactNode
   onPress?: () => void
@@ -428,9 +429,13 @@ export function ListRow({
     <Row style={{ paddingVertical: space.md }}>
       {leading}
       <View style={{ flex: 1, gap: 2 }}>
-        <T variant="bodyStrong" numberOfLines={1}>
-          {title}
-        </T>
+        {typeof title === 'string' ? (
+          <T variant="bodyStrong" numberOfLines={1}>
+            {title}
+          </T>
+        ) : (
+          title
+        )}
         {subtitle ? (
           <T variant="caption" numberOfLines={1}>
             {subtitle}

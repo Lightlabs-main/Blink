@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto'
 
+import { OG_TYPES, type OgType } from '@blink/domain'
+
 import type { createPrismaClient } from './prisma-campaign-repo.ts'
 
 /*
@@ -32,6 +34,9 @@ export interface StoredProfile {
   username: string | null
   avatarVersion: number
   hasAvatar: boolean
+  /** D-45: OG marks from the last check, and when it ran. */
+  og: OgType[]
+  ogCheckedAt: Date | null
 }
 
 export class UsernameTakenError extends Error {
@@ -44,6 +49,12 @@ export interface ProfileStore {
   setUsername(privyUserId: string, username: string | null): Promise<StoredProfile>
   setAvatar(privyUserId: string, image: { bytes: Uint8Array; type: string } | null): Promise<StoredProfile>
   avatar(publicId: string): Promise<{ bytes: Uint8Array; type: string } | null>
+  setOg(privyUserId: string, og: OgType[]): Promise<StoredProfile>
+}
+
+/** The participant fields every public view shares: username, picture and OG marks. */
+export function profileExtras(p: StoredProfile | null | undefined): { avatarUrl: string | null; og?: OgType[] } {
+  return p?.og.length ? { avatarUrl: avatarPath(p), og: p.og } : { avatarUrl: avatarPath(p) }
 }
 
 const newPublicId = () => randomBytes(9).toString('base64url')
@@ -61,13 +72,13 @@ export class InMemoryProfileStore implements ProfileStore {
   private row(privyUserId: string) {
     let r = this.rows.get(privyUserId)
     if (!r) {
-      r = { privyUserId, publicId: newPublicId(), username: null, avatarVersion: 0, hasAvatar: false, avatar: null }
+      r = { privyUserId, publicId: newPublicId(), username: null, avatarVersion: 0, hasAvatar: false, og: [], ogCheckedAt: null, avatar: null }
       this.rows.set(privyUserId, r)
     }
     return r
   }
   private view(r: StoredProfile): StoredProfile {
-    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: r.hasAvatar }
+    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: r.hasAvatar, og: [...r.og], ogCheckedAt: r.ogCheckedAt }
   }
   async get(privyUserId: string) {
     const r = this.rows.get(privyUserId)
@@ -101,17 +112,24 @@ export class InMemoryProfileStore implements ProfileStore {
   async avatar(publicId: string) {
     return [...this.rows.values()].find((r) => r.publicId === publicId)?.avatar ?? null
   }
+  async setOg(privyUserId: string, og: OgType[]) {
+    const r = this.row(privyUserId)
+    r.og = og
+    r.ogCheckedAt = new Date()
+    return this.view(r)
+  }
 }
 
-type Row = { privyUserId: string; publicId: string; username: string | null; avatarVersion: number; avatarType: string | null }
+type Row = { privyUserId: string; publicId: string; username: string | null; avatarVersion: number; avatarType: string | null; og: string[]; ogCheckedAt: Date | null }
+const toOg = (v: string[]) => OG_TYPES.filter((t) => v.includes(t))
 
 export class PrismaProfileStore implements ProfileStore {
   constructor(private readonly prisma: ReturnType<typeof createPrismaClient>) {}
 
   private view(r: Row): StoredProfile {
-    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: Boolean(r.avatarType) }
+    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: Boolean(r.avatarType), og: toOg(r.og), ogCheckedAt: r.ogCheckedAt }
   }
-  private readonly select = { privyUserId: true, publicId: true, username: true, avatarVersion: true, avatarType: true } as const
+  private readonly select = { privyUserId: true, publicId: true, username: true, avatarVersion: true, avatarType: true, og: true, ogCheckedAt: true } as const
 
   async get(privyUserId: string) {
     const r = await this.prisma.profile.findUnique({ where: { privyUserId }, select: this.select })
@@ -157,5 +175,14 @@ export class PrismaProfileStore implements ProfileStore {
   async avatar(publicId: string) {
     const r = await this.prisma.profile.findUnique({ where: { publicId }, select: { avatar: true, avatarType: true } })
     return r?.avatar && r.avatarType ? { bytes: Uint8Array.from(r.avatar), type: r.avatarType } : null
+  }
+  async setOg(privyUserId: string, og: OgType[]) {
+    const r = await this.prisma.profile.upsert({
+      where: { privyUserId },
+      create: { privyUserId, publicId: newPublicId(), og, ogCheckedAt: new Date() },
+      update: { og, ogCheckedAt: new Date() },
+      select: this.select,
+    })
+    return this.view(r)
   }
 }

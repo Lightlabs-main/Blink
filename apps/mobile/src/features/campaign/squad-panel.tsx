@@ -5,6 +5,7 @@ import { Share, StyleSheet, TextInput, View } from 'react-native'
 
 import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
+import { PersonName } from '../../design/og'
 import { color, radius, space } from '../../design/tokens'
 import { Avatar, Button, Card, Notice, Row, T } from '../../design/ui'
 import { api, apiUrl } from '../../lib/api'
@@ -60,7 +61,9 @@ export function SquadPanel({ campaign }: { campaign: CampaignSummary }) {
           {mine.members.map((m) => (
             <Row key={m.who.label}>
               <Avatar label={m.who.username ?? m.who.label} size={30} uri={apiUrl(m.who.avatarUrl)} />
-              <T style={{ flex: 1 }} variant="bodyStrong">{`${m.who.label}${m.captain ? ' · captain' : ''}`}</T>
+              <View style={{ flex: 1 }}>
+                <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} text={`${m.who.label}${m.captain ? ' · captain' : ''}`} who={m.who} />
+              </View>
               <T variant="numeric">{m.taps.toLocaleString()}</T>
             </Row>
           ))}

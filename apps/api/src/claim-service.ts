@@ -21,7 +21,7 @@ import type { QuestService } from './quest-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import type { RateLimiter } from './rate-limit.ts'
 import type { SocialStore } from './social-store.ts'
-import { avatarPath, type ProfileStore } from './profile.ts'
+import { profileExtras, type ProfileStore } from './profile.ts'
 
 /** D-17: finds a genuine Seeker Genesis Token (mainnet) held by a wallet; returns its mint (the device identity). */
 export interface SeekerVerifier {
@@ -248,7 +248,7 @@ export class ClaimService {
     const profiles = this.deps.profiles ? await this.deps.profiles.getMany(ids) : new Map()
     const who = (privyUserId: string, wallet: string | null) => {
       const p = profiles.get(privyUserId)
-      return p?.username ? { label: `@${p.username}`, username: p.username, avatarUrl: avatarPath(p) } : { ...publicLabel(wallet), avatarUrl: avatarPath(p) }
+      return p?.username ? { label: `@${p.username}`, username: p.username, ...profileExtras(p) } : { ...publicLabel(wallet), ...profileExtras(p) }
     }
     const reward = campaign.rewardPerClaimRaw
     const scored = campaign.type === 'TAP_RUSH' || (campaign.type === 'VERIFIED_QUEST' && Boolean(campaign.requirements && questHasTapRush(campaign.requirements)))

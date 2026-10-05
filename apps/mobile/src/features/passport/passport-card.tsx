@@ -3,7 +3,8 @@ import { Image, StyleSheet, View } from 'react-native'
 
 import { font } from '../../design/fonts'
 import { T } from '../../design/ui'
-import { type Passport, passportLevel } from '../../shared'
+import { OgIcons, isFullOg } from '../../design/og'
+import { type OgType, type Passport, passportLevel } from '../../shared'
 
 /*
  * D-42: the Stock Passport as an ID card (16:9, sized for X). Designed on a 600-unit-wide grid and scaled to
@@ -17,6 +18,8 @@ const RULE = '#2A2A25'
 const CREAM = '#F4F0E6'
 const MUTED = '#8C887E'
 const LIME = '#ABFF1A'
+/** D-45: the OG name colour (all three marks), fixed like the rest of the card. */
+const OG_GOLD = '#F5C451'
 
 /** Passport-style machine-readable line ("P<BLK<<MARIS<<…"), from public fields only. */
 function mrz(username: string | null, number: string, since: string | null) {
@@ -37,8 +40,8 @@ function Field({ u, label, children }: { u: number; label: string; children: Rea
 
 export const PassportIdCard = forwardRef<
   View,
-  { width: number; passport: Passport; username: string | null; avatarUri: string | null; onImageSettled?: () => void }
->(function PassportIdCard({ width, passport, username, avatarUri, onImageSettled }, ref) {
+  { width: number; passport: Passport; username: string | null; avatarUri: string | null; og?: OgType[]; onImageSettled?: () => void }
+>(function PassportIdCard({ width, passport, username, avatarUri, og, onImageSettled }, ref) {
   const u = width / 600
   const [failed, setFailed] = useState(false)
   const level = passportLevel(passport.badges.length)
@@ -98,9 +101,12 @@ export const PassportIdCard = forwardRef<
 
         <View style={{ flex: 1, gap: 9 * u }}>
           <Field label="HOLDER" u={u}>
-            <T numberOfLines={1} style={[font('display'), { fontSize: 27 * u, lineHeight: 31 * u, color: CREAM }]}>
-              {username ? `@${username}` : 'Blink member'}
-            </T>
+            <View style={[styles.row, { gap: 6 * u }]}>
+              <OgIcons og={og} size={17 * u} />
+              <T numberOfLines={1} style={[font('display'), { flexShrink: 1, fontSize: 27 * u, lineHeight: 31 * u, color: isFullOg(og) ? OG_GOLD : CREAM }]}>
+                {username ? `@${username}` : 'Blink member'}
+              </T>
+            </View>
           </Field>
           <View style={[styles.rule, { marginTop: 1 * u }]} />
           <View style={[styles.row, { gap: 18 * u }]}>

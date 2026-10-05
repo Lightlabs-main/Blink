@@ -231,3 +231,9 @@ the migration.
   message: ChatMessage | null }` (409 `EXPIRED`, `TRANSACTION_MISMATCH`, …).
 - `ChatMessage` adds `kind: 'GIFT'`, `gift`, `authorId`. History adds `GIFT_RECEIVED`. `SendService.submit` now also
   returns `confirmed`. Migration `20261005200000_club_gifts` (additive).
+
+## API contract v12: OG marks (owner: Claude, 2026-10-05, D-45)
+
+- `POST /v1/me/og` → `{ profile: { username, avatarUrl, og: OgType[], ogCheckedAt }, unknown: OgType[] }` (429 after 3 in
+  10 minutes; 503 without the quest service). `GET /v1/me/profile` also returns `og` and `ogCheckedAt`.
+- `PublicParticipant.og?: ('ORE' | 'SEEKER' | 'SKR')[]` everywhere people are shown. Migration `20261005210000_profile_og`.

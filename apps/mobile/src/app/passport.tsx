@@ -1,19 +1,74 @@
 import { usePrivy } from '@privy-io/expo'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Sharing from 'expo-sharing'
 import { useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Linking, Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { captureRef } from 'react-native-view-shot'
 
+import { font } from '../design/fonts'
 import { Icon } from '../design/icons'
 import { color, gutter, radius, space } from '../design/tokens'
-import { Button, Card, Divider, EmptyState, ListRow, NavBar, Notice, Screen, Skeleton, T } from '../design/ui'
+import { Button, Card, Divider, EmptyState, ListRow, NavBar, Notice, Row, Screen, Skeleton, T } from '../design/ui'
+import { isFullOg, OgIcon } from '../design/og'
 import { PassportIdCard } from '../features/passport/passport-card'
 import { api, apiUrl } from '../lib/api'
 import { useProfile } from '../lib/data'
 import { haptics } from '../lib/haptics'
-import { passportLevel } from '../shared'
+import { OG_LABEL, OG_TYPES, passportLevel } from '../shared'
+
+/**
+ * D-45: OG marks — ORE miner, Solana Mobile (Seeker) and SKR staker — checked on mainnet against the wallets you verified
+ * in Blink. Each shows as an icon in front of your name; all three turn your name gold.
+ */
+function OgCard() {
+  const router = useRouter()
+  const { getAccessToken } = usePrivy()
+  const queryClient = useQueryClient()
+  const profile = useProfile()
+  const og = profile.data?.profile.og ?? []
+  const checkedAt = profile.data?.profile.ogCheckedAt
+  const check = useMutation({
+    mutationFn: () => api.checkOg(getAccessToken),
+    onSuccess: (res) => {
+      haptics.success()
+      queryClient.setQueryData(['profile'], { profile: res.profile })
+    },
+    onError: () => haptics.error(),
+  })
+  const unknown = check.data?.unknown ?? []
+  return (
+    <Card style={{ gap: space.md }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <T variant="heading">OG status</T>
+        {isFullOg(og) ? <T style={{ ...font('bodySemi'), fontSize: 13, color: color.og }}>Full OG ✦</T> : null}
+      </Row>
+      {OG_TYPES.map((t) => (
+        <Row key={t}>
+          <OgIcon size={20} type={t} />
+          <T style={{ flex: 1 }} variant="bodyStrong">
+            {OG_LABEL[t]}
+          </T>
+          <T variant="caption" color={og.includes(t) ? color.lime : unknown.includes(t) ? color.warning : color.textMuted}>
+            {og.includes(t) ? 'Yes ✓' : unknown.includes(t) ? 'Couldn’t check' : 'Not yet'}
+          </T>
+        </Row>
+      ))}
+      <T variant="caption">
+        {`Each one adds an icon in front of your name; all three turn it gold. Checked on Solana mainnet against the wallets you verified in Blink.${checkedAt ? ` Last checked ${new Date(checkedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.` : ''}`}
+      </T>
+      <Notice message={check.error ? check.error.message : null} />
+      <Row gap={space.sm}>
+        <Button icon="refresh" loading={check.isPending} onPress={() => check.mutate()} size="md" style={{ flex: 1 }} variant="secondary">
+          Check my OG status
+        </Button>
+        <Button icon="wallet" onPress={() => router.push('/login/wallet')} size="md" variant="ghost">
+          Add wallet
+        </Button>
+      </Row>
+    </Card>
+  )
+}
 
 export function usePassport() {
   const { getAccessToken, user } = usePrivy()
@@ -66,7 +121,7 @@ export default function PassportScreen() {
       {/* D-42: the Passport as an ID card. It is also the share image (captured at 1200 × 675). */}
       {p ? (
         <Pressable accessibilityLabel="Edit profile picture and username" onPress={() => router.push('/profile-edit')}>
-          <PassportIdCard avatarUri={avatar} passport={p} ref={card} username={username ?? null} width={cardWidth} />
+          <PassportIdCard avatarUri={avatar} og={profile.data?.profile.og} passport={p} ref={card} username={username ?? null} width={cardWidth} />
         </Pressable>
       ) : (
         <Skeleton height={cardWidth * 0.5625} radius={radius.xl} />
@@ -74,6 +129,8 @@ export default function PassportScreen() {
       {p && (!avatar || !username) ? (
         <T variant="caption">{`Tap the card to add ${!avatar && !username ? 'your picture and username' : !avatar ? 'your picture' : 'a username'} before sharing.`}</T>
       ) : null}
+
+      <OgCard />
 
       {p ? (
         <View style={{ gap: space.sm }}>

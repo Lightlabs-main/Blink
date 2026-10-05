@@ -43,6 +43,12 @@ const night = {
   warningSoft: 'rgba(242,182,85,0.14)',
   danger: '#FF7A6B',
   dangerSoft: 'rgba(255,122,107,0.13)',
+
+  /** D-45: OG name colour (all three marks) and the per-mark tints. */
+  og: '#F5C451',
+  ogOre: '#F0A35E',
+  ogSeeker: '#ABFF1A',
+  ogSkr: '#B9A6FF',
 } as const
 
 const day: { [K in keyof typeof night]: string } = {
@@ -78,6 +84,12 @@ const day: { [K in keyof typeof night]: string } = {
   warningSoft: 'rgba(154,98,0,0.12)',
   danger: '#C23A2C',
   dangerSoft: 'rgba(194,58,44,0.1)',
+
+  /** D-45: OG name colour (all three marks) and the per-mark tints. */
+  og: '#9A6A00',
+  ogOre: '#B5651D',
+  ogSeeker: '#4D7C00',
+  ogSkr: '#6B4FD8',
 }
 
 export const color: { readonly [K in keyof typeof night]: string } = isNight ? night : day
