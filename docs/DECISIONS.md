@@ -524,3 +524,45 @@ make the requirement PASSED; X being unreachable returns a retryable error and n
 hour per user. Not verifiable this way: likes, follows, reposts (nothing public to read).
 **Risk accepted by the owner:** rewarding posts can conflict with X's rules on incentivised engagement; keep tasks
 to genuine posts, one per person, and avoid follow/like-for-reward.
+
+## D-40 — Clubs, chat, squads, event check-in, Passport and the five-tab nav (2026-10-05, Maris)
+
+Final social product update (docs/FINAL_SOCIAL_PRODUCT_UPDATE_2026-10-04.md). Owner answers on 2026-10-05: Claude builds
+backend and mobile; keep the D-39 oEmbed X check; build every P0 item; any signed-in user may start clubs (rate-limited).
+Everything below is offchain Blink state (Postgres). None of it spends SOL or writes to Solana; the payout rail is unchanged.
+
+- **Nav:** Home · Clubs · (Scan) · Drops · You. Create is still the `/create` route (hidden tab), opened from Home's
+  quick actions and the + on Drops, Clubs and a club's Drops tab, so existing links keep working.
+- **Clubs:** `Club` + `ClubMember`. Public or private (8-character invite code). Member counts are `count(*)` of
+  memberships — never estimated. Owners can't leave. 3 new clubs per person per day. Names that look official
+  ("official", "blink", "xstocks", …) are refused, and the UI says a club named after a company is not run by it.
+  Starter clubs (NVDA, Seeker, SKR, ORE Miners) come from `scripts/seed-clubs.ts`, run by Blink, 0 members.
+- **Chat:** plain text (≤ 500 chars, no control characters, never rendered as HTML), replies, 5 fixed reactions,
+  soft delete by the author or the club's owner/mods. Members post; a public club's chat can be read before joining.
+  20 messages per minute per person. **Transport: polling** (`?after=<last id>` every 3.5 s while the chat is on
+  screen, plus a full newest-page resync every 5 polls) — the API has no WebSocket/SSE stack and the live room
+  already polls. Reports and mod roles beyond the owner are P1.
+- **Club drops:** `Campaign.clubId` (nullable). Only a member can post a drop in a club. New verifier
+  `CLUB_MEMBER` (eligibility): a member of the drop's club. It never replaces the xStocks gate.
+- **Leaderboard:** derived, never stored: 10 points for a reward won, 5 for qualifying, 5 for an event check-in, once
+  each per drop, in the club's 30 newest drops, members only, this week (rolling 7 days) or all time. Balances never
+  count. The rule is shown under the board.
+- **Event check-in:** new verifier `QR_CHECKIN` (action). The creator gets a random server-issued code (24 bytes,
+  `EventCode`), shown as a QR of `https://blinksol.site/e/<code>`; "New code" rotates it (old codes stop working).
+  Checking in needs sign-in, a LIVE drop inside its window, and is once per person (`EventCheckin` primary key).
+  No GPS, no location stored. "QR Event" in Create = a Verified Quest whose action is the check-in.
+- **Squads:** Tap Rush drops (and quests with a Tap Rush step). Up to 4 (`CLUB_LIMITS.squadSize`), one squad per
+  person per drop (unique index), join by 6-character code, seat count checked under a row lock, captain leaving
+  disbands. Rule `COMBINED_TAPS`: the sum of each member's best accepted round as the server recorded it; goal =
+  drop goal × 4. **A squad goal is an achievement (Passport), not a payout:** each person still claims by reaching
+  the drop's own goal, so the payout rail and its checks are untouched.
+- **Passport:** derived from records: settled rewards (`PAID` claims), check-ins, first club, squad goals, first club
+  drop. No balances, no NFTs.
+- **Receipts & Activity:** history gains `CHECKIN` and `CLUB_JOINED` (offchain; no amount, no network line). Receipts
+  say "Reward settled ✓" only for confirmed payouts ("Completed · reward sending" before), carry a `BLK-xxxxxxxx`
+  reference, and filters: All / Rewards / Events / Clubs / Sent & funded.
+- **Scanner and links:** QR codes for campaigns, `https://blinksol.site/e/<code>` (check-in, asks before checking in)
+  and `https://blinksol.site/club/<slug>[?invite=CODE]`. `app.json` adds `/e/` and `/club/` App Link paths (needs the
+  next build). The website has no pages for those paths yet: that needs a Caddy rule on the shared VPS (owner OK).
+- **Not changed:** Android package/scheme, Privy, payout rail, compliance gate, Tap Rush anti-cheat, the D-36 Tap
+  Rush defaults (50 taps / 10 s server default; the creator picks up to 1,000 taps / 2 min).

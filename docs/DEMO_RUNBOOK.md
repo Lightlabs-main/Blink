@@ -32,6 +32,13 @@ received yet (OQ-10), so this version covers what exists today.
 | 11 | Phone A: Create → **Flash Drop** and **Referral** | Claim works; the referral pays both people once |
 | 12 | Phone A: revoke the approval in the wallet, then have someone claim | The drop pauses with a reason, and "Check again & resume" is shown |
 | 13 | blinksol.site on a laptop | Live drops listed, Night edition toggle, download works |
+| 14 | Phone B: **Clubs** tab → NVDA Club → Join | Member count goes up by one (real count); Home shows it under Your clubs |
+| 15 | Both phones in the club: Chat → send, reply, react, delete | Messages appear on the other phone within a few seconds |
+| 16 | Phone A: club → Drops → Post a drop in this club (Tap Rush) | The drop lists under the club's Drops (Live) |
+| 17 | Phone B: open that Tap Rush → Play as a squad → Create; phone C joins with the code | Members and combined taps update; the squad goal = drop goal × 4 |
+| 18 | Phone A: Create → **QR Event** → fund; show the Event check-in QR | Phone B scans it in Blink → confirm → "Checked in ✓"; scanning again says already checked in |
+| 19 | Phone B: You → Stock Passport, and Receipts & Activity → filters | Real stamps only (reward settled, check-in, first club); check-in and club join have receipts |
+| 20 | Club → Leaderboard | Points match the rule shown (10 won / 5 qualified / 5 check-in) |
 
 ## Known limits to mention in a demo
 
@@ -39,5 +46,6 @@ received yet (OQ-10), so this version covers what exists today.
   BLOCKED` (SECURITY.md).
 - **SKR stake checks** need a dedicated mainnet RPC; with the public one they show "Couldn't check
   right now", which fails closed.
-- **ORE activity, QR Event, Squads and X quests** are shown as "Soon" or "Unavailable", never as
-  working.
+- **Chat is polled** (every few seconds), not push; a message can take up to ~4 s to appear.
+- **Squad goals** are achievements; each player still wins the drop's reward individually.
+- **Event and club links** open the app; the website has no page for them yet.

@@ -172,3 +172,30 @@ New app builds call `https://api.blinksol.site`. The sslip.io host remains an al
 
 **Codex review requested:** `packages/solana/src/skr-staking.ts` (account order and roles against the IDL),
 `apps/api/src/push.ts`.
+
+## API contract v8: clubs, chat, squads, event check-in, Passport (owner: Claude, 2026-10-05, D-40)
+
+All routes need `Authorization: Bearer <Privy token>`; identity always comes from the token. Migration:
+`20261005090000_clubs_social` (additive: 8 new tables + nullable `Campaign.clubId`).
+
+- **Clubs:** `GET /v1/clubs?tab=discover|joined&q=` → `{ clubs: ClubSummary[] }`; `POST /v1/clubs` `{ name, slug?,
+  description, category, tags[], visibility }` → 201 `{ club }` (409 `SLUG_TAKEN`, 400 `INVALID_NAME`, 429
+  `RATE_LIMITED`); `GET /v1/clubs/:slugOrId[?invite=]` → `{ club: ClubDetail }` (404 for private without invite);
+  `POST /v1/clubs/:slug/join` `{ invite? }` (409 `ALREADY_MEMBER`); `POST /v1/clubs/:slug/leave` (409
+  `OWNER_CANNOT_LEAVE` / `NOT_A_MEMBER`).
+- **Chat:** `GET /v1/clubs/:slug/messages?before=|after=` → `{ messages: ChatMessage[], serverTime }` (ascending, 30
+  per page); `POST …/messages` `{ body, replyTo? }` → 201 `{ message }` (403 `NOT_A_MEMBER`, 429, 400
+  `INVALID_REPLY`); `DELETE …/messages/:id` (author, owner or mod); `POST …/messages/:id/reactions` `{ emoji }` toggles.
+- **Leaderboard:** `GET /v1/clubs/:slug/leaderboard?period=week|all` → `{ leaderboard: ClubLeaderboardEntry[], points }`.
+- **Club drops:** `POST /v1/campaigns` accepts `clubId` (403 `NOT_A_MEMBER`); a `CLUB_MEMBER` requirement needs it.
+  `CampaignSummary.clubId`.
+- **Event check-in:** `GET|POST /v1/campaigns/:id/event-code` (creator; POST rotates) → `{ event: { token, link } }`;
+  `POST /v1/checkin` `{ token }` → `{ checkin: { campaignId, alreadyCheckedIn } }` (404 `INVALID_CODE`, 409
+  `NOT_LIVE` / `NOT_STARTED` / `CAMPAIGN_OVER`, 403 `OWN_CAMPAIGN`, 10 per hour).
+- **Squads:** `GET /v1/campaigns/:id/squads` → `{ mine, squads }`; `POST /v1/campaigns/:id/squads` `{ name }`;
+  `POST /v1/squads/join` `{ code }` (409 `SQUAD_FULL` / `ALREADY_IN_SQUAD`); `POST /v1/squads/:id/leave`.
+- **Passport:** `GET /v1/me/passport` → `{ passport: { badges, rewards, checkins, clubs, squadWins } }`.
+- **History:** items may have `kind: CHECKIN | CLUB_JOINED` with `title` / `clubSlug`, `amountRaw: "0"`, no signature.
+
+**Codex review requested:** `apps/api/src/social-store.ts` (Prisma queries, the squad seat lock), `social-routes.ts`,
+the migration.

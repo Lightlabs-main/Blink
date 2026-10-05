@@ -83,3 +83,11 @@ A new verifier needs:
 
 The campaign model and the UI render conditions generically by type. A future, policy-compliant
 social verifier (§19) plugs in the same way after review, with nothing else to refactor.
+
+## Club member and event check-in (D-40)
+
+Both read Blink's own database (`chain: 'blink'`), never Solana.
+- **CLUB_MEMBER** (eligibility): the person is a member of the drop's club (`Campaign.clubId`). Creating a drop with
+  it requires `clubId`, and only members can post in a club. It does not replace the xStocks gate.
+- **QR_CHECKIN** (action): the person checked in with the drop's current event code (`EventCheckin`, one per person
+  per drop). Unknown or rotated codes are refused the same way.
