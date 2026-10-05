@@ -5,7 +5,9 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native'
 
+import { font } from '../../design/fonts'
 import { Icon, type IconName } from '../../design/icons'
+import { PersonName } from '../../design/og'
 import { color, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
 import { api, apiUrl } from '../../lib/api'
@@ -100,9 +102,11 @@ export default function Profile() {
             <Avatar label={username ?? email ?? creatorWallets[0] ?? 'B'} size={56} uri={apiUrl(profile.data?.profile.avatarUrl)} />
           </Pressable>
           <View style={{ flex: 1, gap: 4 }}>
-            <T variant="title" numberOfLines={1}>
-              {username ? `@${username}` : (email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account'))}
-            </T>
+            <PersonName
+              iconSize={16}
+              style={{ ...font('display'), fontSize: 22, color: color.text }}
+              who={{ label: username ? `@${username}` : (email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account')), og: profile.data?.profile.og }}
+            />
             {username && email ? (
               <T variant="caption" numberOfLines={1}>
                 {email}

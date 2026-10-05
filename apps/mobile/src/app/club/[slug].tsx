@@ -8,6 +8,7 @@ import { Icon } from '../../design/icons'
 import { font } from '../../design/fonts'
 import { color, radius, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Chip, Divider, EmptyState, ListRow, Loading, NavBar, Notice, Row, Screen, Skeleton, StockAvatar, T } from '../../design/ui'
+import { PersonName } from '../../design/og'
 import { ClubChat } from '../../features/clubs/chat'
 import { ClubRulesList } from '../../features/clubs/club-rules'
 import { ClubMark, memberLabel } from '../../features/clubs/club-ui'
@@ -102,7 +103,7 @@ function Leaderboard({ club }: { club: ClubDetail }) {
                   </Row>
                 }
                 subtitle={[e.rewards && `${e.rewards} won`, e.qualified && `${e.qualified} qualified`, e.checkins && `${e.checkins} check-ins`].filter(Boolean).join(' · ')}
-                title={e.who.label}
+                title={<PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} who={e.who} />}
                 trailing={<T variant="numeric">{`${e.points} pts`}</T>}
               />
             </View>
@@ -164,7 +165,7 @@ function About({ club, onLeave, leaving, onChanged }: { club: ClubDetail; onLeav
         </Row>
         <Row style={{ justifyContent: 'space-between' }}>
           <T variant="label">Started by</T>
-          <T variant="bodyStrong">{club.owner?.label ?? 'Blink'}</T>
+          {club.owner ? <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} who={club.owner} /> : <T variant="bodyStrong">Blink</T>}
         </Row>
         <Row style={{ justifyContent: 'space-between' }}>
           <T variant="label">Since</T>

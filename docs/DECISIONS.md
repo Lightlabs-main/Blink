@@ -621,3 +621,15 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
 - **Records:** `ClubGift` (raw amount as Decimal(20,0), signature unique) and `ClubMessage.giftId`. Passport stamps:
   "First gift sent", "Gift received". Gifts can't be undone.
 - **Not yet:** a sweep that later confirms `PENDING` gifts and posts them.
+
+## D-45 — OG marks: ORE miners, Solana Mobile (Seeker) owners, SKR stakers (2026-10-05, Maris)
+
+- **Marks:** ORE (has ever mined ORE — `Miner.round_id > 0` — or has ORE staked), SEEKER (owns a Seeker Genesis Token
+  on a SIWS-verified wallet), SKR (any SKR staked, across all guardian pools). Read on Solana mainnet with the existing
+  Verified Quest readers, for the person's Privy-verified wallets only.
+- **Display:** one small icon per mark in front of the name — pickaxe (ORE), phone (Seeker), stake stack (SKR) — in chat,
+  members, club leaderboards and owner, squads, live rooms, the You tab, Home and the Passport card. All three → the
+  name turns OG gold (`color.og`; fixed `#F5C451` on the Passport card). Marks are public-safe (no amounts).
+- **Checking:** "Check my OG status" on the Passport (3 checks / 10 min). Stored on `Profile.og` + `ogCheckedAt`. A mark
+  that can't be read right now keeps its previous value, so an RPC failure never removes it; marks are removed only when
+  a successful read says no. Not re-checked automatically. SKR stake reads need a dedicated mainnet RPC (OQ-6).

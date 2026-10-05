@@ -149,6 +149,12 @@ describe.skipIf(!url)('social features on Postgres (D-40)', () => {
     const giftMsg = await social.addMessage({ clubId: club.id, authorPrivyUserId: `did:privy:${run}:alice`, authorWallet: null, body: '', replyToId: null, kind: 'GIFT', giftId: giftRow.id })
     expect((await get('bob', `/v1/clubs/${club.slug}/messages?after=${BigInt(giftMsg.id) - 1n}`)).json().messages[0]).toMatchObject({ kind: 'GIFT', gift: { amountRaw: '18446744073709551615' } })
 
+    // D-45: OG marks persist (text[]) and show on names.
+    const prof = new PrismaProfileStore(prisma)
+    expect((await prof.setOg(`did:privy:${run}:alice`, ['ORE', 'SEEKER', 'SKR'])).og).toEqual(['ORE', 'SEEKER', 'SKR'])
+    expect((await prof.getMany([`did:privy:${run}:alice`])).get(`did:privy:${run}:alice`)?.og).toEqual(['ORE', 'SEEKER', 'SKR'])
+    expect((await get('bob', `/v1/clubs/${club.slug}/messages?before=${BigInt(m2.id) + 1n}`)).json().messages.find((x: { id: string }) => x.id === m1.id).author.og).toEqual(['ORE', 'SEEKER', 'SKR'])
+
     // Captain leaving disbands; members can leave the club; owners cannot.
     expect((await post('bob', `/v1/squads/${squad.id}/leave`)).json().disbanded).toBe(true)
     expect((await post('alice', `/v1/clubs/${club.slug}/leave`)).json().error.code).toBe('OWNER_CANNOT_LEAVE')

@@ -26,6 +26,7 @@ import {
 import { apiUrl } from '../../lib/api'
 import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions, useProfile } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, greeting, networkLabel, shortAddress } from '../../lib/format'
+import { PersonName } from '../../design/og'
 import { ClubTile, useMyClubs } from '../../features/clubs/club-ui'
 import { userEmail } from '../../lib/privy-user'
 import type { CampaignSummary } from '../../shared'
@@ -103,9 +104,7 @@ export default function Home() {
           </Pressable>
           <View>
             <T variant="caption">{greeting()}</T>
-            <T variant="heading" numberOfLines={1}>
-              {name}
-            </T>
+            <PersonName iconSize={15} style={{ ...font('display'), fontSize: 19, color: color.text }} who={{ label: name, og: profile.data?.profile.og }} />
           </View>
         </Row>
         <View style={[styles.netPill, net.isTest && { borderColor: color.warning }]}>

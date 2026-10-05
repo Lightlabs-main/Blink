@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
-import { type HistoryItem, TAP_RUSH_DEFAULTS } from '@blink/domain'
+import { type HistoryItem, OG_TYPES, TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
 import {
   claimRequest,
@@ -339,7 +339,28 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!deps.profiles) throw new ClaimError('PROFILES_UNAVAILABLE', 'profiles are not available right now', 503)
     return deps.profiles
   }
-  const profileView = (p: Awaited<ReturnType<ProfileStore['get']>>) => ({ username: p?.username ?? null, avatarUrl: avatarPath(p) })
+  const profileView = (p: Awaited<ReturnType<ProfileStore['get']>>) => ({
+    username: p?.username ?? null,
+    avatarUrl: avatarPath(p),
+    og: p?.og ?? [],
+    ogCheckedAt: p?.ogCheckedAt?.toISOString() ?? null,
+  })
+
+  /**
+   * D-45: check OG marks now (Solana mainnet, the caller's verified wallets). A mark that can't be read right now keeps
+   * its previous value, so an RPC hiccup never takes a mark away.
+   */
+  app.post('/v1/me/og', async (req) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    if (!limiter.hit(`og:${auth.privyUserId}`, 3, 10 * 60_000)) throw new ClaimError('RATE_LIMITED', 'you just checked — try again in a few minutes', 429)
+    if (!deps.quests) throw new ClaimError('QUESTS_UNAVAILABLE', 'OG checks are not available right now', 503)
+    const profiles = requireProfiles()
+    const before = (await profiles.get(auth.privyUserId))?.og ?? []
+    const { og, unknown } = await deps.quests.ogStatus(auth.privyUserId)
+    const merged = OG_TYPES.filter((t) => og.includes(t) || (unknown.includes(t) && before.includes(t)))
+    return { profile: profileView(await profiles.setOg(auth.privyUserId, merged)), unknown }
+  })
 
   app.get('/v1/me/profile', async (req) => {
     const auth = await requireAuth(req)

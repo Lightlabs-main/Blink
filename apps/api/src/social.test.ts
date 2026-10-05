@@ -420,3 +420,45 @@ describe('xStock gifts in club chat (D-44)', () => {
     await a.close()
   })
 })
+
+describe('OG marks (D-45)', () => {
+  it('checks ORE, Seeker and SKR on mainnet readers, shows them on names, and keeps marks when a read fails', async () => {
+    const ogAuth: AuthVerifier = { ...auth, getVerifiedExternalSolanaWallets: async (u) => (u === 'did:privy:olu' ? ['SeekerWa11et1111111111111111111111'] : []) }
+    let skrDown = false
+    const chain = {
+      skrBalance: async () => 0n,
+      skrStaked: async () => {
+        if (skrDown) throw new Error('rpc 429')
+        return 5_000_000n
+      },
+      oreBalance: async () => 0n,
+      oreStaked: async () => 0n,
+      oreMinerRound: async (w: string) => (w.includes('olu') ? 42n : 0n),
+      oreBoardRound: async () => 50n,
+    }
+    const seeker = { findSgt: async (w: string) => (w.startsWith('Seeker') ? 'SgtMint111' : null) }
+    const profiles = new InMemoryProfileStore()
+    const store = new InMemorySocialStore()
+    const a = buildApp({ env, auth: ogAuth, campaigns, claims, social: store, profiles, rpc: {} as Rpc<GetAccountInfoApi>, assets: [], quests: new QuestService({ auth: ogAuth, claims, social: store, chain, seeker: seeker as never }) })
+    const p = (u: string, url: string, payload: object = {}) => a.inject({ method: 'POST', url, headers: as(u), payload })
+
+    // Olu: mined ORE, owns a Seeker, stakes SKR → all three. Ben: only SKR.
+    expect((await p('olu', '/v1/me/og')).json().profile).toMatchObject({ og: ['ORE', 'SEEKER', 'SKR'] })
+    expect((await p('ben', '/v1/me/og')).json().profile.og).toEqual(['SKR'])
+
+    // An RPC failure keeps the SKR mark instead of removing it.
+    skrDown = true
+    const again = (await p('ben', '/v1/me/og')).json()
+    expect(again).toMatchObject({ profile: { og: ['SKR'] }, unknown: ['SKR'] })
+
+    // Names carry the marks wherever people are shown (here: chat).
+    const club = (await p('olu', '/v1/clubs', { name: 'OG Club', description: 'Miners, stakers, Seekers.', category: 'ECOSYSTEM' })).json().club
+    await p('olu', `/v1/clubs/${club.slug}/messages`, { body: 'gm' })
+    const msgs = (await a.inject({ method: 'GET', url: `/v1/clubs/${club.slug}/messages`, headers: as('ben') })).json().messages
+    expect(msgs[0].author.og).toEqual(['ORE', 'SEEKER', 'SKR'])
+    // Rate limit: 3 checks per 10 minutes (Ben has used 2).
+    expect((await p('ben', '/v1/me/og')).statusCode).toBe(200)
+    expect((await p('ben', '/v1/me/og')).statusCode).toBe(429)
+    await a.close()
+  })
+})

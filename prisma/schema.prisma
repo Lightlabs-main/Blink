@@ -240,14 +240,17 @@ model PushToken {
 
 /// D-37: optional public profile — unique username and a small profile picture served by an opaque public id.
 model Profile {
-  privyUserId   String   @id
-  publicId      String   @unique
-  username      String?  @unique
+  privyUserId   String    @id
+  publicId      String    @unique
+  username      String?   @unique
   avatar        Bytes?
   avatarType    String?
-  avatarVersion Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  avatarVersion Int       @default(0)
+  /// D-45: OG marks (ORE, SEEKER, SKR) from the last mainnet check.
+  og            String[]  @default([])
+  ogCheckedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 /// D-38: sends from a Blink stock wallet (fees paid by Blink), for the user's history and receipts.

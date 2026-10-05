@@ -4,6 +4,7 @@ import type {
   ClubDetail,
   ClubLeaderboardEntry,
   ClubMemberView,
+  OgType,
   PublicParticipant,
   ClubReaction,
   ClubSummary,
@@ -105,6 +106,9 @@ export interface SkrPosition {
 export interface MyProfile {
   username: string | null
   avatarUrl: string | null
+  /** D-45: OG marks from the last mainnet check. */
+  og: OgType[]
+  ogCheckedAt: string | null
 }
 
 /** Absolute URL for a path the API returned (e.g. a profile picture). */
@@ -267,6 +271,8 @@ export const api = {
     authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   react: (t: GetAccessToken, slug: string, id: string, emoji: ClubReaction) =>
     authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  /** D-45: check OG marks now (mainnet; 3 checks per 10 minutes). */
+  checkOg: (t: GetAccessToken) => authed<{ profile: MyProfile; unknown: OgType[] }>(t, '/v1/me/og', { method: 'POST', body: '{}' }),
   // ---- D-44: xStock gifts in club chat (prepare → the stock wallet signs → submit) ----
   giftPrepare: (t: GetAccessToken, slug: string, body: { to: string; asset: string; amountRaw: string }) =>
     authed<{ prepared: { transaction: string; createsRecipientAccount: boolean } }>(t, `/v1/clubs/${encodeURIComponent(slug)}/gifts/prepare`, { method: 'POST', body: JSON.stringify(body) }),

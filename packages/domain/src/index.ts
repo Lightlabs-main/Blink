@@ -524,6 +524,14 @@ export const LIVE_EVENT_TYPES = [
 ] as const
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number]
 
+/**
+ * D-45: OG marks, checked on Solana mainnet against the person's verified wallets: an icon each in front of the name,
+ * and a special name colour for people with all three.
+ */
+export const OG_TYPES = ['ORE', 'SEEKER', 'SKR'] as const
+export type OgType = (typeof OG_TYPES)[number]
+export const OG_LABEL: Record<OgType, string> = { ORE: 'ORE miner', SEEKER: 'Solana Mobile (Seeker)', SKR: 'SKR staker' }
+
 /** Privacy-safe public identity: a truncated wallet only. Never email, Privy id, country or compliance data. */
 export interface PublicParticipant {
   /** The username when the person set one (D-37), otherwise a shortened wallet. */
@@ -531,6 +539,8 @@ export interface PublicParticipant {
   username?: string
   /** Profile picture path on the API origin (`/v1/avatars/...`), when set. */
   avatarUrl?: string | null
+  /** D-45: OG marks (ORE, SEEKER, SKR), in that order. */
+  og?: OgType[]
 }
 
 export interface LiveEvent {

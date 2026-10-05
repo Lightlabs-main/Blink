@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Alert, Pressable, RefreshControl, View } from 'react-native'
 
+import { font } from '../design/fonts'
+import { PersonName } from '../design/og'
 import { color, space } from '../design/tokens'
 import { Avatar, Badge, Card, Chip, Divider, EmptyState, Loading, NavBar, Notice, Row, Screen, T } from '../design/ui'
 import { api, apiUrl } from '../lib/api'
@@ -72,7 +74,7 @@ export default function ClubMembers() {
               <Row>
                 <Avatar label={m.who.username ?? m.who.label} size={38} uri={apiUrl(m.who.avatarUrl)} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <T numberOfLines={1} variant="bodyStrong">{`${m.who.label}${m.me ? ' (you)' : ''}`}</T>
+                  <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} text={`${m.who.label}${m.me ? ' (you)' : ''}`} who={m.who} />
                   <T variant="caption">{m.mutedUntil ? `Muted until ${until(m.mutedUntil)}` : `Joined ${new Date(m.joinedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}</T>
                 </View>
                 {m.role === 'OWNER' ? <Badge label="Owner" tone="live" /> : m.role === 'MOD' ? <Badge label="Admin" tone="neutral" /> : null}

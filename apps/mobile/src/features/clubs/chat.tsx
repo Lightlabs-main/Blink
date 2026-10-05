@@ -10,6 +10,7 @@ import { Avatar, Button, IconButton, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, apiUrl } from '../../lib/api'
 import { haptics } from '../../lib/haptics'
 import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction, formatRaw } from '../../shared'
+import { PersonName } from '../../design/og'
 import { useVoicePlayback, VoiceBubble, VoiceRecorder } from './voice'
 
 const POLL_MS = 3500
@@ -285,7 +286,7 @@ export function ClubChat({
                 <Avatar label={m.author.username ?? m.author.label} size={30} uri={apiUrl(m.author.avatarUrl)} />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Row gap={6}>
-                    <T style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }}>{m.author.label}</T>
+                    <PersonName style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }} who={m.author} />
                     <T variant="caption">{time(m.createdAt)}</T>
                   </Row>
                   {m.replyTo ? (

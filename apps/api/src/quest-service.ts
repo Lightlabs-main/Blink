@@ -1,4 +1,5 @@
 import {
+  type OgType,
   combineQuest,
   type QuestRequirements,
   type ConditionResult,
@@ -132,6 +133,27 @@ export class QuestService {
     const { evaluation, tapSessionId, embedded } = await this.run(campaign.requirements, privyUserId, campaign)
     await this.deps.claims.putQuestVerification({ campaignId: campaign.id, privyUserId, evaluation, publicWallet: embedded[0] ?? null })
     return { evaluation, tapSessionId: evaluation.qualified ? tapSessionId : null }
+  }
+
+  /**
+   * D-45: OG marks on mainnet: Seeker owner (SGT), any SKR staked, ORE ever mined (or staked). `unknown` lists the
+   * marks that couldn't be read right now, so a failed read never removes a mark the person already has.
+   */
+  async ogStatus(privyUserId: string): Promise<{ og: OgType[]; unknown: OgType[] }> {
+    const groups: { type: OgType; group: QuestRequirements['eligibility'][number] }[] = [
+      { type: 'ORE', group: { mode: 'ANY', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '0' }, { verifier: 'ORE_STAKED', minRaw: '1' }] } },
+      { type: 'SEEKER', group: { mode: 'ALL', conditions: [{ verifier: 'SEEKER_SGT' }] } },
+      { type: 'SKR', group: { mode: 'ALL', conditions: [{ verifier: 'SKR_STAKED', minRaw: '1' }] } },
+    ]
+    const { evaluation } = await this.run({ eligibility: groups.map((g) => g.group), actions: [] }, privyUserId, null)
+    const og: OgType[] = []
+    const unknown: OgType[] = []
+    groups.forEach((g, i) => {
+      const r = evaluation.eligibility[i]
+      if (r?.passed) og.push(g.type)
+      else if (r?.results.some((x) => x.status === 'ERROR')) unknown.push(g.type)
+    })
+    return { og, unknown }
   }
 
   /** D-41: a club's join rules (eligibility groups only; read-only, nothing is stored). */
