@@ -34,6 +34,9 @@ export type IconName =
   | 'send'
   | 'reply'
   | 'trash'
+  | 'mic'
+  | 'pin'
+  | 'mute'
 
 /** Minimal stroke icon set drawn with react-native-svg (no icon font or extra native module required). */
 export function Icon({ name, size = 22, stroke = color.text, strokeWidth = 1.8 }: { name: IconName; size?: number; stroke?: string; strokeWidth?: number }) {
@@ -124,5 +127,13 @@ const ICONS: Record<IconName, (p: P) => React.ReactNode> = {
   trophy: (p) => <Path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5v1.5A3.5 3.5 0 0 0 8 11M16 6h3.5v1.5A3.5 3.5 0 0 1 16 11M12 13v4M8.5 20.5h7M10 17h4" {...p} />,
   send: (p) => <Path d="M4 12 20 4l-4.5 16-3.5-6.5zM12 13.5 20 4" {...p} />,
   reply: (p) => <Path d="M9.5 6 4 11.5 9.5 17M4 11.5h10a6 6 0 0 1 6 6V19" {...p} />,
+  mic: (p) => (
+    <>
+      <Rect height={11} rx={3.5} width={7} x={8.5} y={3} {...p} />
+      <Path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" {...p} />
+    </>
+  ),
+  pin: (p) => <Path d="M9 3.5h6l-1 6 3.5 3.5h-11L10 9.5zM12 13v7.5" {...p} />,
+  mute: (p) => <Path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9.5l5 5M21 9.5l-5 5" {...p} />,
   trash: (p) => <Path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1l1-13" {...p} />,
 }

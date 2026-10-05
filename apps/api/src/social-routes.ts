@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import {
   type CampaignType,
@@ -8,6 +8,7 @@ import {
   CLUB_REACTIONS,
   type ClubDetail,
   type ClubLeaderboardEntry,
+  type ClubMemberView,
   type ClubReaction,
   type ClubSummary,
   type Passport,
@@ -20,6 +21,10 @@ import {
 import {
   chatMessageRequest,
   checkinRequest,
+  clubSettingsRequest,
+  memberRoleRequest,
+  muteRequest,
+  voiceMessageRequest,
   createClubRequest,
   createSquadRequest,
   joinClubRequest,
@@ -151,6 +156,16 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     return { club, member, social }
   }
 
+  const isAdmin = (m: { role: string } | null | undefined) => m?.role === 'OWNER' || m?.role === 'MOD'
+
+  /** D-43: muted members and (in admins-only chats) non-admins can read and react but not post. */
+  function requireCanPost(club: StoredClub, member: { role: string; mutedUntil: Date | null }) {
+    if (member.mutedUntil && member.mutedUntil.getTime() > Date.now() && member.role !== 'OWNER') {
+      throw new ClaimError('MUTED', `an admin muted you until ${member.mutedUntil.toISOString()}`, 403)
+    }
+    if (club.adminsOnly && !isAdmin(member)) throw new ClaimError('ADMINS_ONLY', 'only admins can send messages in this club right now', 403)
+  }
+
   async function memberOnly(req: FastifyRequest<{ Params: { slug: string } }>, auth: AuthContext) {
     const v = await visibleClub(req, auth)
     if (!v.member) throw new ClaimError('NOT_A_MEMBER', 'join the club first', 403)
@@ -211,6 +226,14 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
       ...summary!,
       inviteCode: member && club.visibility === 'PRIVATE' ? club.inviteCode : member?.role === 'OWNER' || member?.role === 'MOD' ? club.inviteCode : null,
       campaigns: campaigns.map(toSummary),
+      adminsOnly: club.adminsOnly,
+      pinned: null,
+      myMutedUntil: member?.mutedUntil && member.mutedUntil.getTime() > Date.now() ? member.mutedUntil.toISOString() : null,
+    }
+    // D-43: the pinned message, unless it was deleted since.
+    if (club.pinnedMessageId !== null && (club.visibility === 'PUBLIC' || member)) {
+      const [pin] = await social.messagesByIds([club.pinnedMessageId])
+      if (pin && !pin.deletedAt && pin.clubId === club.id) detail.pinned = (await chatView([pin], auth.privyUserId))[0] ?? null
     }
     return { club: detail }
   })
@@ -222,6 +245,8 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'that invite code is not valid')
     const { club, member, social } = await visibleClub(req, auth, parsed.data.invite)
     if (member) return send(reply, 409, 'ALREADY_MEMBER', 'you are already in this club')
+    // D-43: removed members stay out until an admin lets them back in.
+    if (await social.isBanned(club.id, auth.privyUserId)) return send(reply, 403, 'REMOVED', 'an admin removed you from this club')
     // D-41: join rules are checked now, on mainnet, against the person's verified wallets (fails closed).
     if (club.rules.length) {
       if (!deps.quests) throw new ClaimError('RULES_UNAVAILABLE', 'this club’s rules can’t be checked right now', 503)
@@ -273,7 +298,11 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
         author: who(m.authorPrivyUserId, m.authorWallet),
         mine: m.authorPrivyUserId === privyUserId,
         body: m.deletedAt ? '' : m.body,
-        replyTo: reply ? { id: reply.id.toString(), author: who(reply.authorPrivyUserId, reply.authorWallet), body: reply.deletedAt ? '' : reply.body.slice(0, 140) } : null,
+        kind: m.kind === 'VOICE' ? ('VOICE' as const) : ('TEXT' as const),
+        voice: m.kind === 'VOICE' && m.voiceId && !m.deletedAt ? { url: `/v1/voice/${m.voiceId}`, durationMs: m.voiceMs ?? 0 } : null,
+        replyTo: reply
+          ? { id: reply.id.toString(), author: who(reply.authorPrivyUserId, reply.authorWallet), body: reply.deletedAt ? '' : reply.kind === 'VOICE' ? '🎤 Voice note' : reply.body.slice(0, 140) }
+          : null,
         reactions: CLUB_REACTIONS.map((emoji) => ({
           emoji,
           count: mine.filter((r) => r.emoji === emoji).length,
@@ -299,6 +328,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
   app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/messages', async (req, reply) => {
     const auth = await requireAuth(req)
     const { club, member, social } = await memberOnly(req, auth)
+    requireCanPost(club, member)
     if (!limiter.hit(`chat:${auth.privyUserId}`, CLUB_LIMITS.messagesPerMinute, 60_000)) {
       return send(reply, 429, 'RATE_LIMITED', 'you’re sending messages too fast — wait a moment')
     }
@@ -355,6 +385,152 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     if (hidden && !m.deletedAt) await social.deleteMessage(m.id, 'REPORTS')
     return { reported: true, hidden }
   })
+
+  // ---- D-43: voice notes (AAC in MP4, ≤ 60 s, ≤ 1 MB), served by a random id like profile pictures ----
+
+  app.post<{ Params: { slug: string } }>('/v1/clubs/:slug/voice', { bodyLimit: 1_600_000 }, async (req, reply) => {
+    const auth = await requireAuth(req)
+    const { club, member, social } = await memberOnly(req, auth)
+    requireCanPost(club, member)
+    if (!limiter.hit(`chat:${auth.privyUserId}`, CLUB_LIMITS.messagesPerMinute, 60_000) || !limiter.hit(`voice:${auth.privyUserId}`, CLUB_LIMITS.voicesPerTenMinutes, 600_000)) {
+      return send(reply, 429, 'RATE_LIMITED', 'you’re sending voice notes too fast — wait a moment')
+    }
+    const parsed = voiceMessageRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid voice note')
+    const bytes = Uint8Array.from(Buffer.from(parsed.data.audio, 'base64'))
+    if (bytes.length > CLUB_LIMITS.voiceMaxBytes) return send(reply, 413, 'VOICE_TOO_LARGE', 'that voice note is too long')
+    // MP4 / M4A: the 'ftyp' box at byte 4. The declared type is never trusted.
+    if (bytes.length < 12 || Buffer.from(bytes.subarray(4, 8)).toString('latin1') !== 'ftyp') return send(reply, 400, 'INVALID_AUDIO', 'that isn’t a supported voice note')
+    let replyToId: bigint | null = null
+    if (parsed.data.replyTo) {
+      const [target] = await social.messagesByIds([BigInt(parsed.data.replyTo)])
+      if (!target || target.clubId !== club.id) return send(reply, 400, 'INVALID_REPLY', 'that message is not in this club')
+      replyToId = target.id
+    }
+    const voiceId = randomBytes(16).toString('base64url')
+    await social.addVoice({ id: voiceId, clubId: club.id, bytes, mime: 'audio/mp4' })
+    const m = await social.addMessage({ clubId: club.id, authorPrivyUserId: auth.privyUserId, authorWallet: member.publicWallet, body: '', replyToId, kind: 'VOICE', voiceId, voiceMs: parsed.data.durationMs })
+    return reply.status(201).send({ message: (await chatView([m], auth.privyUserId))[0] })
+  })
+
+  /** Audio by its random 128-bit id; gone once the message is deleted. */
+  app.get<{ Params: { id: string } }>('/v1/voice/:id', async (req, reply) => {
+    if (!/^[A-Za-z0-9_-]{22}$/.test(req.params.id)) return send(reply, 404, 'NOT_FOUND', 'not found')
+    const social = requireSocial()
+    const m = await social.messageByVoiceId(req.params.id)
+    const v = m && !m.deletedAt ? await social.voice(req.params.id) : null
+    if (!v) return send(reply, 404, 'NOT_FOUND', 'not found')
+    return reply
+      .header('content-type', v.mime)
+      .header('cache-control', 'private, max-age=86400')
+      .header('x-content-type-options', 'nosniff')
+      .send(Buffer.from(v.bytes))
+  })
+
+  // ---- D-43: admins — members list, roles, mute, remove, chat settings, pin ----
+
+  const memberRef = (clubId: string, privyUserId: string) => createHash('sha256').update(`club-member:${clubId}:${privyUserId}`).digest('hex').slice(0, 16)
+
+  app.get<{ Params: { slug: string } }>('/v1/clubs/:slug/members', async (req) => {
+    const auth = await requireAuth(req)
+    const { club, member, social } = await visibleClub(req, auth)
+    if (club.visibility === 'PRIVATE' && !member) throw new ClaimError('NOT_A_MEMBER', 'join the club first', 403)
+    const rows = await social.members(club.id, 1000)
+    const who = await people(rows.map((m) => m.privyUserId))
+    const rank = { OWNER: 0, MOD: 1, MEMBER: 2 } as const
+    const members: ClubMemberView[] = rows
+      .map((m) => ({
+        id: memberRef(club.id, m.privyUserId),
+        who: who(m.privyUserId, m.publicWallet),
+        role: m.role,
+        mutedUntil: m.mutedUntil && m.mutedUntil.getTime() > Date.now() ? m.mutedUntil.toISOString() : null,
+        joinedAt: m.joinedAt.toISOString(),
+        me: m.privyUserId === auth.privyUserId,
+      }))
+      .sort((a, b) => rank[a.role] - rank[b.role] || Date.parse(a.joinedAt) - Date.parse(b.joinedAt))
+    let removed: { id: string; who: PublicParticipant; at: string }[] | null = null
+    if (isAdmin(member)) {
+      const bans = await social.bans(club.id)
+      const bwho = await people(bans.map((b) => b.privyUserId))
+      removed = bans.map((b) => ({ id: memberRef(club.id, b.privyUserId), who: bwho(b.privyUserId, b.publicWallet), at: b.createdAt.toISOString() }))
+    }
+    return { members, removed }
+  })
+
+  /** The acting admin and the target member (by opaque id). Only the owner manages admins; nobody acts on the owner. */
+  async function adminAction(req: FastifyRequest<{ Params: { slug: string; ref: string } }>) {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!isAdmin(member)) throw new ClaimError('FORBIDDEN', 'only admins can do that', 403)
+    const target = (await social.members(club.id, 5000)).find((m) => memberRef(club.id, m.privyUserId) === req.params.ref)
+    if (!target) throw new ClaimError('NOT_FOUND', 'member not found', 404)
+    if (target.role === 'OWNER') throw new ClaimError('FORBIDDEN', 'the club’s owner can’t be changed', 403)
+    if (target.privyUserId === auth.privyUserId) throw new ClaimError('FORBIDDEN', 'you can’t do that to yourself', 403)
+    if (target.role === 'MOD' && member.role !== 'OWNER') throw new ClaimError('FORBIDDEN', 'only the owner can act on other admins', 403)
+    return { auth, club, member, social, target }
+  }
+
+  app.post<{ Params: { slug: string; ref: string } }>('/v1/clubs/:slug/members/:ref/role', async (req, reply) => {
+    const parsed = memberRoleRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'role must be MOD or MEMBER')
+    const { club, member, social, target } = await adminAction(req)
+    if (member.role !== 'OWNER') return send(reply, 403, 'FORBIDDEN', 'only the owner can make or remove admins')
+    await social.setRole(club.id, target.privyUserId, parsed.data.role)
+    return { ok: true, role: parsed.data.role }
+  })
+
+  app.post<{ Params: { slug: string; ref: string } }>('/v1/clubs/:slug/members/:ref/mute', async (req, reply) => {
+    const parsed = muteRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', 'pick a mute length')
+    const { club, social, target } = await adminAction(req)
+    const until = parsed.data.minutes ? new Date(Date.now() + parsed.data.minutes * 60_000) : null
+    await social.setMuted(club.id, target.privyUserId, until)
+    return { ok: true, mutedUntil: until?.toISOString() ?? null }
+  })
+
+  app.post<{ Params: { slug: string; ref: string } }>('/v1/clubs/:slug/members/:ref/remove', async (req) => {
+    const { auth, club, social, target } = await adminAction(req)
+    await social.ban(club.id, target.privyUserId, auth.privyUserId, target.publicWallet)
+    return { ok: true }
+  })
+
+  app.post<{ Params: { slug: string; ref: string } }>('/v1/clubs/:slug/removed/:ref/restore', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!isAdmin(member)) return send(reply, 403, 'FORBIDDEN', 'only admins can do that')
+    const ban = (await social.bans(club.id)).find((b) => memberRef(club.id, b.privyUserId) === req.params.ref)
+    if (!ban) return send(reply, 404, 'NOT_FOUND', 'not found')
+    await social.unban(club.id, ban.privyUserId)
+    return { ok: true }
+  })
+
+  /** Admins: "only admins can send messages" and the club description (WhatsApp's "edit group info"). */
+  app.put<{ Params: { slug: string } }>('/v1/clubs/:slug/settings', async (req, reply) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!isAdmin(member)) return send(reply, 403, 'FORBIDDEN', 'only admins can change club settings')
+    const parsed = clubSettingsRequest.safeParse(req.body)
+    if (!parsed.success) return send(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid settings')
+    await social.setSettings(club.id, parsed.data)
+    return { ok: true, adminsOnly: parsed.data.adminsOnly ?? club.adminsOnly }
+  })
+
+  async function pin(req: FastifyRequest<{ Params: { slug: string; mid: string } }>, on: boolean) {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!isAdmin(member)) throw new ClaimError('FORBIDDEN', 'only admins can pin messages', 403)
+    const id = cursor(req.params.mid)
+    const [m] = id !== undefined ? await social.messagesByIds([id]) : []
+    if (!m || m.clubId !== club.id || m.deletedAt) throw new ClaimError('NOT_FOUND', 'message not found', 404)
+    await social.setSettings(club.id, { pinnedMessageId: on ? m.id : null })
+    return { ok: true }
+  }
+  app.post<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/pin', (req) => pin(req, true))
+  app.delete<{ Params: { slug: string; mid: string } }>('/v1/clubs/:slug/messages/:mid/pin', (req) => pin(req, false))
 
   // ---- Club leaderboard: points from real, explainable records only (never balances or wealth) ----
 

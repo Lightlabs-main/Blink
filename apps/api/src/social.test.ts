@@ -271,3 +271,77 @@ describe('club join rules and members-only drops (D-41)', () => {
     expect((await post('bob', `/v1/campaigns/${c.id}/tap-rush/start`)).json().error.code).not.toBe('NOT_A_MEMBER')
   })
 })
+
+describe('voice notes and admin controls (D-43)', () => {
+  /** A tiny MP4/M4A-shaped file: size + 'ftyp' + brand, padded. */
+  const m4a = (n = 400) => Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypM4A '), Buffer.alloc(n)]).toString('base64')
+
+  it('posts, serves and deletes voice notes; refuses non-audio', async () => {
+    const club = (await post('alice', '/v1/clubs', { name: 'Voice Club', description: 'Talk instead of typing.', category: 'COMMUNITY' })).json().club
+    const url = `/v1/clubs/${club.slug}/voice`
+    expect((await post('bob', url, { audio: m4a(), durationMs: 3000 })).json().error.code).toBe('NOT_A_MEMBER')
+    await post('bob', `/v1/clubs/${club.slug}/join`)
+    expect((await post('bob', url, { audio: Buffer.alloc(300).toString('base64'), durationMs: 3000 })).json().error.code).toBe('INVALID_AUDIO')
+    expect((await post('bob', url, { audio: m4a(), durationMs: 61_000 })).statusCode).toBe(400)
+    const res = await post('bob', url, { audio: m4a(), durationMs: 4200 })
+    expect(res.statusCode).toBe(201)
+    const msg = res.json().message
+    expect(msg).toMatchObject({ kind: 'VOICE', body: '', voice: { durationMs: 4200 } })
+    expect(msg.voice.url).toMatch(/^\/v1\/voice\/[A-Za-z0-9_-]{22}$/)
+    const audio = await app.inject({ method: 'GET', url: msg.voice.url })
+    expect(audio.statusCode).toBe(200)
+    expect(audio.headers['content-type']).toBe('audio/mp4')
+    // A text reply to a voice note shows a voice label.
+    expect((await post('alice', `/v1/clubs/${club.slug}/messages`, { body: 'nice', replyTo: msg.id })).json().message.replyTo.body).toBe('🎤 Voice note')
+    await app.inject({ method: 'DELETE', url: `/v1/clubs/${club.slug}/messages/${msg.id}`, headers: as('bob') })
+    expect((await app.inject({ method: 'GET', url: msg.voice.url })).statusCode).toBe(404)
+  })
+
+  it('lets the owner make admins, admins mute, remove and pin, and close the chat to admins', async () => {
+    const club = (await post('alice', '/v1/clubs', { name: 'Crew Club', description: 'Testing admin controls.', category: 'COMMUNITY' })).json().club
+    const base = `/v1/clubs/${club.slug}`
+    for (const u of ['bob', 'carol', 'dave']) await post(u, `${base}/join`)
+    const list = (await get('bob', `${base}/members`)).json()
+    expect(list.removed).toBeNull()
+    expect(list.members.map((m: { role: string }) => m.role)).toEqual(['OWNER', 'MEMBER', 'MEMBER', 'MEMBER'])
+    expect(list.members[0].id).toMatch(/^[0-9a-f]{16}$/)
+    const ref = async (u: string) => (await get(u, `${base}/members`)).json().members.find((m: { me: boolean }) => m.me).id as string
+    const [bobId, carolId, daveId, aliceId] = await Promise.all(['bob', 'carol', 'dave', 'alice'].map(ref))
+
+    // Only the owner makes admins; admins can't act on the owner or each other.
+    expect((await post('bob', `${base}/members/${carolId}/role`, { role: 'MOD' })).json().error.code).toBe('FORBIDDEN')
+    expect((await post('alice', `${base}/members/${bobId}/role`, { role: 'MOD' })).json().role).toBe('MOD')
+    expect((await post('bob', `${base}/members/${aliceId}/mute`, { minutes: 60 })).json().error.code).toBe('FORBIDDEN')
+    await post('alice', `${base}/members/${carolId}/role`, { role: 'MOD' })
+    expect((await post('bob', `${base}/members/${carolId}/mute`, { minutes: 60 })).json().error.code).toBe('FORBIDDEN')
+    await post('alice', `${base}/members/${carolId}/role`, { role: 'MEMBER' })
+
+    // Mute: can't post until unmuted; reactions still work.
+    expect((await post('bob', `${base}/members/${daveId}/mute`, { minutes: 7 })).statusCode).toBe(400)
+    expect((await post('bob', `${base}/members/${daveId}/mute`, { minutes: 60 })).json().mutedUntil).toBeTruthy()
+    expect((await post('dave', `${base}/messages`, { body: 'hi' })).json().error.code).toBe('MUTED')
+    expect((await get('dave', base)).json().club.myMutedUntil).toBeTruthy()
+    await post('bob', `${base}/members/${daveId}/mute`, { minutes: 0 })
+    expect((await post('dave', `${base}/messages`, { body: 'hi' })).statusCode).toBe(201)
+
+    // Admins-only chat.
+    expect((await app.inject({ method: 'PUT', url: `${base}/settings`, headers: as('carol'), payload: { adminsOnly: true } })).statusCode).toBe(403)
+    expect((await app.inject({ method: 'PUT', url: `${base}/settings`, headers: as('bob'), payload: { adminsOnly: true } })).json().adminsOnly).toBe(true)
+    expect((await post('carol', `${base}/messages`, { body: 'hello?' })).json().error.code).toBe('ADMINS_ONLY')
+    const announcement = (await post('bob', `${base}/messages`, { body: 'Drop at 6pm' })).json().message
+    expect((await get('carol', base)).json().club.adminsOnly).toBe(true)
+
+    // Pin.
+    expect((await post('carol', `${base}/messages/${announcement.id}/pin`)).json().error.code).toBe('FORBIDDEN')
+    await post('bob', `${base}/messages/${announcement.id}/pin`)
+    expect((await get('carol', base)).json().club.pinned).toMatchObject({ id: announcement.id, body: 'Drop at 6pm' })
+
+    // Remove = can't rejoin until restored.
+    await post('bob', `${base}/members/${carolId}/remove`)
+    expect((await post('carol', `${base}/join`)).json().error.code).toBe('REMOVED')
+    const removed = (await get('bob', `${base}/members`)).json().removed
+    expect(removed).toHaveLength(1)
+    await post('bob', `${base}/removed/${removed[0].id}/restore`)
+    expect((await post('carol', `${base}/join`)).json().club.joined).toBe(true)
+  })
+})

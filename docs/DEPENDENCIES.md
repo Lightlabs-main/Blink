@@ -206,3 +206,11 @@ Built by hand from the official IDL (`skr-staking/program/idl.json`); no generat
 No new packages. Chat uses polling over the existing Fastify API (no WebSocket/SSE library was added). Receipts keep
 `react-native-view-shot` + `expo-sharing` (D-38); event QR codes use the installed `react-native-qrcode-svg`; the
 scanner uses the installed `expo-camera`. Status: VERIFIED (installed versions in apps/mobile/package.json).
+
+## expo-audio (D-43, 2026-10-05)
+
+`expo-audio ~57.0.5`, installed with `npx expo install expo-audio` (Expo SDK 57's expected version). Config plugin in
+app.json with `microphonePermission` and `enableBackgroundPlayback: false`; it adds Android `RECORD_AUDIO`. APIs used
+(checked in the installed type definitions): `useAudioRecorder`, `useAudioRecorderState`, `RecordingPresets`,
+`requestRecordingPermissionsAsync`, `setAudioModeAsync`, `useAudioPlayer`, `useAudioPlayerStatus`, `AudioPlayer.replace /
+play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet verified. Needs a new native build.

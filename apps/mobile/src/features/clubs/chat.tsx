@@ -10,6 +10,7 @@ import { Avatar, Button, IconButton, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, apiUrl } from '../../lib/api'
 import { haptics } from '../../lib/haptics'
 import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction } from '../../shared'
+import { useVoicePlayback, VoiceBubble, VoiceRecorder } from './voice'
 
 const POLL_MS = 3500
 /** Every few polls, reload the newest page too, so reactions and deletions on recent messages catch up. */
@@ -47,8 +48,29 @@ function merge(prev: ChatMessage[], next: ChatMessage[]) {
  * D-40: club chat. Polled while the screen is focused (stops when you leave). Members post; everyone signed in can
  * read a public club. Tap a message for reactions, reply or delete.
  */
-export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug: string; canPost: boolean; canModerate: boolean; onJoin: () => void; joining: boolean }) {
+export function ClubChat({
+  slug,
+  canPost,
+  canModerate,
+  onJoin,
+  joining,
+  postBlocked,
+  pinned,
+  onPinChange,
+}: {
+  slug: string
+  canPost: boolean
+  canModerate: boolean
+  onJoin: () => void
+  joining: boolean
+  /** D-43: why a member can't post right now (muted, admins-only chat); they can still read and react. */
+  postBlocked?: string | null
+  pinned?: ChatMessage | null
+  onPinChange?: () => void
+}) {
   const { getAccessToken } = usePrivy()
+  const playback = useVoicePlayback()
+  const [recording, setRecording] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [older, setOlder] = useState<'idle' | 'loading' | 'done'>('idle')
@@ -181,10 +203,50 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
     ])
   }
 
+  async function sendVoice(audio: string, durationMs: number) {
+    setSending(true)
+    try {
+      const res = await api.sendVoice(getAccessToken, slug, audio, durationMs, replyTo?.id)
+      haptics.tap()
+      setReplyTo(null)
+      setMessages((prev) => merge(prev, [res.message]))
+      setError(null)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function togglePin(m: ChatMessage | null, on: boolean) {
+    setSelected(null)
+    if (!m) return
+    try {
+      await api.pinMessage(getAccessToken, slug, m.id, on)
+      haptics.tap()
+      onPinChange?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not pin')
+    }
+  }
+
+  const preview = (m: { body: string; kind?: string }) => (m.kind === 'VOICE' ? '🎤 Voice note' : m.body)
   const data = [...messages].reverse()
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      {pinned ? (
+        <Row gap={space.sm} style={styles.pinned}>
+          <Icon name="pin" size={15} stroke={color.lime} />
+          <T numberOfLines={2} style={{ flex: 1 }} variant="caption">
+            <T style={{ ...font('bodySemi'), fontSize: 12.5, color: color.text }}>{`${pinned.author.label}: `}</T>
+            {preview(pinned)}
+          </T>
+          {canModerate ? (
+            <Pressable accessibilityLabel="Unpin" hitSlop={8} onPress={() => void togglePin(pinned, false)}>
+              <Icon name="close" size={14} stroke={color.textMuted} />
+            </Pressable>
+          ) : null}
+        </Row>
+      ) : null}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={color.text} />
@@ -231,6 +293,8 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
                   ) : null}
                   {m.deleted ? (
                     <T style={{ ...font('body'), fontStyle: 'italic', fontSize: 14, color: color.textMuted }}>Message deleted</T>
+                  ) : m.kind === 'VOICE' && m.voice ? (
+                    <VoiceBubble durationMs={m.voice.durationMs} id={m.id} mine={m.mine} playback={playback} url={m.voice.url} />
                   ) : (
                     <Body text={m.body} />
                   )}
@@ -260,6 +324,11 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
                       >
                         <Icon name="reply" size={16} stroke={color.text} />
                       </Pressable>
+                      {canModerate ? (
+                        <Pressable accessibilityLabel={pinned?.id === m.id ? 'Unpin message' : 'Pin message'} onPress={() => void togglePin(m, pinned?.id !== m.id)} style={styles.reaction}>
+                          <Icon name="pin" size={16} stroke={pinned?.id === m.id ? color.lime : color.text} />
+                        </Pressable>
+                      ) : null}
                       {!m.mine ? (
                         <Pressable accessibilityLabel="Report message" onPress={() => report(m)} style={styles.reaction}>
                           <T style={{ fontSize: 12, color: color.textMuted }}>Report</T>
@@ -282,12 +351,23 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
 
       {error ? <Notice message={error} tone={error === 'Reconnecting…' ? 'warn' : 'danger'} /> : null}
 
-      {canPost ? (
+      {canPost && postBlocked ? (
+        <Row gap={space.sm} style={[styles.replyBar, { marginTop: space.sm, paddingVertical: space.md }]}>
+          <Icon name={postBlocked.startsWith('Only admins') ? 'lock' : 'mute'} size={16} stroke={color.textMuted} />
+          <T style={{ flex: 1 }} variant="label">
+            {postBlocked}
+          </T>
+        </Row>
+      ) : canPost && recording ? (
+        <View style={{ paddingTop: space.sm }}>
+          <VoiceRecorder onClose={() => setRecording(false)} onSend={sendVoice} sending={sending} />
+        </View>
+      ) : canPost ? (
         <View style={{ gap: space.xs, paddingTop: space.sm }}>
           {replyTo ? (
             <Row style={styles.replyBar}>
               <Icon name="reply" size={14} stroke={color.textMuted} />
-              <T numberOfLines={1} style={{ flex: 1 }} variant="caption">{`Replying to ${replyTo.author.label}: ${replyTo.body}`}</T>
+              <T numberOfLines={1} style={{ flex: 1 }} variant="caption">{`Replying to ${replyTo.author.label}: ${preview(replyTo)}`}</T>
               <Pressable accessibilityLabel="Cancel reply" hitSlop={8} onPress={() => setReplyTo(null)}>
                 <Icon name="close" size={14} stroke={color.textMuted} />
               </Pressable>
@@ -303,7 +383,13 @@ export function ClubChat({ slug, canPost, canModerate, onJoin, joining }: { slug
               style={styles.input}
               value={text}
             />
-            {sending ? <ActivityIndicator color={color.text} style={{ width: 40 }} /> : <IconButton icon="send" label="Send" onPress={() => void send()} tone="lime" />}
+            {sending ? (
+              <ActivityIndicator color={color.text} style={{ width: 40 }} />
+            ) : text.trim() ? (
+              <IconButton icon="send" label="Send" onPress={() => void send()} tone="lime" />
+            ) : (
+              <IconButton icon="mic" label="Record a voice note" onPress={() => setRecording(true)} tone="lime" />
+            )}
           </Row>
         </View>
       ) : (
@@ -322,6 +408,7 @@ const styles = StyleSheet.create({
   quote: { borderLeftWidth: 2, borderColor: color.limeLine, paddingLeft: space.sm },
   reaction: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: color.surface3, borderWidth: 1, borderColor: color.border },
   reactionMine: { borderColor: color.limeLine, backgroundColor: color.limeSoft },
+  pinned: { paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.surface2, borderWidth: 1, borderColor: color.limeLine, marginBottom: space.sm },
   replyBar: { paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: color.surface2 },
   input: {
     flex: 1,

@@ -3,6 +3,8 @@ import type {
   ClubCategory,
   ClubDetail,
   ClubLeaderboardEntry,
+  ClubMemberView,
+  PublicParticipant,
   ClubReaction,
   ClubSummary,
   Passport,
@@ -265,6 +267,26 @@ export const api = {
     authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   react: (t: GetAccessToken, slug: string, id: string, emoji: ClubReaction) =>
     authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  // ---- D-43: voice notes and admin controls ----
+  sendVoice: (t: GetAccessToken, slug: string, audioBase64: string, durationMs: number, replyTo?: string) =>
+    authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/voice`, {
+      method: 'POST',
+      body: JSON.stringify(replyTo ? { audio: audioBase64, durationMs, replyTo } : { audio: audioBase64, durationMs }),
+    }),
+  clubMembers: (t: GetAccessToken, slug: string) =>
+    authed<{ members: ClubMemberView[]; removed: { id: string; who: PublicParticipant; at: string }[] | null }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members`),
+  setMemberRole: (t: GetAccessToken, slug: string, memberId: string, role: 'MOD' | 'MEMBER') =>
+    authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members/${memberId}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
+  muteMember: (t: GetAccessToken, slug: string, memberId: string, minutes: number) =>
+    authed<{ ok: true; mutedUntil: string | null }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members/${memberId}/mute`, { method: 'POST', body: JSON.stringify({ minutes }) }),
+  removeMember: (t: GetAccessToken, slug: string, memberId: string) =>
+    authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members/${memberId}/remove`, { method: 'POST', body: '{}' }),
+  restoreMember: (t: GetAccessToken, slug: string, memberId: string) =>
+    authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/removed/${memberId}/restore`, { method: 'POST', body: '{}' }),
+  clubSettings: (t: GetAccessToken, slug: string, body: { adminsOnly?: boolean; description?: string }) =>
+    authed<{ ok: true; adminsOnly: boolean }>(t, `/v1/clubs/${encodeURIComponent(slug)}/settings`, { method: 'PUT', body: JSON.stringify(body) }),
+  pinMessage: (t: GetAccessToken, slug: string, id: string, on: boolean) =>
+    authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/pin`, { method: on ? 'POST' : 'DELETE' }),
   reportMessage: (t: GetAccessToken, slug: string, id: string) =>
     authed<{ reported: true; hidden: boolean }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/report`, { method: 'POST', body: '{}' }),
   clubLeaderboard: (t: GetAccessToken, slug: string, period: 'week' | 'all') =>

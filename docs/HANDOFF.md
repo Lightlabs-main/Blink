@@ -209,3 +209,15 @@ the migration.
 - `POST /v1/campaigns` accepts `membersOnly` (requires `clubId`); `CampaignSummary.membersOnly`. Participation routes
   return 403 `NOT_A_MEMBER` for non-members.
 - Migration `20261005150000_club_rules` (additive: `Club.rulesJson`, `Campaign.membersOnly` default false).
+
+## API contract v10: voice notes and club admin controls (owner: Claude, 2026-10-05, D-43)
+
+- `POST /v1/clubs/:slug/voice` `{ audio (base64 M4A), durationMs ≤ 60000, replyTo? }` → 201 `{ message }`; 400
+  `INVALID_AUDIO`, 413 `VOICE_TOO_LARGE`, 403 `MUTED` / `ADMINS_ONLY` / `NOT_A_MEMBER`, 429. `GET /v1/voice/:id` → audio/mp4.
+- `ChatMessage` adds `kind: TEXT | VOICE` and `voice: { url, durationMs } | null`. `ClubDetail` adds `adminsOnly`,
+  `pinned`, `myMutedUntil`. Text posts may now return 403 `MUTED` / `ADMINS_ONLY`; joins 403 `REMOVED`.
+- `GET /v1/clubs/:slug/members` → `{ members: ClubMemberView[], removed: [...] | null (admins only) }`.
+- `POST …/members/:id/role` `{ role: MOD | MEMBER }` (owner); `POST …/members/:id/mute` `{ minutes: 0|60|480|1440|10080 }`;
+  `POST …/members/:id/remove`; `POST …/removed/:id/restore`; `PUT …/settings` `{ adminsOnly?, description? }`;
+  `POST|DELETE …/messages/:mid/pin` (admins).
+- Migration `20261005180000_club_admin_voice` (additive).

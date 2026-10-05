@@ -58,6 +58,13 @@
         }
       ],
       "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Blink uses the microphone only when you record a voice note in a club chat.",
+          "enableBackgroundPlayback": false
+        }
+      ],
       "expo-secure-store",
       "expo-web-browser",
       [
