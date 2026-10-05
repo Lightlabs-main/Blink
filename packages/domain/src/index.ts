@@ -194,7 +194,7 @@ export interface ClaimSummary {
 
 /** D-38: one line of the user's history; every line opens a receipt. */
 /** CHECKIN and CLUB_JOINED (D-40) are offchain records: no amount, no transaction. */
-export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED' | 'CHECKIN' | 'CLUB_JOINED'
+export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED' | 'CHECKIN' | 'CLUB_JOINED' | 'GIFT_RECEIVED'
 
 export interface HistoryItem {
   /** `<kind>:<source id>`, stable across refreshes. */
@@ -212,7 +212,7 @@ export interface HistoryItem {
   campaignType: CampaignType | null
   /** SENT: the recipient address. */
   counterparty: string | null
-  /** CLUB_JOINED: the club's name; CHECKIN: the drop's stock symbol. */
+  /** CLUB_JOINED: the club's name; CHECKIN: the drop's stock symbol; GIFT_RECEIVED: who sent it (public label). */
   title?: string | null
   /** CLUB_JOINED: the club's slug, to open it. */
   clubSlug?: string | null
@@ -647,9 +647,13 @@ export interface ChatMessage {
   mine: boolean
   /** Plain text; never rendered as HTML. Empty when deleted. */
   body: string
-  kind: 'TEXT' | 'VOICE'
+  kind: 'TEXT' | 'VOICE' | 'GIFT'
   /** D-43: a voice note (null for text and deleted messages). */
   voice: { url: string; durationMs: number } | null
+  /** D-44: a confirmed xStock gift. Raw amount as a string; never a wallet address. */
+  gift: { to: PublicParticipant; mint: string; symbol: string; decimals: number; amountRaw: RawAmount; signature: string; cluster: string } | null
+  /** D-44: the author's opaque per-club id (for gifting them back); null for deleted messages. */
+  authorId: string | null
   replyTo: { id: string; author: PublicParticipant; body: string } | null
   reactions: { emoji: ClubReaction; count: number; mine: boolean }[]
   deleted: boolean

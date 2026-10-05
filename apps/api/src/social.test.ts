@@ -345,3 +345,63 @@ describe('voice notes and admin controls (D-43)', () => {
     expect((await post('carol', `${base}/join`)).json().club.joined).toBe(true)
   })
 })
+
+describe('xStock gifts in club chat (D-44)', () => {
+  it('gifts through the Send flow, checks the recipient, and posts only confirmed gifts', async () => {
+    const enforced = loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', XSTOCK_COMPLIANCE: 'enforce' })
+    const real = { symbol: 'NVDAx', name: 'NVIDIA xStock', mint: SUPPORTED_XSTOCKS[0]!.mint, decimals: 8, logo: null, isTest: false }
+    const prepared: { user: string; to: string; amountRaw: bigint }[] = []
+    let confirm = true
+    const sendFake = {
+      prepare: async (user: string, _ip: string, input: { asset: string; to: string; amountRaw: bigint }) => {
+        prepared.push({ user, to: input.to, amountRaw: input.amountRaw })
+        return { transaction: 'dHg=', from: 'me', createsRecipientAccount: true }
+      },
+      submit: async () => ({ signature: `sig${prepared.length}${confirm ? 'c' : 'p'}`, confirmed: confirm }),
+    }
+    const eligible = new Set(['did:privy:bob'])
+    const store = new InMemorySocialStore()
+    const notes: { to: string; body: string }[] = []
+    const a = buildApp({
+      env: enforced, auth, campaigns, claims, social: store, profiles: new InMemoryProfileStore(), rpc: {} as Rpc<GetAccountInfoApi>, assets: [real],
+      send: sendFake as never, eligibility: { isEligibleStored: async (u: string) => eligible.has(u) } as never,
+      notifier: { notify: async (to: string, m: { body: string }) => void notes.push({ to, body: m.body }) },
+    })
+    const p = (u: string, url: string, payload: object = {}) => a.inject({ method: 'POST', url, headers: as(u), payload })
+    const g = (u: string, url: string) => a.inject({ method: 'GET', url, headers: as(u) })
+    const club = (await p('alice', '/v1/clubs', { name: 'Gift Club', description: 'Members gift each other stock.', category: 'COMMUNITY' })).json().club
+    const base = `/v1/clubs/${club.slug}`
+    for (const u of ['bob', 'carol']) await p(u, `${base}/join`)
+    const idOf = async (u: string) => (await g(u, `${base}/members`)).json().members.find((m: { me: boolean }) => m.me).id as string
+    const [bobId, carolId, aliceId] = await Promise.all([idOf('bob'), idOf('carol'), idOf('alice')])
+
+    expect((await p('alice', `${base}/gifts/prepare`, { to: aliceId, asset: real.mint, amountRaw: '1000' })).json().error.code).toBe('SELF_GIFT')
+    expect((await p('alice', `${base}/gifts/prepare`, { to: carolId, asset: real.mint, amountRaw: '1000' })).json().error.code).toBe('RECIPIENT_NOT_ELIGIBLE')
+    expect((await p('alice', `${base}/gifts/prepare`, { to: bobId, asset: '11111111111111111111111111111112', amountRaw: '1000' })).json().error.code).toBe('UNSUPPORTED_ASSET')
+    expect((await p('zed', `${base}/gifts/prepare`, { to: bobId, asset: real.mint, amountRaw: '1000' })).json().error.code).toBe('NOT_A_MEMBER')
+
+    // A confirmed gift: prepared to Bob's own Blink wallet (server-resolved), posted in chat, Bob notified.
+    const prep = await p('alice', `${base}/gifts/prepare`, { to: bobId, asset: real.mint, amountRaw: '1000000' })
+    expect(prep.json().prepared).toEqual({ transaction: 'dHg=', createsRecipientAccount: true })
+    expect(prepared.at(-1)).toMatchObject({ user: 'did:privy:alice', to: (await auth.getEmbeddedSolanaWallets('did:privy:bob'))[0], amountRaw: 1_000_000n })
+    expect(JSON.stringify(prep.json())).not.toContain('Wa11et')
+    const done = (await p('alice', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json()
+    expect(done.gift.status).toBe('CONFIRMED')
+    expect(done.message).toMatchObject({ kind: 'GIFT', gift: { symbol: 'NVDAx', amountRaw: '1000000', decimals: 8 } })
+    expect(notes).toEqual([{ to: 'did:privy:bob', body: expect.stringContaining('NVDAx') }])
+    expect((await p('alice', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json().error.code).toBe('EXPIRED')
+
+    // Bob sees it in his history and Passport; messages carry an opaque author id for gifting back.
+    expect((await g('bob', '/v1/me/history')).json().items[0]).toMatchObject({ kind: 'GIFT_RECEIVED', amountRaw: '1000000', symbol: 'NVDAx' })
+    expect((await g('bob', '/v1/me/passport')).json().passport.badges.map((b: { title: string }) => b.title)).toContain('Gift received')
+    expect((await g('bob', `${base}/messages`)).json().messages.at(-1).authorId).toBe(aliceId)
+
+    // Still confirming: recorded, but nothing appears in chat and nobody is told it arrived.
+    confirm = false
+    await p('alice', `${base}/gifts/prepare`, { to: bobId, asset: real.mint, amountRaw: '5' })
+    const pend = (await p('alice', `${base}/gifts/submit`, { signedTransaction: 'x'.repeat(120) })).json()
+    expect(pend).toMatchObject({ gift: { status: 'PENDING' }, message: null })
+    expect(notes).toHaveLength(1)
+    await a.close()
+  })
+})

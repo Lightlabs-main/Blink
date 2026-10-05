@@ -76,6 +76,11 @@ export default function ClubMembers() {
                   <T variant="caption">{m.mutedUntil ? `Muted until ${until(m.mutedUntil)}` : `Joined ${new Date(m.joinedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}</T>
                 </View>
                 {m.role === 'OWNER' ? <Badge label="Owner" tone="live" /> : m.role === 'MOD' ? <Badge label="Admin" tone="neutral" /> : null}
+                {!m.me ? (
+                  <Pressable accessibilityLabel={`Gift stock to ${m.who.label}`} hitSlop={8} onPress={() => router.push({ pathname: '/club-gift', params: { slug: String(slug), to: m.id, name: m.who.label } })}>
+                    <T style={{ fontSize: 18 }}>🎁</T>
+                  </Pressable>
+                ) : null}
               </Row>
               {open === m.id ? (
                 <View style={{ gap: space.sm }}>

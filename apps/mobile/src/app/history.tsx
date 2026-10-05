@@ -12,13 +12,13 @@ import { api } from '../lib/api'
 import { useAssetMap } from '../lib/data'
 import type { HistoryItem } from '../shared'
 
-const ICON: Record<HistoryItem['kind'], IconName> = { REWARD: 'gift', INVITE_BONUS: 'users', SENT: 'arrowUpRight', FUNDED: 'sparkle', CHECKIN: 'scan', CLUB_JOINED: 'users' }
+const ICON: Record<HistoryItem['kind'], IconName> = { REWARD: 'gift', INVITE_BONUS: 'users', SENT: 'arrowUpRight', FUNDED: 'sparkle', CHECKIN: 'scan', CLUB_JOINED: 'users', GIFT_RECEIVED: 'gift' }
 
 /** D-40: Receipts & Activity filters. Only offchain records and onchain settlements that actually happened. */
 type Filter = 'ALL' | 'REWARDS' | 'EVENTS' | 'CLUBS' | 'WALLET'
 const FILTERS: { key: Filter; label: string; kinds: HistoryItem['kind'][] }[] = [
   { key: 'ALL', label: 'All', kinds: [] },
-  { key: 'REWARDS', label: 'Rewards', kinds: ['REWARD', 'INVITE_BONUS'] },
+  { key: 'REWARDS', label: 'Rewards & gifts', kinds: ['REWARD', 'INVITE_BONUS', 'GIFT_RECEIVED'] },
   { key: 'EVENTS', label: 'Events', kinds: ['CHECKIN'] },
   { key: 'CLUBS', label: 'Clubs', kinds: ['CLUB_JOINED'] },
   { key: 'WALLET', label: 'Sent & funded', kinds: ['SENT', 'FUNDED'] },

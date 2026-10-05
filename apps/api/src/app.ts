@@ -307,6 +307,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
           status: 'CONFIRMED', signature: null, campaignId: campaign.id, campaignType: campaign.type, counterparty: null, title: campaign.xstockSymbol, at: ch.at.toISOString(),
         })
       }
+      // D-44: gifts received from club members (confirmed transfers only; the sender sees theirs as SENT).
+      const received = (await deps.social.giftsReceived(auth.privyUserId, 100)).filter((g) => g.status === 'CONFIRMED')
+      const senders = deps.profiles ? await deps.profiles.getMany([...new Set(received.map((g) => g.senderPrivyUserId))]) : new Map()
+      for (const g of received) {
+        const p = senders.get(g.senderPrivyUserId)
+        items.push({
+          id: `GIFT_RECEIVED:${g.id}`, kind: 'GIFT_RECEIVED', cluster: g.cluster as HistoryItem['cluster'], symbol: g.symbol, mint: g.mint, decimals: g.decimals,
+          amountRaw: g.amountRaw.toString(), status: 'CONFIRMED', signature: g.signature, campaignId: null, campaignType: null, counterparty: null,
+          title: p?.username ? `@${p.username}` : g.senderWallet ? `${g.senderWallet.slice(0, 4)}…${g.senderWallet.slice(-4)}` : 'A club member', at: g.createdAt.toISOString(),
+        })
+      }
       const memberships = await deps.social.membershipsOf(auth.privyUserId)
       const clubs = new Map((await deps.social.clubsByIds(memberships.map((m) => m.clubId))).map((c) => [c.id, c]))
       for (const m of memberships) {

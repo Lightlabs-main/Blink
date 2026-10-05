@@ -267,6 +267,14 @@ export const api = {
     authed<{ ok: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   react: (t: GetAccessToken, slug: string, id: string, emoji: ClubReaction) =>
     authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/messages/${encodeURIComponent(id)}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  // ---- D-44: xStock gifts in club chat (prepare → the stock wallet signs → submit) ----
+  giftPrepare: (t: GetAccessToken, slug: string, body: { to: string; asset: string; amountRaw: string }) =>
+    authed<{ prepared: { transaction: string; createsRecipientAccount: boolean } }>(t, `/v1/clubs/${encodeURIComponent(slug)}/gifts/prepare`, { method: 'POST', body: JSON.stringify(body) }),
+  giftSubmit: (t: GetAccessToken, slug: string, signedTransaction: string) =>
+    authed<{ gift: { id: string; signature: string; status: 'CONFIRMED' | 'PENDING' }; message: ChatMessage | null }>(t, `/v1/clubs/${encodeURIComponent(slug)}/gifts/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ signedTransaction }),
+    }),
   // ---- D-43: voice notes and admin controls ----
   sendVoice: (t: GetAccessToken, slug: string, audioBase64: string, durationMs: number, replyTo?: string) =>
     authed<{ message: ChatMessage }>(t, `/v1/clubs/${encodeURIComponent(slug)}/voice`, {

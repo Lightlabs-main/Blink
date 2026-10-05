@@ -603,3 +603,20 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
   owner acts on admins; nobody acts on themselves. Members are addressed by an opaque per-club id, never the account id.
   Muted members and non-admins in an admins-only chat can still read and react.
 - **Not in this build (owner decision):** paid clubs — one-time and monthly — come after October 8.
+
+## D-44 — Gift xStocks to club members in chat (2026-10-05, Maris)
+
+- **Flow:** 🎁 Gift on someone's message or in the members list → pick a stock in your Blink wallet and an amount →
+  the server finds the recipient's Blink (embedded) wallet itself (never shown in the app) and builds the transfer
+  through the D-32 Send service; the wallet signs in the app; Blink's fee payer pays the fee and, the first time, the
+  recipient's token-account rent (mainnet budget cap applies). Same 20 sends/day cap and the global kill switch.
+- **Checks:** both people must be members of the club; muted members (and non-admins in an admins-only chat) can't
+  gift; no self-gifts; only Blink's supported assets; real xStocks need the sender's live eligibility check (inside
+  Send) and the recipient's stored, current eligible decision (`isEligibleStored`) — otherwise
+  `RECIPIENT_NOT_ELIGIBLE` before anything is signed.
+- **Truthful states:** a gift is posted in the chat, notified to the recipient (push) and shown as "Gift received" in
+  their Receipts & Activity only when Solana confirmed it. A transfer still confirming when the request ends is
+  recorded `PENDING` and is not posted (the sender's Activity shows it via the Send record).
+- **Records:** `ClubGift` (raw amount as Decimal(20,0), signature unique) and `ClubMessage.giftId`. Passport stamps:
+  "First gift sent", "Gift received". Gifts can't be undone.
+- **Not yet:** a sweep that later confirms `PENDING` gifts and posts them.

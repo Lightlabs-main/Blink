@@ -221,3 +221,13 @@ the migration.
   `POST …/members/:id/remove`; `POST …/removed/:id/restore`; `PUT …/settings` `{ adminsOnly?, description? }`;
   `POST|DELETE …/messages/:mid/pin` (admins).
 - Migration `20261005180000_club_admin_voice` (additive).
+
+## API contract v11: xStock gifts in club chat (owner: Claude, 2026-10-05, D-44)
+
+- `POST /v1/clubs/:slug/gifts/prepare` `{ to: <member id>, asset: <mint>, amountRaw }` → `{ prepared: { transaction,
+  createsRecipientAccount } }`. Errors: 400 `SELF_GIFT` / `UNSUPPORTED_ASSET`, 404, 403 `RECIPIENT_NOT_ELIGIBLE` /
+  `NOT_A_MEMBER` / `MUTED` / `ADMINS_ONLY`, 429, plus the Send errors (`SEND_*`, `NOT_ELIGIBLE`, `PAYOUTS_PAUSED`).
+- `POST /v1/clubs/:slug/gifts/submit` `{ signedTransaction }` → `{ gift: { id, signature, status: CONFIRMED | PENDING },
+  message: ChatMessage | null }` (409 `EXPIRED`, `TRANSACTION_MISMATCH`, …).
+- `ChatMessage` adds `kind: 'GIFT'`, `gift`, `authorId`. History adds `GIFT_RECEIVED`. `SendService.submit` now also
+  returns `confirmed`. Migration `20261005200000_club_gifts` (additive).

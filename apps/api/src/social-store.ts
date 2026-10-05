@@ -64,9 +64,27 @@ export interface NewMessage {
   body: string
   replyToId: bigint | null
   /** D-43: voice notes. */
-  kind?: 'TEXT' | 'VOICE'
+  kind?: 'TEXT' | 'VOICE' | 'GIFT'
   voiceId?: string | null
   voiceMs?: number | null
+  /** D-44: gifts. */
+  giftId?: string | null
+}
+
+export interface StoredGift {
+  id: string
+  clubId: string
+  senderPrivyUserId: string
+  recipientPrivyUserId: string
+  senderWallet: string | null
+  mint: string
+  symbol: string
+  decimals: number
+  amountRaw: bigint
+  cluster: string
+  signature: string
+  status: 'CONFIRMED' | 'PENDING'
+  createdAt: Date
 }
 
 export interface StoredMessage {
@@ -79,6 +97,7 @@ export interface StoredMessage {
   kind: string
   voiceId: string | null
   voiceMs: number | null
+  giftId: string | null
   deletedAt: Date | null
   createdAt: Date
 }
@@ -132,6 +151,11 @@ export interface SocialStore {
   addVoice(v: { id: string; clubId: string; bytes: Uint8Array; mime: string }): Promise<void>
   voice(id: string): Promise<{ bytes: Uint8Array; mime: string; clubId: string } | null>
   messageByVoiceId(voiceId: string): Promise<StoredMessage | null>
+  /** D-44: xStock gifts (one row per confirmed or still-confirming transfer). */
+  createGift(g: Omit<StoredGift, 'createdAt'>): Promise<StoredGift>
+  giftsByIds(ids: string[]): Promise<StoredGift[]>
+  giftsReceived(privyUserId: string, limit: number): Promise<StoredGift[]>
+  giftsSent(privyUserId: string, limit: number): Promise<StoredGift[]>
   findClubByInvite(code: string): Promise<StoredClub | null>
   /** Public clubs plus the caller's own (private ones included), newest first, at most `limit`. */
   listClubs(opts: { privyUserId: string; q?: string; limit: number }): Promise<StoredClub[]>
@@ -192,6 +216,7 @@ export class InMemorySocialStore implements SocialStore {
   private readonly reactionRows: (StoredReaction & { at: Date })[] = []
   private readonly reports = new Set<string>()
   private readonly banRows = new Map<string, StoredBan>()
+  private readonly gifts: StoredGift[] = []
   private readonly voices = new Map<string, { id: string; clubId: string; bytes: Uint8Array; mime: string }>()
   private readonly eventTokens = new Map<string, string>()
   private readonly checkins: { campaignId: string; privyUserId: string; at: Date }[] = []
@@ -258,6 +283,20 @@ export class InMemorySocialStore implements SocialStore {
   async messageByVoiceId(voiceId: string) {
     return this.messages.find((m) => m.voiceId === voiceId) ?? null
   }
+  async createGift(g: Omit<StoredGift, 'createdAt'>) {
+    const stored = { ...g, createdAt: new Date() }
+    this.gifts.push(stored)
+    return { ...stored }
+  }
+  async giftsByIds(ids: string[]) {
+    return this.gifts.filter((g) => ids.includes(g.id))
+  }
+  async giftsReceived(privyUserId: string, limit: number) {
+    return this.gifts.filter((g) => g.recipientPrivyUserId === privyUserId).reverse().slice(0, limit)
+  }
+  async giftsSent(privyUserId: string, limit: number) {
+    return this.gifts.filter((g) => g.senderPrivyUserId === privyUserId).reverse().slice(0, limit)
+  }
   async findClubByInvite(code: string) {
     return [...this.clubs.values()].find((c) => c.inviteCode === code) ?? null
   }
@@ -305,7 +344,7 @@ export class InMemorySocialStore implements SocialStore {
   }
 
   async addMessage(m: NewMessage) {
-    const stored: StoredMessage = { ...m, kind: m.kind ?? 'TEXT', voiceId: m.voiceId ?? null, voiceMs: m.voiceMs ?? null, id: BigInt(this.messages.length + 1), deletedAt: null, createdAt: new Date() }
+    const stored: StoredMessage = { ...m, kind: m.kind ?? 'TEXT', voiceId: m.voiceId ?? null, voiceMs: m.voiceMs ?? null, giftId: m.giftId ?? null, id: BigInt(this.messages.length + 1), deletedAt: null, createdAt: new Date() }
     this.messages.push(stored)
     return { ...stored }
   }
@@ -413,6 +452,11 @@ function toClub(r: { id: string; slug: string; name: string; description: string
   const { rulesJson, ...rest } = r
   return { ...rest, category: r.category as ClubCategory, visibility: r.visibility as ClubVisibility, rules: Array.isArray(rulesJson) ? (rulesJson as QuestGroup[]) : [] }
 }
+const toGift = (r: Omit<StoredGift, 'amountRaw' | 'status'> & { amountRaw: { toFixed(d: number): string }; status: string }): StoredGift => ({
+  ...r,
+  amountRaw: BigInt(r.amountRaw.toFixed(0)),
+  status: r.status === 'CONFIRMED' ? 'CONFIRMED' : 'PENDING',
+})
 const toMember = (r: { clubId: string; privyUserId: string; role: string; publicWallet: string | null; mutedUntil: Date | null; joinedAt: Date }): StoredMember => ({ ...r, role: r.role as ClubRole })
 
 export class PrismaSocialStore implements SocialStore {
@@ -473,6 +517,18 @@ export class PrismaSocialStore implements SocialStore {
   }
   async messageByVoiceId(voiceId: string) {
     return this.prisma.clubMessage.findUnique({ where: { voiceId } })
+  }
+  async createGift(g: Omit<StoredGift, 'createdAt'>) {
+    return toGift(await this.prisma.clubGift.create({ data: { ...g, amountRaw: g.amountRaw.toString() } }))
+  }
+  async giftsByIds(ids: string[]) {
+    return ids.length ? (await this.prisma.clubGift.findMany({ where: { id: { in: ids } } })).map(toGift) : []
+  }
+  async giftsReceived(privyUserId: string, limit: number) {
+    return (await this.prisma.clubGift.findMany({ where: { recipientPrivyUserId: privyUserId }, orderBy: { createdAt: 'desc' }, take: limit })).map(toGift)
+  }
+  async giftsSent(privyUserId: string, limit: number) {
+    return (await this.prisma.clubGift.findMany({ where: { senderPrivyUserId: privyUserId }, orderBy: { createdAt: 'desc' }, take: limit })).map(toGift)
   }
   async findClubByInvite(code: string) {
     const row = await this.prisma.club.findUnique({ where: { inviteCode: code } })
