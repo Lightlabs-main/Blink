@@ -79,7 +79,7 @@ Wording "Community around NVDAx", never official.
 ## Owner decisions (2026-10-05)
 
 Claude builds backend and mobile · keep the D-39 oEmbed X check · build all P0 items · any signed-in user may start
-clubs (rate-limited). Still open: production migration + deploy, and the release APK (each on Maris's go).
+clubs (rate-limited). Deployed 2026-10-05 on Maris's go. Still open: the release APK and an on-device pass.
 
 ## Built 2026-10-05 (D-40, API contract v8)
 
@@ -95,9 +95,13 @@ clubs (rate-limited). Still open: production migration + deploy, and the release
 | Receipts & Activity: new kinds, filters, settled vs completed wording, BLK ref | Implemented |
 | How Blink works: 6 steps + "Private identity. Transparent settlement." | Implemented |
 | "Coming soon" removed from You and Create | Implemented |
-| Seed starter clubs | `scripts/seed-clubs.ts` (not run) |
-| Web pages for `/e/` and `/club/` links | Not done — needs a Caddy rule on the shared VPS |
-| On-device test, release APK | Not done — waiting for Maris |
+| Seed starter clubs | Run on the VPS 2026-10-05: nvda, seeker, skr, ore-miners (0 members) |
+| Web pages for `/e/` and `/club/` links | Live (Caddy rule added after backup + validate; checked in a browser) |
+| Message reports (3 distinct reports hide a message) | Implemented, API + Postgres tests |
+| Tap Rush default 1,000 taps / 2 min (+ "Classic" preset) | Implemented |
+| Prisma code on real Postgres (`social.prisma.test.ts`, scratch DB) | Passed 2026-10-05, scratch DB dropped |
+| Deploy: DB backup, migration, API restart | Done 2026-10-05 (`backups/…-before-clubs.dump`) |
+| On-device test, release APK | Not done — the APK build must be started by Maris |
 
 ## Decisions that were needed from Maris (stop conditions §46)
 
