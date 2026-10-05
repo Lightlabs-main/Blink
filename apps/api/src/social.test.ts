@@ -185,7 +185,10 @@ describe('club drops, event check-in and leaderboard (D-40)', () => {
     // History and passport show the check-in.
     expect((await get('bob', '/v1/me/history')).json().items.some((i: { kind: string }) => i.kind === 'CHECKIN')).toBe(true)
     const passport = (await get('bob', '/v1/me/passport')).json().passport
-    expect(passport).toMatchObject({ checkins: 1, clubs: 1, rewards: 0, squadWins: 0 })
+    expect(passport).toMatchObject({ checkins: 1, clubs: 1, rewards: 0, squadWins: 0, level: 'EXPLORER' })
+    expect(passport.number).toMatch(/^BLK-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/)
+    expect((await get('bob', '/v1/me/passport')).json().passport.number).toBe(passport.number)
+    expect((await get('carol', '/v1/me/passport')).json().passport).toMatchObject({ level: 'NEWCOMER', memberSince: null })
     expect(passport.badges.map((b: { title: string }) => b.title)).toEqual(expect.arrayContaining(['Event check-in', 'First club']))
   })
 })
