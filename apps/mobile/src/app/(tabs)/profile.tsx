@@ -14,15 +14,7 @@ import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork, useProfi
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, networkLabel, shortAddress } from '../../lib/format'
 import { embeddedSolanaAddress, userEmail } from '../../lib/privy-user'
 import { type PushState, registerForPush, unregisterPush } from '../../lib/push'
-import { PRODUCT_COPY } from '../../shared'
-
-/** Announced, not built yet: shown so people know what is coming, never as working features. */
-const SOON: { title: string; body: string; icon: IconName }[] = [
-  { title: 'Squads', body: 'Team up and complete quests together', icon: 'users' },
-  { title: 'Stock Clubs', body: 'Communities around the stocks you hold', icon: 'sparkle' },
-  { title: 'Stock Passport', body: 'One record of every stock you earned', icon: 'shield' },
-  { title: 'QR Event check-in', body: 'Prove you were at the event', icon: 'scan' },
-]
+import { usePassport } from '../passport'
 
 function RowIcon({ icon, tint = color.lime }: { icon: IconName; tint?: string }) {
   return (
@@ -49,6 +41,7 @@ export default function Profile() {
 
   const email = userEmail(user)
   const profile = useProfile()
+  const passport = usePassport()
   const username = profile.data?.profile.username ?? null
   const stockWallet = embeddedSolanaAddress(user)
   const creatorWallets = me.data?.verifiedCreatorWallets ?? []
@@ -142,6 +135,18 @@ export default function Profile() {
         </Row>
       </GlowCard>
 
+      {/* D-40: Passport and Receipts & Activity replace the old "Coming soon" list. */}
+      <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+        <ListRow
+          leading={<RowIcon icon="shield" />}
+          onPress={() => router.push('/passport')}
+          subtitle={passport.data ? `${passport.data.passport.badges.length} stamps · what you did, never what you hold` : 'Your verified participation record'}
+          title="Stock Passport"
+        />
+        <Divider />
+        <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/history')} subtitle="Rewards, check-ins, clubs and sends, each with a receipt" title="Receipts & Activity" />
+      </Card>
+
       <View style={{ gap: space.md }}>
         <SectionHeader title="Wallets" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
@@ -205,13 +210,6 @@ export default function Profile() {
       ) : null}
 
       <View style={{ gap: space.md }}>
-        <SectionHeader title="Activity" />
-        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
-          <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/history')} subtitle="Rewards, sends and drops, each with a receipt" title="History & receipts" />
-        </Card>
-      </View>
-
-      <View style={{ gap: space.md }}>
         <SectionHeader title="SKR" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/skr')} subtitle="Stake, unstake and withdraw · mainnet" title="SKR staking" />
@@ -240,25 +238,13 @@ export default function Profile() {
       <View style={{ gap: space.md }}>
         <SectionHeader title="About" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
-          <ListRow leading={<RowIcon icon="shield" />} onPress={() => router.push('/how')} subtitle="Taking part, your wallet, campaigns and safety" title="How Blink works" />
+          <ListRow leading={<RowIcon icon="sparkle" />} onPress={() => router.push('/how')} subtitle="Join, qualify, complete, receive, keep the receipt" title="How Blink works" />
           {__DEV__ ? (
             <>
               <Divider />
               <ListRow leading={<RowIcon icon="layers" tint={color.textDim} />} onPress={() => router.push('/dev/wallet-lab')} subtitle="Developer wallet tests" title="Wallet lab" />
             </>
           ) : null}
-        </Card>
-      </View>
-
-      <View style={{ gap: space.md }}>
-        <SectionHeader title="Coming soon" />
-        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
-          {SOON.map((item, i) => (
-            <View key={item.title}>
-              {i > 0 ? <Divider /> : null}
-              <ListRow chevron={false} leading={<RowIcon icon={item.icon} tint={color.textMuted} />} subtitle={item.body} title={item.title} trailing={<Badge label="Soon" tone="neutral" />} />
-            </View>
-          ))}
         </Card>
       </View>
 

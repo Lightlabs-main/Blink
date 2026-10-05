@@ -17,10 +17,12 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.bg } }}
       tabBar={(props) => <BlinkTabBar {...props} />}
     >
+      {/* D-40: Home | Clubs | (Scan) | Drops | You. Create stays a route (Home quick action, + in Drops and clubs). */}
       <Tabs.Screen name="home" />
+      <Tabs.Screen name="clubs" />
       <Tabs.Screen name="drops" />
-      <Tabs.Screen name="create" />
       <Tabs.Screen name="profile" />
+      <Tabs.Screen name="create" />
     </Tabs>
   )
 }

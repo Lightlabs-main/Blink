@@ -95,6 +95,11 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
     if (!user || r?.status === 'PASSED') return null
     if (c.verifier === 'TAP_RUSH') return { label: 'Play Tap Rush', icon: 'bolt' as const, go: () => router.push(`/tap-rush/${campaign.id}`) }
     if (c.verifier === 'X_QUEST') return null
+    // D-40: the club is opened by id (the API accepts an id or a slug); joining is free.
+    if (c.verifier === 'CLUB_MEMBER') {
+      return campaign.clubId ? { label: 'Open the club', icon: 'users' as const, go: () => router.push({ pathname: '/club/[slug]', params: { slug: campaign.clubId! } }) } : null
+    }
+    if (c.verifier === 'QR_CHECKIN') return { label: 'Scan the event QR', icon: 'scan' as const, go: () => router.push('/scan') }
     if (c.verifier === 'ORE_ACTIVITY') {
       return r?.status === 'ERROR' || r?.status === 'FAILED' || !r
         ? { label: 'Open ORE to mine', icon: 'arrowUpRight' as const, go: () => void Linking.openURL('https://ore.supply') }
