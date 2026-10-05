@@ -601,7 +601,7 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
   1 week; unmute), remove a member (they can't rejoin until an admin lets them back in — `ClubBan`), pin one message,
   switch the chat to "only admins can send messages" and edit the description. Nobody acts on the owner; only the
   owner acts on admins; nobody acts on themselves. Members are addressed by an opaque per-club id, never the account id.
-  Muted members can only read: no messages, voice notes, reactions or gifts (owner decision 2026-10-05).
+  Muted members can only read: no messages, voice notes, reactions, gifts or reports (owner decision 2026-10-05).
   Non-admins in an admins-only chat can't post but can still react and gift.
 - **Not in this build (owner decision):** paid clubs — one-time and monthly — come after October 8.
 
