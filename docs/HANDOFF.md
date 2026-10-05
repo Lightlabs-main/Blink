@@ -226,7 +226,7 @@ the migration.
 
 - `POST /v1/clubs/:slug/gifts/prepare` `{ to: <member id>, asset: <mint>, amountRaw }` → `{ prepared: { transaction,
   createsRecipientAccount } }`. Errors: 400 `SELF_GIFT` / `UNSUPPORTED_ASSET`, 404, 403 `RECIPIENT_NOT_ELIGIBLE` /
-  `NOT_A_MEMBER` / `MUTED` / `ADMINS_ONLY`, 429, plus the Send errors (`SEND_*`, `NOT_ELIGIBLE`, `PAYOUTS_PAUSED`).
+  `NOT_A_MEMBER`, 429 (muted members and admins-only chats can still gift), plus the Send errors (`SEND_*`, `NOT_ELIGIBLE`, `PAYOUTS_PAUSED`).
 - `POST /v1/clubs/:slug/gifts/submit` `{ signedTransaction }` → `{ gift: { id, signature, status: CONFIRMED | PENDING },
   message: ChatMessage | null }` (409 `EXPIRED`, `TRANSACTION_MISMATCH`, …).
 - `ChatMessage` adds `kind: 'GIFT'`, `gift`, `authorId`. History adds `GIFT_RECEIVED`. `SendService.submit` now also
