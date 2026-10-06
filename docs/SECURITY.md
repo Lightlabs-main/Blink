@@ -7,7 +7,7 @@ require.
 
 ## 1. xStocks compliance
 
-**Status: `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED`.** The eligibility gate is now implemented
+**Status: `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = STAGED` (D-46: eligibility method decided; switch + smoke test pending).** The eligibility gate is now implemented
 (D-20: self-declaration + IP-country cross-check, enforced server-side). Public mainnet distribution
 stays blocked until all of the following are done:
 1. the gate is verified on a device;

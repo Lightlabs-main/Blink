@@ -633,3 +633,12 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
 - **Checking:** "Check my OG status" on the Passport (3 checks / 10 min). Stored on `Profile.og` + `ogCheckedAt`. A mark
   that can't be read right now keeps its previous value, so an RPC failure never removes it; marks are removed only when
   a successful read says no. Not re-checked automatically. SKR stake reads need a dedicated mainnet RPC (OQ-6).
+
+## D-46 — Mainnet launch decisions (2026-10-06, Maris)
+
+- **xStocks eligibility (OQ-9):** self-declaration (country + not a U.S. person + attestations) with the offline
+  IP-country cross-check, enforced on mainnet. No KYC provider for launch.
+- **Issuer-control disclosure (OQ-5):** the shipped wording (`PRODUCT_COPY.issuerControlStatement`) is approved.
+- **Budget:** `MAINNET_BUDGET_LAMPORTS=20000000` (0.02 SOL ≈ 12 new recipients; hard ceiling stays 0.10 SOL).
+- **Timing:** mainnet is staged, not switched. The server stays on devnet until Maris finishes devnet testing and says
+  go; then `bash scripts/switch-network.sh mainnet` (validated config, backups, health check, automatic rollback).
