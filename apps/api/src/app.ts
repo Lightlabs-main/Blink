@@ -709,6 +709,39 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return { campaign: toSummary(live.campaign), verified: live.verified }
   })
 
+  // ---- W-1: creator wind-down — revoke Blink, return unused stock, close the campaign account (creator signs) ----
+
+  const CLOSABLE = ['LIVE', 'PAUSED', 'ENDED', 'AWAITING_FUNDING', 'AWAITING_DELEGATION'] as const
+
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/close/prepare', async (req) => {
+    const funding = requireFunding()
+    if (!funding.prepareClose) throw new FundingRequestError('CLOSE_UNAVAILABLE', 'closing drops is not available right now', 503)
+    let c = await requireOwnCampaign(req)
+    if (!(CLOSABLE as readonly string[]).includes(c.status)) throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
+    // Closing ends the drop first, so no new reward can be reserved (reservations need LIVE, checked atomically).
+    if (c.status === 'LIVE' || c.status === 'PAUSED') c = (await deps.campaigns.transitionStatus(c.id, c.status, 'ENDED')) ?? c
+    // Never pull the stock from under a reward that is still being sent.
+    const inFlight = deps.claims ? (await deps.claims.listUnsettled(new Date(Date.now() + 60_000), 1000)).filter((x) => x.campaignId === c.id) : []
+    if (inFlight.length) throw new FundingRequestError('PAYOUTS_IN_FLIGHT', 'a reward from this drop is still being sent — try again in a minute', 409)
+    return { campaign: toSummary(c), prepared: await funding.prepareClose(c) }
+  })
+
+  app.post<{ Params: { id: string } }>('/v1/campaigns/:id/close/submit', async (req, reply) => {
+    const funding = requireFunding()
+    if (!funding.submitClose) throw new FundingRequestError('CLOSE_UNAVAILABLE', 'closing drops is not available right now', 503)
+    const c = await requireOwnCampaign(req)
+    if (!(CLOSABLE as readonly string[]).includes(c.status)) throw new FundingRequestError('WRONG_STATUS', `campaign is ${c.status}`, 409)
+    const parsed = submitFundingRequest.safeParse(req.body)
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
+    const { signature, closed } = await funding.submitClose(c, parsed.data.signedTransaction)
+    let after = c
+    if (closed) {
+      const from = c.status === 'LIVE' || c.status === 'PAUSED' ? (await deps.campaigns.transitionStatus(c.id, c.status, 'ENDED'))?.status ?? c.status : c.status
+      after = (await deps.campaigns.transitionStatus(c.id, from, 'CLOSED')) ?? c
+    }
+    return { signature, closed, campaign: toSummary(after) }
+  })
+
   async function goLiveIfVerified(funding: FundingService, c: StoredCampaign) {
     const { live, status } = await funding.verify(c)
     if (!live) {

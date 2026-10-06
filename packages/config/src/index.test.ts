@@ -60,19 +60,21 @@ describe('assertMainnetSpendAllowed', () => {
 })
 
 describe('checkBudget', () => {
+  // 0.02 SOL budget → 0.015 SOL committable; 25 % (0.005 SOL) always stays as a buffer (W-3).
   const state = {
     spentLamports: 10_000_000n,
-    reservedLamports: 5_000_000n,
-    estimatedNextOperationLamports: 5_000_000n,
+    reservedLamports: 2_500_000n,
+    estimatedNextOperationLamports: 2_500_000n,
     configuredBudgetLamports: 20_000_000n,
   }
 
-  it('allows an operation landing exactly on the budget', () => {
-    expect(checkBudget(state)).toEqual({ allowed: true, projectedLamports: 20_000_000n, remainingAfterLamports: 0n })
+  it('allows an operation landing exactly on 75 % of the budget', () => {
+    expect(checkBudget(state)).toEqual({ allowed: true, projectedLamports: 15_000_000n, remainingAfterLamports: 0n })
   })
 
-  it('blocks an operation one lamport over budget', () => {
-    expect(checkBudget({ ...state, estimatedNextOperationLamports: 5_000_001n }).allowed).toBe(false)
+  it('blocks an operation that would eat into the 25 % safety buffer', () => {
+    expect(checkBudget({ ...state, estimatedNextOperationLamports: 2_500_001n }).allowed).toBe(false)
+    expect(checkBudget({ ...state, estimatedNextOperationLamports: 7_500_000n }).allowed).toBe(false)
   })
 
   it('never allows more than the hard ceiling even if configured higher', () => {

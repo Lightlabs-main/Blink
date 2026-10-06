@@ -145,3 +145,21 @@ describe('evaluateDelegation', () => {
     expect(s.distributable).toBe(0n)
   })
 })
+
+describe('multiplierUpdateInProgress (W-2, xStocks 15-minute window)', () => {
+  const cfg = (ts: bigint) => ({ multiplier: 1, newMultiplier: 1.01, newMultiplierEffectiveTimestamp: ts })
+  it('is true from 15 minutes before to 15 minutes after an activation', async () => {
+    const { multiplierUpdateInProgress } = await import('./mint.ts')
+    const t = 1_800_000_000n
+    expect(multiplierUpdateInProgress(cfg(t), t - 901n)).toBe(false)
+    expect(multiplierUpdateInProgress(cfg(t), t - 900n)).toBe(true)
+    expect(multiplierUpdateInProgress(cfg(t), t)).toBe(true)
+    expect(multiplierUpdateInProgress(cfg(t), t + 900n)).toBe(true)
+    expect(multiplierUpdateInProgress(cfg(t), t + 901n)).toBe(false)
+  })
+  it('is false without a scheduled activation or Scaled UI', async () => {
+    const { multiplierUpdateInProgress } = await import('./mint.ts')
+    expect(multiplierUpdateInProgress(cfg(0n), 1_800_000_000n)).toBe(false)
+    expect(multiplierUpdateInProgress(null, 1_800_000_000n)).toBe(false)
+  })
+})

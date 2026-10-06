@@ -102,6 +102,18 @@ export async function inspectMint(rpc: Rpc<GetAccountInfoApi>, mint: Address): P
  * `if (timestamp >= newMultiplierEffectiveTimestamp) multiplier = newMultiplier`.
  * Callers must pass the cluster Clock timestamp, not the device clock.
  */
+/**
+ * Pre-mainnet gate W-2 (xStocks guidance, docs.xstocks.fi/developers/multipliers): pause interactions for a brief window
+ * (15 min) before and after each multiplier activation. True when `nowUnix` is within `windowSeconds` of a set
+ * activation timestamp. Raw transfer amounts are unaffected; this avoids moving stock while displays and books update.
+ */
+export const MULTIPLIER_UPDATE_WINDOW_SECONDS = 900n
+export function multiplierUpdateInProgress(config: ScaledUiConfig | null, nowUnix: bigint, windowSeconds = MULTIPLIER_UPDATE_WINDOW_SECONDS): boolean {
+  if (!config || config.newMultiplierEffectiveTimestamp <= 0n) return false
+  const d = nowUnix - config.newMultiplierEffectiveTimestamp
+  return d >= -windowSeconds && d <= windowSeconds
+}
+
 export function effectiveScaledUiMultiplier(config: ScaledUiConfig, clusterUnixTimestamp: bigint): number {
   return clusterUnixTimestamp >= config.newMultiplierEffectiveTimestamp ? config.newMultiplier : config.multiplier
 }

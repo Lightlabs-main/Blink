@@ -23,12 +23,12 @@ import {
   TOKEN_2022_PROGRAM_ADDRESS,
 } from '@solana-program/token-2022'
 
-import { inspectMint, mintTransferBlockers } from './mint.ts'
+import { inspectMint, mintTransferBlockers, multiplierUpdateInProgress } from './mint.ts'
 import { estimateCampaignAccountRent } from './rent.ts'
 
 type PayoutRpc = Rpc<GetAccountInfoApi & GetLatestBlockhashApi & GetMinimumBalanceForRentExemptionApi & SimulateTransactionApi>
 
-export type PayoutErrorCode = 'MINT_BLOCKED' | 'MINT_DECIMALS_MISMATCH' | 'RECIPIENT_ACCOUNT_FROZEN' | 'SIMULATION_FAILED'
+export type PayoutErrorCode = 'ASSET_UPDATING' | 'MINT_BLOCKED' | 'MINT_DECIMALS_MISMATCH' | 'RECIPIENT_ACCOUNT_FROZEN' | 'SIMULATION_FAILED'
 
 export class PayoutError extends Error {
   override name = 'PayoutError'
@@ -82,6 +82,9 @@ export async function buildPayoutTransaction(
   }
   const blockers = mintTransferBlockers(mint)
   if (blockers.length) throw new PayoutError('MINT_BLOCKED', `stock cannot be transferred right now: ${blockers.join(', ')}`)
+  if (multiplierUpdateInProgress(mint.scaledUi, BigInt(Math.floor(Date.now() / 1000)))) {
+    throw new PayoutError('ASSET_UPDATING', 'this stock is applying a corporate action; payouts resume in a few minutes')
+  }
 
   const [recipientAta] = await findAssociatedTokenPda({ owner: input.recipient, mint: input.mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS })
   const existing = await fetchMaybeToken(rpc, recipientAta, { commitment: 'confirmed' })
