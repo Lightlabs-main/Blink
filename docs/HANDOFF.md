@@ -237,3 +237,20 @@ the migration.
 - `POST /v1/me/og` → `{ profile: { username, avatarUrl, og: OgType[], ogCheckedAt }, unknown: OgType[] }` (429 after 3 in
   10 minutes; 503 without the quest service). `GET /v1/me/profile` also returns `og` and `ogCheckedAt`.
 - `PublicParticipant.og?: ('ORE' | 'SEEKER' | 'SKR')[]` everywhere people are shown. Migration `20261005210000_profile_og`.
+
+## Pre-mainnet gate follow-ups (2026-10-07, from MAINNET_GO_NO_GO.md — NO-GO)
+
+Backend items (Codex-owned areas; Claude may take them if Maris asks):
+- **W-1 Creator wind-down:** build an unsigned creator transaction (MWA) that revokes the campaign delegate, transfers the
+  unused balance from the auxiliary account back to the creator's ATA and closes the auxiliary account (rent back to the
+  creator); mark the campaign CLOSED. Needed for smoke-test steps 33–36 and for creators to get unused stock back.
+- **W-2 Corporate-action window:** before each payout read `newMultiplier` / `newMultiplierEffectiveTimestamp`; if an
+  activation is within ±15 min, refuse with a retryable `ASSET_UPDATING` (xStocks guidance), without pausing the campaign.
+- **W-3 Budget buffer:** keep ≥ 25 % of `MAINNET_BUDGET_LAMPORTS` uncommitted (reject operations that would cross 75 %).
+- **W-4 Load liveness:** under high latency, 20 concurrent claims hit Prisma's interactive-transaction timeout (safe, no
+  overpay). Consider a single-statement reservation or a higher `timeout`, and retry on transaction timeouts.
+- **W-5 Late gift confirmations:** sweep PENDING gifts and post them once confirmed.
+- Remove or add `scripts/verify-delegation.ts` and `scripts/estimate-rent.ts` (listed in package.json, files missing).
+
+Mobile items (Claude): rebuild with `a06d8f7` (camera/microphone) + `ab3977d` + `89cbeb6`; run the device plan in
+MOBILE_STACK_VERIFICATION.md (MWA reject / cancel / disconnect, Phantom and Solflare, Seed Vault if a Seeker is available).

@@ -232,3 +232,16 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
   block those permissions app-wide. The QR scanner can't open the camera and voice notes can't record. Fixed in
   `a06d8f7` (options removed; `expo config --type introspect` now lists CAMERA and RECORD_AUDIO and the `/c/`, `/e/`,
   `/club/` App Links). Needs the next build.
+
+## Pre-mainnet verification evidence (2026-10-07)
+
+| Item | Value | Source / method | Status |
+|---|---|---|---|
+| NVDAx / TSLAx / AAPLx / SPYx mints | `Xsc9qv…qEh`, `XsDoVf…zoB`, `XsbEhL…zJp`, `XsoCS1…F2W` | api.xstocks.fi `/api/v2/public/assets/{SYMBOL}` (Solana deployment) + onchain (Helius mainnet, `scripts/inspect-xstock.ts`) | VERIFIED |
+| xStock mint state | Token-2022, decimals 8, not paused, TransferHook without program, DefaultAccountState Initialized, PermanentDelegate | onchain | VERIFIED |
+| Multipliers | NVDAx 1.001701, TSLAx 1, AAPLx 1.003269, SPYx 1.005715 (last activations 2026-06 to 2026-09); no pending change | onchain + api.xstocks.fi `/multiplier?network=Solana` | VERIFIED |
+| Campaign account | 175 bytes, 1,539,240 lamports | Token-2022 GetAccountDataSize simulation (read-only) | VERIFIED |
+| SKR mint / staking program / stake config | `SKRbvo6G…hW3` / `SKRskrmt…4BZ` / `4HQy82s9…yqw` | docs.solanamobile.com/solana-mobile-stack/skr | VERIFIED (matches code) |
+| Devnet payout e2e | funding `2p8t7cnp…`, payouts `4W6SPeVn…`, `53xKvVnb…`, allowance 250000 → 50000 | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
+| Devnet send e2e | `2H5CLK4e…` (0-SOL sender, Blink paid fee + rent) | `scripts/devnet-send-e2e.ts` | VERIFIED (devnet) |
+| Postgres concurrency | 20 parallel claims → 5/5; double tap → 1 claim | `apps/api/src/claims.prisma.test.ts` on the server | VERIFIED |
