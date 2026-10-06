@@ -24,7 +24,7 @@
 
 See SPIKES.md SPIKE-1, "Security caveat". The recommendation is option A for the hackathon.
 
-## OQ-5 — PermanentDelegate disclosure — NEEDS_OWNER_DECISION
+## OQ-5 — PermanentDelegate disclosure — RESOLVED 2026-10-06 (D-46: shipped wording approved)
 
 Every supported xStock has a PermanentDelegate (the issuer), so the issuer can move tokens out of
 campaign accounts and recipient accounts. A DRAFT disclosure is in place
@@ -53,7 +53,7 @@ an existing holder account.
 §25 requires a random, short-lived, single-use nonce and exact payload verification. Privy performs
 SIWS verification, but we haven't found documentation of its nonce expiry and single-use semantics.
 
-## OQ-9 — xStocks eligibility method — NEEDS_OWNER_DECISION (2026-10-01)
+## OQ-9 — xStocks eligibility method — RESOLVED 2026-10-06 (D-46: self-declaration + IP-country check)
 
 How should Blink establish that a recipient or creator may receive xStocks? Options include
 self-declaration + attestation, an IP-country cross-check, or a KYC provider. Minimum data applies.
