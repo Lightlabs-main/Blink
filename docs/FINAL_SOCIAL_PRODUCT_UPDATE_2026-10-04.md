@@ -101,7 +101,14 @@ clubs (rate-limited). Deployed 2026-10-05 on Maris's go. Still open: the release
 | Tap Rush default 1,000 taps / 2 min (+ "Classic" preset) | Implemented |
 | Prisma code on real Postgres (`social.prisma.test.ts`, scratch DB) | Passed 2026-10-05, scratch DB dropped |
 | Deploy: DB backup, migration, API restart | Done 2026-10-05 (`backups/…-before-clubs.dump`) |
-| On-device test, release APK | Not done — the APK build must be started by Maris |
+| Club join rules (Seeker / SKR / ORE, custom minimums) + members-only drops (D-41) | Implemented, API + Postgres tests, deployed |
+| Passport ID card + share image (D-42) | Implemented |
+| Voice notes, admins, mute, remove, admins-only chat, pin (D-43) | Implemented, API + Postgres tests, deployed |
+| xStock gifts in chat (D-44) | Implemented, API + Postgres tests, deployed; not yet run between two phones |
+| OG marks (D-45) | Implemented, API + Postgres tests, deployed; mainnet reads via Helius |
+| Mainnet staged (D-46) | Settings validated, fee payer created; switch after devnet testing |
+| Release APK `c5dc737a` | Hosted; **camera and microphone permissions missing** (image-picker config) — fixed in `a06d8f7`, needs a rebuild |
+| Recheck 2026-10-06 | Git in sync (local = GitHub = server), 187 tests, typechecks, lint, Postgres run, 16/16 migrations, all routes, website, App Links, backups made private |
 
 ## Decisions that were needed from Maris (stop conditions §46)
 

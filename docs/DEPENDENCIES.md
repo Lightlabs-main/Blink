@@ -226,3 +226,9 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
   `716d6b245b90863103fbabe966c2f7338faeb3fce3579aaeddd4d298178e4b60`); the previous APK is kept beside it.
 - **Signing:** same EAS keystore as build #4 (App Links certificate unchanged).
 - **Not yet verified on a device.**
+
+- **Known defect (found 2026-10-06 in the recheck):** build `c5dc737a…` has no CAMERA or RECORD_AUDIO permission: the
+  `expo-image-picker` options `cameraPermission: false` / `microphonePermission: false` (added with D-37 on 2026-10-04)
+  block those permissions app-wide. The QR scanner can't open the camera and voice notes can't record. Fixed in
+  `a06d8f7` (options removed; `expo config --type introspect` now lists CAMERA and RECORD_AUDIO and the `/c/`, `/e/`,
+  `/club/` App Links). Needs the next build.
