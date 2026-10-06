@@ -256,6 +256,13 @@ export function ClubChat({
         <View style={styles.center}>
           <ActivityIndicator color={color.text} />
         </View>
+      ) : messages.length === 0 ? (
+        <View style={styles.center}>
+          <Icon name="chat" size={28} stroke={color.textMuted} />
+          <T align="center" variant="label">
+            No messages yet. Say hi 👋
+          </T>
+        </View>
       ) : (
         <FlatList
           contentContainerStyle={{ paddingVertical: space.md, gap: space.md }}
@@ -263,14 +270,6 @@ export function ClubChat({
           inverted
           keyExtractor={(m) => m.id}
           keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={[styles.center, { transform: [{ scaleY: -1 }] }]}>
-              <Icon name="chat" size={28} stroke={color.textMuted} />
-              <T align="center" variant="label">
-                No messages yet. Say hi 👋
-              </T>
-            </View>
-          }
           ListFooterComponent={
             older === 'loading' ? <ActivityIndicator color={color.textMuted} /> : older === 'idle' && messages.length ? (
               <Pressable onPress={() => void loadOlder()} style={{ alignSelf: 'center', padding: space.sm }}>
