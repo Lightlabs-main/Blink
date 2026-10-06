@@ -8,7 +8,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native'
 
 import { font } from '../../design/fonts'
 import { Icon } from '../../design/icons'
@@ -115,7 +115,10 @@ export function VoiceRecorder({ onSend, onClose, sending }: { onSend: (audio: st
     void (async () => {
       try {
         const perm = await requestRecordingPermissionsAsync()
-        if (!perm.granted) throw new Error('Allow the microphone to send voice notes (Settings → Apps → Blink).')
+        if (!perm.granted) {
+          if (!perm.canAskAgain) void Linking.openSettings()
+          throw new Error('Allow the microphone to send voice notes: Settings → Apps → Blink → Permissions → Microphone.')
+        }
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
         await recorder.prepareToRecordAsync()
         if (!alive) return

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Linking, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Icon } from '../design/icons'
@@ -56,7 +56,11 @@ function Scanner({ camera }: { camera: CameraModule }) {
           action="Allow camera"
           body="Blink uses the camera only to scan campaign QR codes. Nothing is recorded or uploaded."
           icon="scan"
-          onAction={() => void requestPermission()}
+          onAction={() => {
+            // Android stops showing the prompt after a refusal: send people to the app's settings instead.
+            if (permission.canAskAgain) void requestPermission()
+            else void Linking.openSettings()
+          }}
           title="Camera access"
         />
       </Screen>
