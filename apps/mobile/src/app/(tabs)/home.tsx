@@ -143,7 +143,13 @@ export default function Home() {
                 <StockAvatar isTest={p.asset.isTest} logo={p.asset.logo} size={34} symbol={p.asset.symbol} />
                 <View>
                   <T variant="bodyStrong">{p.asset.symbol}</T>
-                  <T variant="caption">{p.kinds.includes('creator') ? 'Creator wallet' : 'Stock wallet'}</T>
+                  <T variant="caption">
+                    {p.inDrops > 0n
+                      ? `${p.inDropsShares ?? 'Some'} in your drops · ${displayShares(p.asset, p.raw - p.inDrops) ?? '—'} free`
+                      : p.kinds.includes('creator')
+                        ? 'Creator wallet'
+                        : 'Stock wallet'}
+                  </T>
                 </View>
               </Row>
               <T variant="numeric" style={{ fontSize: 17 }}>

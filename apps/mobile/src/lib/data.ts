@@ -61,12 +61,19 @@ export interface Position {
   shares: string | null
   /** Which of the user's wallets hold it. */
   kinds: ('stock' | 'creator')[]
+  /**
+   * Part of `raw` sitting in the user's own funded drops (campaign accounts their creator wallet owns, not yet claimed).
+   * Wallet apps count it in the wallet's total; Blink can hand out exactly this much.
+   */
+  inDrops: bigint
+  inDropsShares: string | null
 }
 
 /** Non-zero positions across the user's stock (embedded) wallet and creator wallets. */
 export function usePositions() {
   const holdings = useHoldings()
   const assets = useAssets()
+  const mine = useMyCampaigns()
   const positions = useMemo<Position[]>(() => {
     const list = assets.data?.xstocks ?? []
     const out: Position[] = []
@@ -80,9 +87,17 @@ export function usePositions() {
           kinds.add(w.kind)
         }
       }
-      if (raw > 0n) out.push({ asset, raw, shares: displayShares(asset, raw), kinds: [...kinds] })
+      // Stock still in the user's funded drops (funded, not closed): allowance minus what was reserved or paid.
+      let inDrops = 0n
+      for (const c of mine.data?.campaigns ?? []) {
+        if (c.mint !== asset.mint || !['AWAITING_DELEGATION', 'LIVE', 'PAUSED', 'ENDED'].includes(c.status)) continue
+        const left = BigInt(c.allowanceRaw) - BigInt(c.claimedRaw)
+        if (left > 0n) inDrops += left
+      }
+      if (inDrops > raw) inDrops = raw
+      if (raw > 0n) out.push({ asset, raw, shares: displayShares(asset, raw), kinds: [...kinds], inDrops, inDropsShares: inDrops > 0n ? displayShares(asset, inDrops) : null })
     }
     return out
-  }, [holdings.data, assets.data])
+  }, [holdings.data, assets.data, mine.data])
   return { positions, isLoading: holdings.isPending || assets.isPending, available: holdings.data?.available ?? false, error: holdings.error }
 }
