@@ -96,9 +96,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Blink uses a photo you choose as your profile picture.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "photosPermission": "Blink uses a photo you choose as your profile picture."
         }
       ]
     ],
