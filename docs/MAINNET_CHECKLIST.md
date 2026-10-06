@@ -11,13 +11,13 @@ MOBILE_STACK_VERIFICATION.md. Plan: MAINNET_SMOKE_TEST.md. Section numbers follo
 | 5 | SKR | VERIFIED (addresses, reads, gating) · ASSUMPTION (prize wording) | Official docs match code; Helius stake reads work. No SKR-native social utility built. |
 | 6 | ORE | VERIFIED (campaign-bound mining verifier) · ASSUMPTION (prize criteria) | D-33 layout checked onchain; OG "ever mined" is a badge, never a payout condition. |
 | 7 | xStocks token standard | VERIFIED | 4 mints match api.xstocks.fi; onchain extensions, decimals 8, campaign account 175 bytes / 1,539,240 lamports, recipient ≤ 179 bytes. |
-| 8 | Corporate-action safety | **FAILED** | No ±15-min activation-window pause (xStocks guidance). HANDOFF W-2. |
+| 8 | Corporate-action safety | VERIFIED (fixed W-2) | ±15-min activation window refuses payouts/sends/gifts with retryable `ASSET_UPDATING`; drop stays live. Unit tests. |
 | 9 | Compliance | **NEEDS_OWNER_DECISION** · `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED` | Self-declaration + IP check enforced for creator funding, claim, Tap Rush start, Send, Gift (sender live check, recipient stored check). Legal sufficiency unverified; Send to an external address cannot check the recipient. |
 | 10 | Creator-owned treasury | VERIFIED (devnet) | e2e + on-device funding; account owned by the creator, never the ATA, exact delegated amount. |
 | 11 | Account derivation | VERIFIED | CreateAccountWithSeed, 32-char seed from the campaign UUID, re-derived server-side, pre-creation existence check (`409 DERIVED_ACCOUNT_EXISTS`), client-supplied accounts refused (tests). |
 | 12 | Delegate security | VERIFIED · NEEDS_OWNER_DECISION (OQ-4) | Per-campaign Privy delegate; native allowance is the cap. Privy app-secret blast radius still open. |
 | 13 | Fee payer | VERIFIED (devnet) | Separate per-cluster Privy server wallet, no token authority, monitored; mainnet one created, unfunded. |
-| 14 | Cost / rent | VERIFIED (numbers) · **FAILED** (25 % buffer not enforced) | 0.02 SOL ≈ 12 new recipients; with a 25 % buffer ≈ 9. HANDOFF W-3. |
+| 14 | Cost / rent | VERIFIED (fixed W-3) | 0.02 SOL budget; at most 75 % committed (≈ 9 new recipients); 25 % buffer enforced in `checkBudget` (tests). |
 | 15 | Payout pipeline | VERIFIED (devnet) · BLOCKED (mainnet simulate) | devnet-claim-e2e PASSED 2026-10-07; every payout simulates before signing; signature persisted before send; SENDING ≠ PAID. |
 | 16 | Idempotency | VERIFIED | Unit tests + Postgres double-tap test (one claim). |
 | 17 | Solvency | VERIFIED · ASSUMPTION (heavy-load liveness) | Postgres 20-way concurrency: exactly 5 of 5. Timeouts under high latency fail safe. |

@@ -23,12 +23,10 @@ recipient, one campaign, about $0.50–$1.
 | 27–29 | Recipient balance, campaign balance, allowance decreased exactly | explorer + `GET /v1/campaigns/:id` (claimedRaw) + onchain account read | Ready |
 | 30–31 | Blink receipt, explorer link on mainnet | App → Receipts & Activity | Ready |
 | 32 | Pause the campaign | Kill switch (`PAYOUTS_ENABLED=false`) or owner pause | Global only — no per-campaign pause button |
-| 33 | Revoke the delegate | **No Blink tooling** (creator wallet must support revoke for a non-ATA account) | **BLOCKED** |
-| 34 | Return unused stock | **No Blink tooling** | **BLOCKED** |
-| 35–36 | Close the auxiliary account, recover rent | **No Blink tooling** | **BLOCKED** |
+| 33–36 | Revoke the delegate, return unused stock, close the auxiliary account, recover rent | App: creator's drop → **Close drop** (one wallet approval; `POST /v1/campaigns/:id/close/prepare` → sign → `/close/submit`) | Ready (devnet e2e PASSED) |
 | 37 | Record everything here | — | — |
 
-Steps 33–36 need a creator wind-down action (HANDOFF item W-1) before the smoke test can complete.
+Steps 33–36 use the creator wind-down (W-1). devnet e2e 2026-10-07: close `4Bz9tGjd…` returned 50000 raw, account deleted, 1,534,240 lamports net back to the creator; wallet-tampered close refused (`TRANSACTION_MISMATCH`).
 
 ## Script reference
 
