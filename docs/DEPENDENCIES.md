@@ -244,4 +244,5 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
 | SKR mint / staking program / stake config | `SKRbvo6G…hW3` / `SKRskrmt…4BZ` / `4HQy82s9…yqw` | docs.solanamobile.com/solana-mobile-stack/skr | VERIFIED (matches code) |
 | Devnet payout e2e | funding `2p8t7cnp…`, payouts `4W6SPeVn…`, `53xKvVnb…`, allowance 250000 → 50000 | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
 | Devnet send e2e | `2H5CLK4e…` (0-SOL sender, Blink paid fee + rent) | `scripts/devnet-send-e2e.ts` | VERIFIED (devnet) |
+| Devnet creator wind-down (W-1) | close `4Bz9tGjd…`: delegate revoked, 50000 raw returned, account closed, 1,534,240 lamports net refunded | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
 | Postgres concurrency | 20 parallel claims → 5/5; double tap → 1 claim | `apps/api/src/claims.prisma.test.ts` on the server | VERIFIED |

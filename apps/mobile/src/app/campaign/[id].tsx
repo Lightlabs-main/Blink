@@ -12,6 +12,7 @@ import { ClaimPanel, sentence } from '../../features/campaign/claim-panel'
 import { LiveRoom } from '../../features/campaign/live-room'
 import { QuestPanel } from '../../features/campaign/quest-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
+import { CloseCampaign } from '../../features/campaign/close-campaign'
 import { EventQrCard } from '../../features/campaign/event-qr'
 import { SquadPanel } from '../../features/campaign/squad-panel'
 import { api, ApiError } from '../../lib/api'
@@ -185,6 +186,9 @@ export default function CampaignScreen() {
           </T>
         </Card>
       ) : null}
+
+      {/* W-1: the creator can end the drop and take the unused stock back. */}
+      {isCreator && ['LIVE', 'PAUSED', 'ENDED', 'AWAITING_DELEGATION'].includes(c.status) ? <CloseCampaign asset={asset} campaign={c} /> : null}
 
       <Card style={{ alignItems: 'center', gap: space.lg }}>
         <View style={{ alignSelf: 'stretch', gap: 2 }}>

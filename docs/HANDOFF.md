@@ -241,12 +241,18 @@ the migration.
 ## Pre-mainnet gate follow-ups (2026-10-07, from MAINNET_GO_NO_GO.md — NO-GO)
 
 Backend items (Codex-owned areas; Claude may take them if Maris asks):
-- **W-1 Creator wind-down:** build an unsigned creator transaction (MWA) that revokes the campaign delegate, transfers the
-  unused balance from the auxiliary account back to the creator's ATA and closes the auxiliary account (rent back to the
-  creator); mark the campaign CLOSED. Needed for smoke-test steps 33–36 and for creators to get unused stock back.
-- **W-2 Corporate-action window:** before each payout read `newMultiplier` / `newMultiplierEffectiveTimestamp`; if an
-  activation is within ±15 min, refuse with a retryable `ASSET_UPDATING` (xStocks guidance), without pausing the campaign.
-- **W-3 Budget buffer:** keep ≥ 25 % of `MAINNET_BUDGET_LAMPORTS` uncommitted (reject operations that would cross 75 %).
+- **W-1 Creator wind-down — DONE (Claude, 2026-10-07).** `buildCloseCampaignTransaction` (packages/solana) builds one
+  creator-signed transaction: Revoke (if a delegate is set) → create the creator's ATA idempotently + TransferChecked of
+  the whole balance → CloseAccount (rent to the creator); simulated before it is returned. API (creator only):
+  `POST /v1/campaigns/:id/close/prepare` → `{ campaign, prepared: { transaction, minContextSlot, summary: {
+  campaignAccount, returnRaw, rentLamports, revokesDelegate } } }` — ends a LIVE/PAUSED drop first; `409
+  PAYOUTS_IN_FLIGHT` while a claim is unsettled; errors `CLOSE_ACCOUNT_MISSING | CLOSE_WRONG_OWNER | CLOSE_WRONG_MINT |
+  CLOSE_FROZEN | CLOSE_MINT_BLOCKED | CLOSE_SIMULATION_FAILED`. `POST /v1/campaigns/:id/close/submit` `{ signedTransaction
+  }` → `{ signature, closed, campaign }` (same byte-for-byte message check as funding; CLOSED once the account is gone).
+  Mobile: `features/campaign/close-campaign.tsx` ("Close drop" for the creator). Devnet e2e PASSED.
+- **W-2 Corporate-action window — DONE.** Within ±15 min of `newMultiplierEffectiveTimestamp`, payouts, sends and gifts
+  return `503 ASSET_UPDATING` (retryable; the claim is released, the drop stays live).
+- **W-3 Budget buffer — DONE.** `checkBudget` commits at most 75 % of the budget (`MAINNET_SAFETY_BUFFER_PERCENT = 25n`).
 - **W-4 Load liveness:** under high latency, 20 concurrent claims hit Prisma's interactive-transaction timeout (safe, no
   overpay). Consider a single-statement reservation or a higher `timeout`, and retry on transaction timeouts.
 - **W-5 Late gift confirmations:** sweep PENDING gifts and post them once confirmed.

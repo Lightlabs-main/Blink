@@ -5,7 +5,9 @@ write was made; no mainnet SOL, xStock, SKR or ORE was moved).
 
 ## MAINNET STATUS: **NO-GO**
 
-Seven critical gates are not VERIFIED (below). Each has a concrete path to closure; none needs a redesign.
+Seven critical gates were not VERIFIED at the audit. Update 2026-10-07: the three code gaps (corporate-action guard, budget
+buffer, creator wind-down) are fixed and verified; still open: Android build + device test, MWA edge cases, mainnet
+simulation, compliance sufficiency, controlled recipient. Status stays **NO-GO** until those close.
 
 ## Critical gates
 
@@ -17,27 +19,27 @@ Seven critical gates are not VERIFIED (below). Each has a concrete path to closu
 | Network separation | VERIFIED | Config guards (`loadEnv` tests: mainnet needs `MAINNET_ENABLED`, GO flag needs it, budget ceiling, compliance must be `enforce` on mainnet); `.env.mainnet` / `.env.devnet` validated by `scripts/check-env.ts`; per-cluster fee payer role (`fee-payer-devnet` vs `fee-payer-mainnet-beta`); every campaign stores `cluster`, claims/funding refuse `WRONG_NETWORK`; asset registry per cluster (`assetsForCluster`); mainnet readers check the genesis hash. |
 | Target xStock mint / extensions | VERIFIED | NVDAx/TSLAx/AAPLx/SPYx mints match api.xstocks.fi (2026-10-07); onchain via Helius mainnet: Token-2022, 8 decimals, not paused, `TransferHook` with no program, `DefaultAccountState` Initialized, PermanentDelegate present (disclosed, OQ-5), multipliers' last activation in the past and equal to the API's current multiplier. |
 | Raw / scaled amounts | VERIFIED | Transfers use `rewardPerClaimRaw` / raw u64 (bigint) end to end; display uses the multiplier (`rawToUiShares`, xstocks package tests). Devnet e2e paid exactly 100000 raw per recipient. |
-| Corporate-action guard | **FAILED** | xStocks guidance: pause ~15 min around a multiplier activation. Blink reads `newMultiplier` / timestamp but has no activation-window pause before payouts. Raw payouts are unaffected, but the guidance is not implemented. |
+| Corporate-action guard | VERIFIED (fixed W-2) | Payouts, sends and gifts refuse with a retryable `ASSET_UPDATING` (HTTP 503) within ±15 min of a set `newMultiplierEffectiveTimestamp`; the claim is released and the drop stays live (`multiplierUpdateInProgress`, unit tests). |
 | Campaign treasury | VERIFIED (devnet) | `devnet-claim-e2e` 2026-10-07: creator-owned auxiliary Token-2022 account (CreateAccountWithSeed, server-derived), exact allowance to a per-campaign delegate, wallet-tampered funding refused (`TRANSACTION_MISMATCH`), funding `2p8t7cnp…` verified onchain. Real creator funding on device (2026-10-05) left 20 + 10 tNVDAx in two creator-owned accounts with exactly matching delegated amounts. |
 | Delegate cap | VERIFIED (devnet) | Per-campaign Privy delegate; native Token-2022 allowance decreased exactly (e2e: 50000 left of 250000 after two 100000 payouts); third claim refused before signing. Max loss on delegate compromise = that campaign's remaining allowance. |
 | Payout simulation (mainnet target) | **BLOCKED** | Simulation passes on devnet (every payout simulates first). A mainnet simulation needs a funded mainnet campaign; it is step 20 of the smoke plan (dry run of `smoke-mainnet.ts`). |
 | Idempotency | VERIFIED | Tests: second claim returns the same claim; sweep-released claim cannot be sent; double tap of 10 parallel claims on Postgres → one claim (`claims.prisma.test.ts`, run on the server 2026-10-07). Signature persisted before send (`markSending`). |
 | Solvency | VERIFIED | Conditional `UPDATE … claimedRaw + amount <= allowanceRaw` + CHECK constraint; 20 parallel claims on a 5-reward drop → exactly 5, rest `EXHAUSTED`, `claimedRaw = 500 = allowance` (Postgres on the server). Note: through a high-latency tunnel the same test timed out to 1/5 reserved — fails safe (no overpay) but is a load-liveness risk. |
 | Fee payer | VERIFIED (devnet) | Separate Privy server wallet per cluster, no token authority; balance shown in `/v1/status` with a low flag and hourly log warning; e2e paid fees and recipient rent. Mainnet fee payer `5WeRQjUR…HaKhu` created, unfunded. |
-| Mainnet budget | **FAILED (minor)** | Real costs measured (new recipient ≤ 0.001570 SOL, holder 0.00001 SOL); budget 0.02 SOL configured and capped at 0.10 SOL. The required 25 % uncommitted buffer is **not enforced** (`checkBudget` allows spending up to the budget). Fix: enforce the buffer, or set the effective budget to 0.015 SOL. |
+| Mainnet budget | VERIFIED (fixed W-3) | Real costs measured (new recipient ≤ 0.001570 SOL, holder 0.00001 SOL); budget 0.02 SOL, capped at 0.10 SOL. `checkBudget` now commits at most 75 % (0.015 SOL ≈ 9 new recipients); 25 % always stays uncommitted (config tests). |
 | Production RPC | VERIFIED (reads) | Helius mainnet: genesis verified; SKR stake (`getProgramAccounts`), ORE board/miner/stake, SGT and xStock mint reads succeed (< 1 s). Mainnet simulate/send/confirm through Helius not yet exercised (smoke plan). |
 | Secrets audit | VERIFIED | Repo: no secrets tracked (git grep), `.env*` ignored. APK: PRIVY_APP_SECRET, DB password, Helius key, Expo token absent from every APK entry; only the public Privy app/client ids present; pattern hits were library constants. Server: `.env*` and backups mode 600, `.secrets` 700. |
 | Payout kill switch | VERIFIED | `PAYOUTS_ENABLED=false` stops claims before any reservation (test), payouts (`payout-service`), sends and gifts (`send-service`); `/v1/status` shows it. Browsing unaffected. |
 | Compliance approach | **NEEDS_OWNER_DECISION** | Owner chose self-declaration + IP-country check (D-46). Official Backed legal page: products prohibited for U.S. persons; it does not say whether a third-party distributor may rely on self-declaration. Legal sufficiency is unverified; `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION` stays **BLOCKED** until confirmed. Send to an arbitrary address cannot check the recipient. |
 | Controlled-recipient eligibility | **BLOCKED** | Needs a named controlled recipient who confirms eligibility on mainnet (step 13–14 of the smoke plan). |
-| Smoke-test plan | **FAILED (incomplete)** | Plan written (MAINNET_SMOKE_TEST.md), but steps 33–36 (revoke delegate, return unused stock, close the auxiliary account, recover rent) have **no Blink tooling**; creators cannot do them from the app. |
+| Smoke-test plan | VERIFIED (plan complete, fixed W-1) | Steps 33–36 now use the creator wind-down: one creator-signed transaction revokes the delegate, returns the unused stock and closes the account (rent back). devnet e2e 2026-10-07: close `4Bz9tGjd…` returned 50000 raw, account deleted, 1,534,240 lamports net back to the creator; wallet-tampered close refused (`TRANSACTION_MISMATCH`). App: "Close drop" on the creator's drop (in the next APK). |
 
 ## What closes NO-GO
 
 1. New APK with the permission fix → clean install on a real phone → run the device checklist (MOBILE_STACK_VERIFICATION.md), including MWA reject / cancel / disconnect and Phantom in Testnet/Mainnet mode.
-2. Implement the corporate-action window guard (refuse payouts within ±15 min of a pending activation; retryable).
-3. Enforce the 25 % budget buffer.
-4. Add creator wind-down: build an unsigned revoke + transfer-back + close transaction for the creator's wallet (MWA), and a "Close drop" action.
+2. ~~Corporate-action window guard~~ — done (W-2).
+3. ~~25 % budget buffer~~ — done (W-3).
+4. ~~Creator wind-down~~ — done (W-1), devnet e2e PASSED; device test of "Close drop" in the new APK.
 5. Owner: confirm compliance sufficiency (legal) and name the controlled recipient + creator for the smoke test.
 6. Then: fund the mainnet fee payer, switch, run the smoke plan to step 21 (simulate) and **stop for explicit approval**.
 

@@ -47,6 +47,7 @@ received yet (OQ-10), so this version covers what exists today.
 | 26 | Phone B (admin): remove phone C; phone C taps Join | "An admin removed you"; Members → Removed → Let back in, then Join works |
 | 27 | Phone A (holding tNVDAx): tap a phone B message → 🎁 Gift → 0.01 → Gift | Wallet signs; "Gift sent ✓"; a gift card appears in the chat; phone B gets a push and a "Gift received" receipt |
 | 28 | Phone with a verified wallet that mined ORE / owns a Seeker / stakes SKR: Passport → Check my OG status | Each mark shows ✓; icons appear before the name in chat and members; all three → gold name |
+| 29 | Phone A: open your own drop → **Close drop** → confirm → approve in wallet | "Drop closed"; the unused stock is back in the creator wallet; the drop shows Closed; claiming it is refused |
 
 ## Known limits to mention in a demo
 

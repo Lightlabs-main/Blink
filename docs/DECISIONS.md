@@ -642,3 +642,13 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
 - **Budget:** `MAINNET_BUDGET_LAMPORTS=20000000` (0.02 SOL ≈ 12 new recipients; hard ceiling stays 0.10 SOL).
 - **Timing:** mainnet is staged, not switched. The server stays on devnet until Maris finishes devnet testing and says
   go; then `bash scripts/switch-network.sh mainnet` (validated config, backups, health check, automatic rollback).
+
+## D-47 — Pre-mainnet fixes W-1, W-2, W-3 (2026-10-07, Maris approved)
+
+- **Creator wind-down (W-1):** a creator can close their drop from the app at any time after funding. One wallet
+  approval revokes Blink's delegate, returns every unused share to the creator's own token account and closes the
+  campaign account (rent back to the creator). Closing ends the drop for everyone; it is refused while a payout is in
+  flight. Blink never signs for the creator's account.
+- **Corporate-action window (W-2):** follow the xStocks guidance — no payouts, sends or gifts within ±15 min of a
+  multiplier activation. Retryable `ASSET_UPDATING`; the drop is not paused.
+- **Budget buffer (W-3):** at most 75 % of the mainnet budget is ever committed; 25 % stays as a safety buffer.

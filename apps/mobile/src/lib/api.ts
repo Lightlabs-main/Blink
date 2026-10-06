@@ -185,6 +185,18 @@ export const api = {
       `/v1/campaigns/${encodeURIComponent(id)}/funding/submit`,
       { method: 'POST', body: JSON.stringify({ signedTransaction }) },
     ),
+  /** W-1: end the drop and build the creator's revoke + return + close transaction. */
+  closePrepare: (t: GetAccessToken, id: string) =>
+    authed<{ campaign: CampaignSummary; prepared: { transaction: string; minContextSlot: string; summary: { campaignAccount: string; returnRaw: string; rentLamports: string; revokesDelegate: boolean } } }>(
+      t,
+      `/v1/campaigns/${encodeURIComponent(id)}/close/prepare`,
+      { method: 'POST' },
+    ),
+  closeSubmit: (t: GetAccessToken, id: string, signedTransaction: string) =>
+    authed<{ signature: string; closed: boolean; campaign: CampaignSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/close/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ signedTransaction }),
+    }),
   fundingVerify: (t: GetAccessToken, id: string) =>
     authed<{ verified: boolean; campaign: CampaignSummary }>(t, `/v1/campaigns/${encodeURIComponent(id)}/funding/verify`, {
       method: 'POST',
