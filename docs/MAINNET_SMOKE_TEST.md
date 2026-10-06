@@ -1,49 +1,44 @@
-# Mainnet smoke test
+# Mainnet smoke test — plan (prepared, NOT executed)
 
-`scripts/smoke-mainnet.ts` proves one real payout end to end before any public mainnet drop
-(MASTER_PROMPT §7, §22).
+Status 2026-10-07: **not started**. MAINNET_GO_NO_GO.md is NO-GO; this plan runs only after every critical gate is
+VERIFIED, and it stops at step 21 for Maris's explicit approval. One xStock, one creator, one eligible controlled
+recipient, one campaign, about $0.50–$1.
 
-## Before you start
+**Proposed values (owner to confirm):** asset NVDAx (`Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh`); fund 0.01 NVDAx
+(1,000,000 raw), reward 0.005 NVDAx (500,000 raw) per person; Blink budget 0.02 SOL (fee payer
+`5WeRQjURUrgJBEMP91ndv4dnmFjpcYWETMPDnxXHaKhu`).
 
-- **Owner approval:** Maris has approved mainnet spending.
-- **Server environment:**
-  - `SOLANA_CLUSTER=mainnet-beta`
-  - a dedicated `SOLANA_RPC_URL` (OQ-6)
-  - `MAINNET_ENABLED=true` and `MAINNET_GO_APPROVED=true`
-  - `MAINNET_BUDGET_LAMPORTS` within the 0.10 SOL hard ceiling
-- **A LIVE mainnet campaign** funded from the app by a creator wallet holding real xStocks, with a
-  small `rewardPerClaimRaw`.
-- **Fee payer** (logged by blink-api as "payout fee payer ready"; also at `GET /v1/status`) funded
-  with a small amount of SOL.
+| # | Step | Tooling | Status |
+|---|---|---|---|
+| 1–5 | Verify mint, Token-2022, decimals, multiplier (incl. pending + activation), extensions | `scripts/inspect-xstock.ts`, `scripts/mainnet-preflight.ts`, api.xstocks.fi | Done read-only 2026-10-07; repeat on the day |
+| 6 | Creator + recipient eligibility | App (eligibility screen) | Needs both people |
+| 7 | Account sizes / rent | inspect-xstock: campaign account 175 bytes / 1,539,240 lamports; recipient ≤ 179 bytes / 0.001570 SOL | Done; repeat |
+| 8–11 | Derive, create and fund the campaign account; approve the exact delegate amount | App: Create → Fund (one MWA transaction, server re-derives the account) | Ready |
+| 12 | Verify balance / allowance | `POST /v1/campaigns/:id/funding/verify` (onchain re-check) + the dry run of `smoke-mainnet.ts` (delegation covers one reward) | Ready |
+| 13–14 | Recipient signs in, eligibility rechecked at claim time | App + claim route (IP re-check) | Ready |
+| 15–19 | Derive recipient account, sponsored cost, budget, build, resolve extensions | `scripts/smoke-mainnet.ts` (dry run) | Ready |
+| 20 | Simulate | `npx tsx scripts/smoke-mainnet.ts --campaign <id> --recipient <wallet>` | Ready |
+| **21** | **STOP — ask Maris for explicit mainnet approval** | — | — |
+| 22–26 | Sign, persist signature, submit, confirm, reconcile | `smoke-mainnet.ts --execute` (production payout path, budget ledger) | After approval only |
+| 27–29 | Recipient balance, campaign balance, allowance decreased exactly | explorer + `GET /v1/campaigns/:id` (claimedRaw) + onchain account read | Ready |
+| 30–31 | Blink receipt, explorer link on mainnet | App → Receipts & Activity | Ready |
+| 32 | Pause the campaign | Kill switch (`PAYOUTS_ENABLED=false`) or owner pause | Global only — no per-campaign pause button |
+| 33 | Revoke the delegate | **No Blink tooling** (creator wallet must support revoke for a non-ATA account) | **BLOCKED** |
+| 34 | Return unused stock | **No Blink tooling** | **BLOCKED** |
+| 35–36 | Close the auxiliary account, recover rent | **No Blink tooling** | **BLOCKED** |
+| 37 | Record everything here | — | — |
 
-## 1. Dry run (read-only, safe to repeat)
+Steps 33–36 need a creator wind-down action (HANDOFF item W-1) before the smoke test can complete.
 
-```bash
-npx tsx scripts/smoke-mainnet.ts --campaign <campaign-id> --recipient <your wallet>
-```
+## Script reference
 
-It checks, in order:
-- the RPC is mainnet-beta, by genesis hash;
-- the campaign is LIVE on mainnet;
-- the mint is transferable, with no pause or transfer hook;
-- the onchain delegation covers one reward;
-- the fee payer can pay;
-- the §7 budget has room;
-- the exact payout transaction simulates.
+- Dry run (read-only): checks mainnet genesis, campaign LIVE on mainnet, mint transferable, delegation covers one
+  reward, fee payer can pay, budget room, and simulates the exact payout. Nothing is signed.
+- `--execute` (real SOL and stock): pays one reward through the production path (Privy fee payer + per-campaign Privy
+  delegate, budget ledger), checks the recipient balance and prints the explorer link.
 
-Nothing is signed or sent.
+Never write "mainnet works" without the signature.
 
-## 2. Execute (real SOL and real stock move)
+## Results
 
-```bash
-npx tsx scripts/smoke-mainnet.ts --campaign <campaign-id> --recipient <your wallet> --execute
-```
-
-This pays ONE reward to `--recipient` through the production payout path: Privy fee payer plus the
-per-campaign Privy delegate, with a budget ledger entry. It then checks the recipient's balance
-onchain and prints the explorer link.
-
-## Record the result
-
-Record the signature and outcome in `docs/DEPENDENCIES.md` (status vocabulary §5.4). Never write
-"Mainnet works" without the signature.
+(none yet)

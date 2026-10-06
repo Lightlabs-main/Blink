@@ -140,3 +140,11 @@ Applies to requirements such as SGT, SKR, ORE and Tap Rush.
 - Event codes are 24 random bytes from the server, rotatable; no location data.
 - People appear by username or a shortened wallet only; private clubs are 404 to non-members without the invite.
 - Not yet: message reports and extra moderator roles (owner deletes only), automated content moderation.
+
+## 5. Pre-mainnet audit findings (2026-10-07)
+
+- APK secret scan clean (Privy secret, DB password, Helius key, Expo token absent; only public Privy ids). Repo clean.
+- Server: `.env*` and `backups/*` 600, `backups/` and `.secrets/` 700 (backups were 644 before 2026-10-06).
+- Released APK `c5dc737a` lacked CAMERA / RECORD_AUDIO (functional, not a security issue); fixed in `a06d8f7`.
+- Open: corporate-action window guard (W-2), 25 % budget buffer (W-3), creator wind-down (W-1), Privy authorization-key
+  blast radius (OQ-4), compliance legal sufficiency (`MAINNET_PUBLIC_XSTOCK_DISTRIBUTION = BLOCKED`), X proof on mainnet.
