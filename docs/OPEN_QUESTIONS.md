@@ -30,7 +30,11 @@ Every supported xStock has a PermanentDelegate (the issuer), so the issuer can m
 campaign accounts and recipient accounts. A DRAFT disclosure is in place
 (`PRODUCT_COPY.issuerControlStatement`, D-16). The final wording is Maris's call.
 
-## OQ-6 — Dedicated RPC provider — NEEDS_OWNER_DECISION
+## OQ-6 — Dedicated RPC provider — RESOLVED for reads 2026-10-06
+
+Mainnet reads (Seeker, SKR, ORE, xStock market data) now use Helius mainnet with the existing Helius key; payouts
+will use the same when the server switches to mainnet (docs/MAINNET_GO_LIVE.md). Previous note:
+
 
 The public mainnet RPC is rate-limited. It returned HTTP 429 again on 2026-10-01, from both the
 dev machine and the VPS, for `getTokenLargestAccounts`. A reliable provider is required (§19);
