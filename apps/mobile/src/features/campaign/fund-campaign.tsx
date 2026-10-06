@@ -3,8 +3,8 @@ import { address, getAddressEncoder, getBase64Decoder, getBase64EncodedWireTrans
 import { useQueryClient } from '@tanstack/react-query'
 import { transact, useMobileWallet } from '@wallet-ui/react-native-kit'
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { AppState, StyleSheet, View } from 'react-native'
 
 import { Icon, type IconName } from '../../design/icons'
 import { color, space } from '../../design/tokens'
@@ -15,6 +15,14 @@ import { haptics } from '../../lib/haptics'
 import { type CampaignSummary, PRODUCT_COPY } from '../../shared'
 
 type Step = 'idle' | 'preparing' | 'review' | 'signing' | 'submitting' | 'done'
+
+/**
+ * Typical devnet/mainnet fee for this one transaction (base fee + the small priority fee wallets add). Shown as an
+ * estimate; the wallet's own screen shows the exact number when it can.
+ */
+const FEE_ESTIMATE_LAMPORTS = 100_000n
+/** If Blink is still on screen this long after asking the wallet to open, the wallet didn't open. */
+const WALLET_OPEN_TIMEOUT_MS = 6000
 
 function formatSol(lamports: string) {
   const n = Number(lamports) / 1e9
@@ -49,6 +57,9 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
   const [needsCheck, setNeedsCheck] = useState(false)
   const router = useRouter()
   const [signature, setSignature] = useState<string | null>(null)
+  // Each signing attempt has an id, so a wallet that never answers can be abandoned without its late reply landing.
+  const attempt = useRef(0)
+  const [walletStuck, setWalletStuck] = useState(false)
 
   const refresh = () =>
     Promise.all([
@@ -82,12 +93,18 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
     setError(null)
     try {
       setStep('signing')
+      setWalletStuck(false)
+      const mine = ++attempt.current
       // Solana transactions expire about a minute after they are built, so build a fresh one on every tap, right
       // before the wallet opens (D-29). Never call Blink while the wallet app is on screen: Blink is then in the
       // background and many Android phones block background network access (D-35).
       const fresh = await api.fundingPrepare(getAccessToken, campaign.id)
       setPlan(fresh)
       const unsigned = getTransactionDecoder().decode(getBase64Encoder().encode(fresh.transaction))
+      // When the wallet opens, Blink goes to the background. Still in front after a few seconds = no wallet answered.
+      const watch = setTimeout(() => {
+        if (attempt.current === mine && AppState.currentState === 'active') setWalletStuck(true)
+      }, WALLET_OPEN_TIMEOUT_MS)
       // A fresh authorization that always names the network. Re-using a saved session made older-protocol wallets
       // (Solflare / Seeker) reauthorize without a network and treat this devnet transaction as mainnet.
       const signed = await transact(async (wallet) => {
@@ -100,7 +117,10 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         const [tx] = await wallet.signTransactions({ transactions: [unsigned] })
         if (!tx) throw new Error('Your wallet app did not return a signed transaction')
         return tx
-      })
+      }).finally(() => clearTimeout(watch))
+      // Abandoned with "Try again" while the wallet never answered: ignore this late result.
+      if (attempt.current !== mine) return
+      setWalletStuck(false)
       setStep('submitting')
       const result = await api.fundingSubmit(getAccessToken, campaign.id, getBase64EncodedWireTransaction(signed))
       setSignature(result.signature)
@@ -113,6 +133,7 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         setStep('idle')
       }
     } catch (e) {
+      setWalletStuck(false)
       if (e instanceof ApiError && e.code === 'EXPIRED') {
         haptics.error()
         setError('That took a little too long, so the network no longer accepts it. Tap “Open wallet to approve” again and approve straight away.')
@@ -145,6 +166,7 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         <T variant="label" color={color.text}>
           {PRODUCT_COPY.treasuryStatement}
         </T>
+        <T variant="caption">Your wallet app still counts this stock in its total: it sits in a campaign account your wallet owns. It goes down as people claim. Home shows it as “in your drops”.</T>
         {signature ? <T variant="caption">{`Transaction ${shortAddress(signature, 8, 8)}`}</T> : null}
       </Card>
     )
@@ -165,8 +187,50 @@ export function FundCampaign({ campaign, amountLabel }: { campaign: CampaignSumm
         />
         <Point body="It stays in an account you own." icon="arrowRight" title={`Moves ${amountLabel} into it`} />
         <Point body="Never more. You can revoke any time." icon="shield" title={`Lets Blink hand out up to exactly ${amountLabel}`} />
-        <T variant="caption">{`Network: ${campaign.cluster} · plus a small network fee`}</T>
+        <Card style={{ gap: 6 }} tone="raised">
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T variant="label">Account deposit (refundable)</T>
+            <T variant="numeric">{`${formatSol(plan?.summary.rentLamports ?? '0')} SOL`}</T>
+          </Row>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T variant="label">Network fee (about)</T>
+            <T variant="numeric">{`${formatSol(FEE_ESTIMATE_LAMPORTS.toString())} SOL`}</T>
+          </Row>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T variant="bodyStrong">Paid from your wallet</T>
+            <T variant="numeric">{`≈ ${formatSol((BigInt(plan?.summary.rentLamports ?? '0') + FEE_ESTIMATE_LAMPORTS).toString())} SOL`}</T>
+          </Row>
+          <T variant="caption">{`Network: ${campaign.cluster === 'mainnet-beta' ? 'Solana' : `Solana ${campaign.cluster} (test)`}. Your wallet app may not show the fee on devnet.`}</T>
+        </Card>
         <Notice message={error} />
+        {walletStuck ? (
+          <Card style={{ gap: space.sm }} tone="danger">
+            <T variant="heading">Your wallet didn’t open</T>
+            <T variant="label" color={color.text}>
+              {campaign.cluster === 'mainnet-beta'
+                ? 'Open your wallet app once, then come back and try again.'
+                : 'This drop is on devnet. In Phantom: Settings → Developer Settings → turn on Testnet Mode and choose Solana Devnet. In Solflare: switch the network to Devnet.'}
+            </T>
+            <T variant="label" color={color.text}>
+              If you have several wallets, Android may be sending Blink to the wrong one: Settings → Apps → that wallet → Open by default → Clear defaults.
+            </T>
+            <T variant="label" color={color.text}>
+              {`Use the wallet that holds ${shortAddress(campaign.creatorWallet)} — it created this drop.`}
+            </T>
+            <Button
+              icon="refresh"
+              onPress={() => {
+                attempt.current += 1
+                setWalletStuck(false)
+                setStep('review')
+              }}
+              size="md"
+              variant="secondary"
+            >
+              Try again
+            </Button>
+          </Card>
+        ) : null}
         <Button disabled={step !== 'review'} icon="wallet" loading={step === 'submitting'} onPress={() => void onSign()}>
           {step === 'signing' ? 'Waiting for your wallet…' : step === 'submitting' ? 'Confirming on Solana…' : 'Open wallet to approve'}
         </Button>
