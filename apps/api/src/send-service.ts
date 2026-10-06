@@ -131,7 +131,7 @@ export class SendService {
     } catch (err) {
       if (err instanceof SendError) {
         if (err.code === 'SIMULATION_FAILED') this.deps.log?.warn({ logs: err.logs.slice(-8) }, 'send simulation failed')
-        throw new ClaimError(`SEND_${err.code}`, err.message, err.code === 'SIMULATION_FAILED' ? 422 : 400)
+        throw new ClaimError(`SEND_${err.code}`, err.message, err.code === 'SIMULATION_FAILED' ? 422 : err.code === 'ASSET_UPDATING' ? 503 : 400)
       }
       throw err
     }

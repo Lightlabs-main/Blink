@@ -146,6 +146,10 @@ export class SolanaPayoutService implements PayoutService {
       })
     } catch (err) {
       await claims.markFailed(claim.id, err instanceof PayoutError ? err.code : 'BUILD_FAILED')
+      // W-2: a multiplier activation is close. The reservation is released (claim FAILED, retryable); the drop stays live.
+      if (err instanceof PayoutError && err.code === 'ASSET_UPDATING') {
+        throw new ClaimError('ASSET_UPDATING', 'This stock is applying a corporate action. Try again in a few minutes.', 503)
+      }
       if (err instanceof PayoutError && err.code === 'MINT_BLOCKED') {
         await this.deps.campaigns.transitionStatus(campaign.id, 'LIVE', 'PAUSED', 'MINT_STATE_CHANGED')
         throw new ClaimError('CAMPAIGN_PAUSED', 'This stock cannot be transferred right now, so the drop is paused.')

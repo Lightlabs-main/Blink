@@ -210,6 +210,39 @@ async function main() {
   if (third.ok || third.reason !== 'NOT_LIVE' || final.status !== 'ENDED') throw new Error('third claim should be refused by an ENDED drop')
   log('drop ENDED when the pool could not fit another reward; third claim refused before signing', { claimedRaw: final.claimedRaw, status: final.status })
 
+  // W-1 creator wind-down: revoke the delegate, return the unused stock, close the account, rent back to the creator.
+  const [creatorAta] = await findAssociatedTokenPda({ owner: creator.address, mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS })
+  const ataBefore = (await fetchMaybeToken(rpc, creatorAta, { commitment: 'confirmed' }))
+  const heldBefore = ataBefore.exists ? ataBefore.data.amount : 0n
+  const solBefore = (await rpc.getBalance(creator.address, { commitment: 'confirmed' }).send()).value
+  const closePrep = await funding.prepareClose(final)
+  const leftRaw = POOL_RAW - 2n * REWARD_RAW
+  if (closePrep.summary.returnRaw !== leftRaw.toString() || !closePrep.summary.revokesDelegate) throw new Error(`close plan ${JSON.stringify(closePrep.summary)}`)
+  const sneakyClose = await walletSigned(creator, closePrep.transaction, [
+    getTransferSolInstruction({ source: createNoopSigner(creator.address), destination: authority.address, amount: 1_000n }),
+  ])
+  try {
+    await funding.submitClose(final, sneakyClose)
+    throw new Error('a close transaction with an extra transfer was accepted')
+  } catch (err) {
+    if (!(err instanceof FundingRequestError) || err.code !== 'TRANSACTION_MISMATCH') throw err
+    log('wallet-modified close refused', { code: err.code })
+  }
+  const closeAgain = await funding.prepareClose(final)
+  const closed = await funding.submitClose(final, await walletSigned(creator, closeAgain.transaction, []))
+  if (!closed.closed) throw new Error('campaign account still exists after close')
+  const ataAfter = await fetchMaybeToken(rpc, creatorAta, { commitment: 'confirmed' })
+  const heldAfter = ataAfter.exists ? ataAfter.data.amount : 0n
+  if (heldAfter - heldBefore !== leftRaw) throw new Error(`creator got ${heldAfter - heldBefore} raw back, expected ${leftRaw}`)
+  const solAfter = (await rpc.getBalance(creator.address, { commitment: 'confirmed' }).send()).value
+  const refund = BigInt(closeAgain.summary.rentLamports)
+  if (!(solAfter > solBefore) || solAfter - solBefore > refund) throw new Error(`rent refund ${solAfter - solBefore} lamports, expected about ${refund} minus fees`)
+  const gone = await rpc.getAccountInfo(campaignTokenAccount, { encoding: 'base64', commitment: 'confirmed' }).send()
+  if (gone.value !== null) throw new Error('campaign account still exists')
+  log('creator closed the drop: delegate revoked, unused stock returned, account closed, rent refunded', {
+    signature: closed.signature, returnedRaw: leftRaw, rentRefundLamports: (solAfter - solBefore).toString(),
+  })
+
   console.log('\nClaims devnet end-to-end test: PASSED')
 }
 

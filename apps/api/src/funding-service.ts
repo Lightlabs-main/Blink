@@ -1,6 +1,8 @@
 import {
+  buildCloseCampaignTransaction,
   buildFundingTransaction,
   checkCampaignDelegation,
+  CloseCampaignError,
   type DelegationStatus,
   FundingError,
   messageLifetimeToken,
@@ -53,10 +55,19 @@ export interface FundingVerification {
   status: DelegationStatus
 }
 
+export interface PreparedClose {
+  transaction: string
+  minContextSlot: string
+  summary: { campaignAccount: string; returnRaw: string; rentLamports: string; revokesDelegate: boolean }
+}
+
 export interface FundingService {
   prepare(campaign: StoredCampaign): Promise<PreparedFunding>
   submit(campaign: StoredCampaign, signedTransactionBase64: string): Promise<{ signature: string }>
   verify(campaign: StoredCampaign): Promise<FundingVerification>
+  /** W-1 creator wind-down: revoke + return unused stock + close the campaign account (creator signs). */
+  prepareClose?(campaign: StoredCampaign): Promise<PreparedClose>
+  submitClose?(campaign: StoredCampaign, signedTransactionBase64: string): Promise<{ signature: string; closed: boolean }>
 }
 
 export class FundingRequestError extends Error {
@@ -131,10 +142,45 @@ export class SolanaFundingService implements FundingService {
   }
 
   async submit(campaign: StoredCampaign, signedTransactionBase64: string): Promise<{ signature: string }> {
-    const pending = this.pending.get(campaign.id)
+    return this.relay(campaign.id, campaign, signedTransactionBase64)
+  }
+
+  async prepareClose(campaign: StoredCampaign): Promise<PreparedClose> {
+    const asset = this.assets.find((a) => a.mint === campaign.mint)
+    if (!asset) throw new FundingRequestError('UNSUPPORTED_MINT', 'this stock is not available on the current network')
+    try {
+      const plan = await buildCloseCampaignTransaction(this.rpc, {
+        creator: address(campaign.creatorWallet),
+        campaignSeed: campaign.campaignSeed,
+        storedCampaignAccount: campaign.campaignTokenAccount,
+        mint: address(campaign.mint),
+        expectedDecimals: asset.decimals,
+      })
+      const { messageBytes } = getTransactionDecoder().decode(Buffer.from(plan.transaction, 'base64'))
+      this.pending.set(`close:${campaign.id}`, { messageBytes: Uint8Array.from(messageBytes), expiresAt: Date.now() + PENDING_TTL_MS })
+      return {
+        transaction: plan.transaction,
+        minContextSlot: plan.minContextSlot.toString(),
+        summary: { campaignAccount: plan.campaignAccount, returnRaw: plan.returnRaw.toString(), rentLamports: plan.rentLamports.toString(), revokesDelegate: plan.revokedDelegate !== null },
+      }
+    } catch (err) {
+      if (err instanceof CloseCampaignError) throw new FundingRequestError(`CLOSE_${err.code}`, err.message, err.code === 'ACCOUNT_MISSING' ? 409 : 422)
+      throw err
+    }
+  }
+
+  async submitClose(campaign: StoredCampaign, signedTransactionBase64: string): Promise<{ signature: string; closed: boolean }> {
+    const signature = (await this.relay(`close:${campaign.id}`, campaign, signedTransactionBase64)).signature
+    const { value } = await this.rpc.getAccountInfo(address(campaign.campaignTokenAccount), { encoding: 'base64', commitment: 'confirmed' }).send()
+    return { signature, closed: value === null }
+  }
+
+  /** Relays exactly the transaction prepared under `key` (wallet additions allowed), then waits for confirmation. */
+  private async relay(key: string, campaign: StoredCampaign, signedTransactionBase64: string): Promise<{ signature: string }> {
+    const pending = this.pending.get(key)
     if (!pending || pending.expiresAt < Date.now()) {
-      this.pending.delete(campaign.id)
-      throw new FundingRequestError('EXPIRED', 'this funding request expired — please try again', 409)
+      this.pending.delete(key)
+      throw new FundingRequestError('EXPIRED', 'this request expired — please try again', 409)
     }
 
     let decoded: ReturnType<ReturnType<typeof getTransactionDecoder>['decode']>
@@ -178,7 +224,7 @@ export class SolanaFundingService implements FundingService {
         if (blockhashNotFound) {
           // Blink's own blockhash: it expired while the user was approving. A wallet's newer one: RPC lag, retry.
           if (!walletReplacedBlockhash) {
-            this.pending.delete(campaign.id)
+            this.pending.delete(key)
             throw new FundingRequestError('EXPIRED', EXPIRED_MESSAGE, 409)
           }
           if (attempt < 4) {
@@ -194,7 +240,7 @@ export class SolanaFundingService implements FundingService {
         throw new FundingRequestError('SEND_FAILED', `the network rejected this transaction${hint ? `: ${hint.slice(0, 160)}` : ''}`, 422)
       }
     }
-    this.pending.delete(campaign.id)
+    this.pending.delete(key)
     await this.waitForConfirmation(signature)
     return { signature }
   }

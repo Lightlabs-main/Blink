@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { buildApp } from './app.ts'
 import { AuthError, type AuthVerifier, extractEmbeddedSolanaWallets, extractVerifiedExternalSolanaWallets } from './auth.ts'
 import { InMemoryCampaignRepository, type StoredCampaign } from './campaign-repo.ts'
+import { InMemoryClaimRepository } from './claim-repo.ts'
 import { type FundingService, FundingRequestError } from './funding-service.ts'
 
 // Arbitrary valid addresses used only as test inputs.
@@ -315,5 +316,75 @@ describe('funding routes', () => {
     build()
     const id = (await post(body)).json().campaign.id
     expect((await app.inject({ method: 'POST', url: url(id, 'prepare'), headers: auth })).statusCode).toBe(503)
+  })
+})
+
+describe('creator wind-down: close a drop (W-1)', () => {
+  const auth = { authorization: 'Bearer good-token' }
+  const signed = { signedTransaction: 'A'.repeat(200) }
+
+  function closer(closed = true): FundingService & { calls: string[] } {
+    const calls: string[] = []
+    return {
+      calls,
+      prepare: async () => ({ transaction: 'AAAA', minContextSlot: '1', summary: { campaignAccount: 'a', delegate: CREATOR, amountRaw: '1', rentLamports: '1', accountSpace: '175' } }),
+      submit: async () => ({ signature: 'sig' }),
+      verify: async () => ({ live: true, status: { problems: [] } as never }),
+      prepareClose: async (c: StoredCampaign) => {
+        calls.push(`prepareClose:${c.status}`)
+        return { transaction: 'BBBB', minContextSlot: '1', summary: { campaignAccount: c.campaignTokenAccount, returnRaw: '600', rentLamports: '1539240', revokesDelegate: true } }
+      },
+      submitClose: async () => {
+        calls.push('submitClose')
+        return { signature: 'closesig', closed }
+      },
+    }
+  }
+
+  async function liveDrop(repo: InMemoryCampaignRepository) {
+    build({ repo, funding: closer() })
+    const id = (await post({ type: 'TAP_RUSH', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100' })).json().campaign.id
+    await repo.transitionStatus(id, 'DRAFT', 'AWAITING_FUNDING')
+    await repo.transitionStatus(id, 'AWAITING_FUNDING', 'AWAITING_DELEGATION')
+    await repo.transitionStatus(id, 'AWAITING_DELEGATION', 'LIVE')
+    await app.close()
+    return id
+  }
+
+  it('ends the drop, then closes it after the creator signs; only the creator can', async () => {
+    const repo = new InMemoryCampaignRepository()
+    const id = await liveDrop(repo)
+    const funding = closer()
+    build({ repo, funding })
+    const url = (step: string) => `/v1/campaigns/${id}/close/${step}`
+    expect((await app.inject({ method: 'POST', url: url('prepare'), headers: { authorization: 'Bearer other-token' } })).statusCode).toBe(401)
+    const prep = await app.inject({ method: 'POST', url: url('prepare'), headers: auth })
+    expect(prep.statusCode).toBe(200)
+    expect(prep.json()).toMatchObject({ campaign: { status: 'ENDED' }, prepared: { summary: { returnRaw: '600', revokesDelegate: true } } })
+    expect(funding.calls).toEqual(['prepareClose:ENDED'])
+    const sub = await app.inject({ method: 'POST', url: url('submit'), headers: auth, payload: signed })
+    expect(sub.json()).toMatchObject({ signature: 'closesig', closed: true, campaign: { status: 'CLOSED' } })
+    expect((await app.inject({ method: 'POST', url: url('prepare'), headers: auth })).json().error.code).toBe('WRONG_STATUS')
+  })
+
+  it('refuses to close while a reward is still being sent', async () => {
+    const repo = new InMemoryCampaignRepository()
+    const id = await liveDrop(repo)
+    const claims = new InMemoryClaimRepository(repo)
+    await claims.reserve({ campaignId: id, privyUserId: 'did:privy:someone', recipientWallet: 'w', amountRaw: 100n, tapSessionId: null })
+    app = buildApp({ env, auth: fakeAuth([CREATOR]), campaigns: repo, claims, rpc: fakeRpc(false), assets: ASSETS, funding: closer() })
+    const res = await app.inject({ method: 'POST', url: `/v1/campaigns/${id}/close/prepare`, headers: auth })
+    expect(res.json().error.code).toBe('PAYOUTS_IN_FLIGHT')
+    // The drop is already ended, so no new reward can be reserved meanwhile.
+    expect((await app.inject({ method: 'GET', url: `/v1/campaigns/${id}` })).json().campaign.status).toBe('ENDED')
+  })
+
+  it('stays ENDED (not CLOSED) if the account is still there after the transaction', async () => {
+    const repo = new InMemoryCampaignRepository()
+    const id = await liveDrop(repo)
+    build({ repo, funding: closer(false) })
+    await app.inject({ method: 'POST', url: `/v1/campaigns/${id}/close/prepare`, headers: auth })
+    const sub = await app.inject({ method: 'POST', url: `/v1/campaigns/${id}/close/submit`, headers: auth, payload: signed })
+    expect(sub.json()).toMatchObject({ closed: false, campaign: { status: 'ENDED' } })
   })
 })

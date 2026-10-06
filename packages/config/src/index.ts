@@ -124,6 +124,9 @@ export type BudgetDecision =
   | { allowed: false; projectedLamports: bigint; reason: string }
 
 /** MASTER_PROMPT §7: spent + reserved + estimatedNextOperation <= configuredBudget, never above hard ceiling. */
+/** Pre-mainnet gate W-3: at least this share of the budget always stays uncommitted (safety buffer). */
+export const MAINNET_SAFETY_BUFFER_PERCENT = 25n
+
 export function checkBudget(state: BudgetState): BudgetDecision {
   const values = [
     state.spentLamports,
@@ -135,10 +138,12 @@ export function checkBudget(state: BudgetState): BudgetDecision {
     return { allowed: false, projectedLamports: 0n, reason: 'negative lamport value' }
   }
   const projected = state.spentLamports + state.reservedLamports + state.estimatedNextOperationLamports
-  const limit =
+  const budget =
     state.configuredBudgetLamports < MAINNET_HARD_CEILING_LAMPORTS
       ? state.configuredBudgetLamports
       : MAINNET_HARD_CEILING_LAMPORTS
+  // W-3: spend at most 75 % of the budget; the remaining 25 % is a buffer that is never committed.
+  const limit = (budget * (100n - MAINNET_SAFETY_BUFFER_PERCENT)) / 100n
   if (projected > limit) {
     return {
       allowed: false,

@@ -27,12 +27,12 @@ import {
   TOKEN_2022_PROGRAM_ADDRESS,
 } from '@solana-program/token-2022'
 
-import { inspectMint, mintTransferBlockers } from './mint.ts'
+import { inspectMint, mintTransferBlockers, multiplierUpdateInProgress } from './mint.ts'
 import { estimateCampaignAccountRent } from './rent.ts'
 
 type SendRpc = Rpc<GetAccountInfoApi & GetBalanceApi & GetLatestBlockhashApi & GetMinimumBalanceForRentExemptionApi & SimulateTransactionApi>
 
-export type SendErrorCode = 'SAME_WALLET' | 'INSUFFICIENT_BALANCE' | 'MINT_BLOCKED' | 'MINT_DECIMALS_MISMATCH' | 'ACCOUNT_FROZEN' | 'LEAVES_DUST' | 'SIMULATION_FAILED'
+export type SendErrorCode = 'ASSET_UPDATING' | 'SAME_WALLET' | 'INSUFFICIENT_BALANCE' | 'MINT_BLOCKED' | 'MINT_DECIMALS_MISMATCH' | 'ACCOUNT_FROZEN' | 'LEAVES_DUST' | 'SIMULATION_FAILED'
 
 export class SendError extends Error {
   override name = 'SendError'
@@ -93,6 +93,9 @@ export async function buildSendTransaction(
     if (mint.decimals !== input.asset.decimals) throw new SendError('MINT_DECIMALS_MISMATCH', 'This stock’s details changed; please try later.')
     const blockers = mintTransferBlockers(mint)
     if (blockers.length) throw new SendError('MINT_BLOCKED', 'This stock can’t be transferred right now.')
+    if (multiplierUpdateInProgress(mint.scaledUi, BigInt(Math.floor(Date.now() / 1000)))) {
+      throw new SendError('ASSET_UPDATING', 'This stock is applying a corporate action. Try again in a few minutes.')
+    }
 
     const [source] = await findAssociatedTokenPda({ owner: input.from, mint: input.asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS })
     const held = await fetchMaybeToken(rpc, source, { commitment: 'confirmed' })
