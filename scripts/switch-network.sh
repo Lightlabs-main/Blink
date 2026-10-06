@@ -8,6 +8,8 @@
 # .env are backed up, the API restarts and must answer /health on the expected cluster within 30 s — otherwise the
 # previous .env is restored and the API restarted on it. Moves no funds and sends no transactions.
 set -euo pipefail
+# Backups hold secrets (.env) and user data (database dumps): owner-only.
+umask 077
 
 TARGET="${1:-}"
 case "$TARGET" in
