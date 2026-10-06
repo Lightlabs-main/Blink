@@ -115,8 +115,8 @@ Applies to requirements such as SGT, SKR, ORE and Tap Rush.
   - payout idempotency
   - Token-2022 and mint operational checks (pause, transfer hook)
   - the global payout kill switch
-- **X_QUEST is BLOCKED (policy review).** No rewards for likes, reposts or follows, no scraping,
-  and never ask for X credentials.
+- **X_QUEST** (D-39, owner decision): a person's own public post containing their personal code, read through X's
+  oEmbed; no rewards for likes, reposts or follows, no scraping, never X credentials.
 
 ## 3. Existing protections (unchanged)
 
