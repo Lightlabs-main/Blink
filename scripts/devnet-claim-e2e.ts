@@ -211,7 +211,6 @@ async function main() {
   log('drop ENDED when the pool could not fit another reward; third claim refused before signing', { claimedRaw: final.claimedRaw, status: final.status })
 
   // W-1 creator wind-down: revoke the delegate, return the unused stock, close the account, rent back to the creator.
-  const [creatorAta] = await findAssociatedTokenPda({ owner: creator.address, mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS })
   const ataBefore = (await fetchMaybeToken(rpc, creatorAta, { commitment: 'confirmed' }))
   const heldBefore = ataBefore.exists ? ataBefore.data.amount : 0n
   const solBefore = (await rpc.getBalance(creator.address, { commitment: 'confirmed' }).send()).value
