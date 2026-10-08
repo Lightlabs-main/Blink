@@ -10,7 +10,7 @@ a GitHub repository, a demo video, a pitch deck; submissions close October 8, 20
 | Requirement | Status | Evidence |
 |---|---|---|
 | Android app, not a PWA wrapper | VERIFIED | Expo / React Native native build (`expo prebuild`, EAS `preview` profile, `buildType: apk`); native modules: expo-camera, expo-audio, MWA (`@wallet-ui/react-native-kit ^4.2.1` over `@solana-mobile/mobile-wallet-adapter-protocol`), Privy embedded wallets. |
-| Functional APK | **FAILED** until rebuild | Build `c5dc737a` installs and runs (owner's phone, 2026-10-06) but has no CAMERA / RECORD_AUDIO (see MAINNET_GO_NO_GO.md). Fix `a06d8f7`. |
+| Functional APK | Built · device test pending | Build `b3bd98d0` (2026-10-08, commit `386e675`) includes CAMERA and RECORD_AUDIO (manifest checked), same signing key as before. The earlier `c5dc737a` lacked them. Install and run the device plan to mark VERIFIED. |
 | Solana Mobile Stack + MWA | VERIFIED (partial) | MWA used for creator connect, SIWS, campaign funding, gifts and Close drop; on-device funding with Solflare confirmed onchain. Blink does not provide SKR staking in the submitted build (D-48): staking is on stake.solanamobile.com / Seed Vault Wallet. |
 | Meaningful Solana interaction | VERIFIED | Token-2022 xStock funding with delegated allowance, payouts, sends, gifts (devnet e2e 2026-10-07; device funding 2026-10-05). |
 
