@@ -250,3 +250,18 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
 | SKR stake made on official surfaces | 20/20 sampled real stakers detected; 47,618 UserStake accounts, active stake in 1 guardian pool | `scripts/skr-official-stake-check.ts` (mainnet, read-only, 2026-10-08) | VERIFIED |
 | Devnet creator wind-down (W-1) | close `4Bz9tGjd…`: delegate revoked, 50000 raw returned, account closed, 1,534,240 lamports net refunded | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
 | Postgres concurrency | 20 parallel claims → 5/5; double tap → 1 claim | `apps/api/src/claims.prisma.test.ts` on the server | VERIFIED |
+
+## Android build 2026-10-08 (hackathon submission candidate)
+
+- **Build:** EAS Build `b3bd98d0-9ffb-4169-8b4e-1adba1c99446` (profile `preview`) from commit `386e675`, FINISHED.
+- **What changed since `c5dc737a`:** camera + microphone permissions restored (`a06d8f7`); funding UX (`ab3977d`); event
+  QR shared as an image and chat empty state (`89cbeb6`); creator **Close drop** (W-1); SKR staking moved to
+  stake.solanamobile.com / Seed Vault Wallet, in-app staking off (D-48).
+- **Hosting:** `https://blinksol.site/download/blink-to-stock.apk` (178,554,389 bytes, SHA-256
+  `5d6d26936ce706ce14ebce49be5e0a9ac280ef3049d5a1ef343fb27f661bb2ee`); previous APK kept beside it.
+- **Verified from the APK (2026-10-08):** manifest now includes `CAMERA` and `RECORD_AUDIO` (only change vs the previous
+  APK: those two added, none removed); bundle contains "Stake on Solana Mobile", the stake.solanamobile.com link, the
+  Seed Vault line and the close routes, and no "Stake SKR in Blink"; no server secret value (9 checked) in any APK entry;
+  APK v2 signing certificate SHA-256 `0F:0A:…:D3:6C` = previous build = assetlinks.json (App Links keep working).
+- **Not yet verified on a device** (MOBILE_STACK_VERIFICATION.md device plan).
+
