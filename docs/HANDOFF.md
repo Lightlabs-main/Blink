@@ -158,6 +158,9 @@ New app builds call `https://api.blinksol.site`. The sslip.io host remains an al
 
 ## API contract v7: SKR staking and push (owner: Claude, 2026-10-02)
 
+> **D-48 (2026-10-08):** the two SKR routes below are off unless `SKR_IN_APP_STAKING=true`; otherwise they answer
+> `404 SKR_STAKING_DISABLED` and read / build nothing. The app links to stake.solanamobile.com instead.
+
 - **`GET /v1/skr/position?wallet=`** (auth; the wallet must be one of the caller's SIWS-verified wallets) →
   `{ position: { wallet, guardianPool, walletRaw, stakedRaw, unstakingRaw, minStakeRaw, cooldownSeconds,
   withdrawableAt } }`. Raw amounts are strings, 6 decimals. Mainnet reads.

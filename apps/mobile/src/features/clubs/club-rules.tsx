@@ -7,6 +7,7 @@ import { Button, Card, Row, T } from '../../design/ui'
 import { formatRaw, type QuestEvaluation, type QuestGroup, VERIFIERS } from '../../shared'
 import { describeCondition } from '../campaign/quest-panel'
 import { type RuleState, type TokenRule, TokenRuleCard } from '../rules/rule-builder'
+import { openOfficialSkrStaking, SKR_SEED_VAULT_NOTE, SKR_STAKE_LABEL } from '../skr/official-staking'
 
 export const EMPTY_RULES: RuleState = { seeker: false, skrRule: 'off', skrMin: '', oreRule: 'off', oreMin: '' }
 
@@ -51,9 +52,12 @@ export function ClubRulesEditor({ value, onChange }: { value: RuleState; onChang
   )
 }
 
-function ctaFor(verifier: string): { label: string; icon: IconName; route: string } | null {
+type Cta = { label: string; icon: IconName; route?: '/login/wallet'; open?: () => void }
+
+function ctaFor(verifier: string): Cta | null {
   if (verifier === 'SEEKER_SGT') return { label: 'Connect my Seeker', icon: 'phone', route: '/login/wallet' }
-  if (verifier === 'SKR_STAKED' || verifier === 'SKR_TOTAL') return { label: 'Stake SKR in Blink', icon: 'layers', route: '/skr' }
+  // D-48: staking happens on Solana Mobile's official surfaces; Blink only reads the stake.
+  if (verifier === 'SKR_STAKED' || verifier === 'SKR_TOTAL') return { label: SKR_STAKE_LABEL, icon: 'arrowUpRight', open: openOfficialSkrStaking }
   return { label: 'Verify a wallet', icon: 'wallet', route: '/login/wallet' }
 }
 
@@ -61,7 +65,7 @@ function ctaFor(verifier: string): { label: string; icon: IconName; route: strin
 export function ClubRulesList({ rules, evaluation }: { rules: QuestGroup[]; evaluation?: QuestEvaluation | null }) {
   const router = useRouter()
   if (!rules.length) return null
-  const ctas = new Map<string, { label: string; icon: IconName; route: string }>()
+  const ctas = new Map<string, Cta>()
   return (
     <Card style={{ gap: space.md }} tone={evaluation ? 'danger' : 'raised'}>
       <Row>
@@ -92,10 +96,11 @@ export function ClubRulesList({ rules, evaluation }: { rules: QuestGroup[]; eval
         </View>
       ))}
       {[...ctas.values()].map((c) => (
-        <Button icon={c.icon} key={c.label} onPress={() => router.push(c.route as '/skr')} size="sm" style={{ alignSelf: 'flex-start' }} variant="secondary">
+        <Button icon={c.icon} key={c.label} onPress={() => (c.open ? c.open() : router.push(c.route!))} size="sm" style={{ alignSelf: 'flex-start' }} variant="secondary">
           {c.label}
         </Button>
       ))}
+      {ctas.has(SKR_STAKE_LABEL) ? <T variant="caption">{SKR_SEED_VAULT_NOTE}</T> : null}
     </Card>
   )
 }

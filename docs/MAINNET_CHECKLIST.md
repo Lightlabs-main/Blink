@@ -8,7 +8,7 @@ MOBILE_STACK_VERIFICATION.md. Plan: MAINNET_SMOKE_TEST.md. Section numbers follo
 | 2 | Hackathon requirements | FAILED until rebuild | APK permissions defect; everything else VERIFIED (MOBILE_STACK_VERIFICATION.md). |
 | 3 | MWA | FAILED (partial) | Solflare authorize + sign on device VERIFIED; Phantom, reject, cancel, disconnect NOT TESTED. |
 | 4 | Seed Vault | VERIFIED (design) · NOT TESTED (hardware) | MWA only; no direct Seed Vault API. No Seeker available. |
-| 5 | SKR | VERIFIED (addresses, reads, gating) · ASSUMPTION (prize wording) | Official docs match code; Helius stake reads work. No SKR-native social utility built. |
+| 5 | SKR | VERIFIED (addresses, reads, gating) | Official docs match code; Helius stake reads work; stake made on the official surfaces detected (20/20, 2026-10-08). In-app staking disabled (D-48); no SKR mainnet write from Blink. No SKR-native social utility built. |
 | 6 | ORE | VERIFIED (campaign-bound mining verifier) · ASSUMPTION (prize criteria) | D-33 layout checked onchain; OG "ever mined" is a badge, never a payout condition. |
 | 7 | xStocks token standard | VERIFIED | 4 mints match api.xstocks.fi; onchain extensions, decimals 8, campaign account 175 bytes / 1,539,240 lamports, recipient ≤ 179 bytes. |
 | 8 | Corporate-action safety | VERIFIED (fixed W-2) | ±15-min activation window refuses payouts/sends/gifts with retryable `ASSET_UPDATING`; drop stays live. Unit tests. |

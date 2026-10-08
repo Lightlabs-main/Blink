@@ -14,6 +14,7 @@ import {
   SKR_STAKING_PROGRAM,
   skrStakedRaw,
 } from './stake-readers.ts'
+import { SKR_GUARDIAN_POOL } from './skr-staking.ts'
 
 const enc = getAddressEncoder()
 const b64 = getBase64Decoder()
@@ -102,6 +103,13 @@ describe('SKR staked aggregation (update §28)', () => {
       programAccounts: [await position({ pool: POOL_A, shares: 1_000_000_000n }), await position({ pool: POOL_B, shares: 2_000_000_000n })],
     })
     expect(await readSkrStaked(rpc, USER)).toEqual({ raw: 3_441_086_976n, positions: 2 })
+  })
+
+  it('D-48: a stake made outside Blink (stake.solanamobile.com / Seed Vault, any guardian pool) counts', async () => {
+    // Detection depends only on (stake config, owner), never on Blink's default pool or on Blink having built the tx.
+    expect(POOL_B).not.toBe(SKR_GUARDIAN_POOL)
+    const rpc = fakeRpc({ config: stakeConfigBytes(PRICE), programAccounts: [await position({ pool: POOL_B, shares: 1_000_000_000n })] })
+    expect(await readSkrStaked(rpc, USER)).toEqual({ raw: 1_147_028_992n, positions: 1 })
   })
 
   it('zero stake and closed (zero-share) positions count as nothing', async () => {

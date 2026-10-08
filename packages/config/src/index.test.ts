@@ -16,6 +16,7 @@ describe('loadEnv', () => {
     expect(env.SOLANA_CLUSTER).toBe('devnet')
     expect(env.MAINNET_ENABLED).toBe(false)
     expect(env.MAINNET_GO_APPROVED).toBe(false)
+    expect(env.SKR_IN_APP_STAKING).toBe(false) // D-48
     expect(env.API_PORT).toBe(4310)
   })
 

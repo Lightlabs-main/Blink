@@ -355,7 +355,7 @@ Source: Maris's product + architecture update of 2026-10-01. The plan is in
 - **Devnet.** `XSTOCK_COMPLIANCE=off` on the devnet server only, because the test asset is not an
   xStock. Mainnet refuses to start unless the gate is `enforce` (D-20).
 
-## D-23 — In-app SKR staking (2026-10-02, Maris: "in-app SKR staking (P1) … build this")
+## D-23 — In-app SKR staking (2026-10-02, Maris: "in-app SKR staking (P1) … build this") — DISABLED by D-48
 
 - **What:** stake, unstake, cancel unstake and withdraw SKR with Solana Mobile's guardian pool
   (`DPJ58…buqr`, the official sample's default) from a Blink screen (`/skr`). Entry points: Profile, and a
@@ -652,3 +652,22 @@ Never shown: balances, wallets, email, country. A browser-rendered reference is 
 - **Corporate-action window (W-2):** follow the xStocks guidance — no payouts, sends or gifts within ±15 min of a
   multiplier activation. Retryable `ASSET_UPDATING`; the drop is not paused.
 - **Budget buffer (W-3):** at most 75 % of the mainnet budget is ever committed; 25 % stays as a safety buffer.
+
+## D-48 — SKR staking moves to Solana Mobile's official surfaces; in-app staking disabled (2026-10-08, Maris)
+
+- **Why:** reduce mainnet risk (in-app staking was the only flow in the app that moved real mainnet funds), use the
+  official staking surfaces (Solana Mobile: "only places are https://stake.solanamobile.com and the Seed Vault wallet"),
+  and keep Blink's SKR integration for differentiated social / community utility rather than duplicating staking.
+  The CLOCK IN FAQ says staking integrations do not qualify for the SKR track, so staking is **not** presented as
+  Blink's SKR integration.
+- **Submitted build:** no `/skr` entry anywhere in the UI. Every former "Stake SKR in Blink" action is now
+  **Stake on Solana Mobile**, which opens https://stake.solanamobile.com in the phone's browser (`Linking.openURL`),
+  with one line: on a Seeker you can also stake in Seed Vault Wallet. Profile → SKR → **Stake SKR** does the same.
+- **Preserved, not deleted:** the D-23 screen, API routes, instruction builder and tests stay in the repo behind
+  `FEATURES.inAppSkrStaking = false` (app) and `SKR_IN_APP_STAKING=false` (API; the routes answer
+  `404 SKR_STAKING_DISABLED` and read / build nothing). The `/skr` route still exists so an old link doesn't break, but
+  it only shows the official link while the flag is off.
+- **Kept (read-only):** liquid SKR balance, staked SKR (every guardian pool), SKR_TOTAL, club join rules, Verified
+  Quest rules and the SKR OG mark. A stake made on the official surfaces is the same onchain UserStake, so it counts.
+- **Unchanged:** MWA (creator connect, SIWS, funding, gifts, Close drop). No direct Seed Vault integration is added;
+  Blink talks to compatible wallets, including Seed Vault Wallet on Seeker, through MWA.
