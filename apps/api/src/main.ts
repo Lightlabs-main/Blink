@@ -128,8 +128,8 @@ const app = buildApp({
   // SGTs, SKR and ORE live on mainnet only, so these checks always read mainnet, even while payouts run on devnet.
   seeker,
   quests,
-  // D-23: SKR staking reads/builds on mainnet; the user's wallet signs and sends.
-  skr: new MainnetSkrStaking(mainnetRead),
+  // D-23 / D-48: in-app SKR staking is off unless SKR_IN_APP_STAKING=true (staking happens on Solana Mobile's surfaces).
+  skr: env.SKR_IN_APP_STAKING ? new MainnetSkrStaking(mainnetRead) : undefined,
   // D-32: Send from the stock wallet; Blink's fee payer pays the network fee.
   send: new SendService({
     env,

@@ -36,6 +36,8 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  /** D-48: Blink's own SKR stake/unstake builder (D-23). Off by default: SKR is staked on Solana Mobile's official surfaces. */
+  SKR_IN_APP_STAKING: boolFlag,
   /** D-24: optional Expo access token for push sends ("enhanced push security"). Backend .env only. */
   EXPO_ACCESS_TOKEN: z.string().min(10).optional(),
   /** D-20: xStocks eligibility gate. 'off' is refused on mainnet. */

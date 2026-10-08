@@ -11,7 +11,7 @@ a GitHub repository, a demo video, a pitch deck; submissions close October 8, 20
 |---|---|---|
 | Android app, not a PWA wrapper | VERIFIED | Expo / React Native native build (`expo prebuild`, EAS `preview` profile, `buildType: apk`); native modules: expo-camera, expo-audio, MWA (`@wallet-ui/react-native-kit ^4.2.1` over `@solana-mobile/mobile-wallet-adapter-protocol`), Privy embedded wallets. |
 | Functional APK | **FAILED** until rebuild | Build `c5dc737a` installs and runs (owner's phone, 2026-10-06) but has no CAMERA / RECORD_AUDIO (see MAINNET_GO_NO_GO.md). Fix `a06d8f7`. |
-| Solana Mobile Stack + MWA | VERIFIED (partial) | MWA used for creator connect, SIWS, campaign funding and SKR staking transactions; on-device funding with Solflare confirmed onchain. |
+| Solana Mobile Stack + MWA | VERIFIED (partial) | MWA used for creator connect, SIWS, campaign funding, gifts and Close drop; on-device funding with Solflare confirmed onchain. Blink does not provide SKR staking in the submitted build (D-48): staking is on stake.solanamobile.com / Seed Vault Wallet. |
 | Meaningful Solana interaction | VERIFIED | Token-2022 xStock funding with delegated allowance, payouts, sends, gifts (devnet e2e 2026-10-07; device funding 2026-10-05). |
 
 Android identity: package `com.blinktostock.app`; scheme `blinktostock`; App Links `https://blinksol.site/{c,e,club}/…`
@@ -53,10 +53,16 @@ Decimals 6 and Tokenkeg program were verified onchain earlier (DEPENDENCIES.md);
 wallet across guardian pools (stake-readers tests). Seed Vault Wallet as an official staking surface: not stated on the
 fetched page — ASSUMPTION.
 
-Blink's SKR uses: A balance check — VERIFIED (tests + mainnet read); B staking-state check — VERIFIED (mainnet read via
-Helius); C club / quest gating — VERIFIED (tests); D SKR social utility (tips, SKR club access) — **not built**.
-Prize note: the "staking integrations do not qualify" wording was not found on the official blog; treat as
-ASSUMPTION and do not present staking as the SKR prize entry.
+Official staking surfaces (Solana Mobile, 2026-10-08): stake.solanamobile.com and Seed Vault Wallet only. Blink links to
+the first and mentions the second; in-app staking is disabled (D-48, code kept behind a flag).
+
+Blink's SKR uses (all read-only): A balance check — VERIFIED (tests + mainnet read); B staking-state check — VERIFIED,
+including stake made on the official surfaces (`scripts/skr-official-stake-check.ts` on mainnet 2026-10-08 (read-only): 47,618 UserStake accounts in the official program, all active stake in one guardian pool; 20/20 sampled real stakers detected by `MainnetChainReader.skrStaked`, the reader behind SKR_STAKED / SKR_TOTAL and the SKR OG mark); C club / quest gating and the SKR OG mark — VERIFIED (tests);
+D SKR social utility (tips, SKR club access) — **not built**.
+Prize note: the CLOCK IN FAQ says staking integrations do not qualify; staking is not presented as Blink's SKR integration.
+
+External staking link on Android: the URL answers 200 (2026-10-08); it opens with `Linking.openURL`, the same call the
+working ORE and explorer links use. **Device check pending** on the next APK (device plan row below).
 
 ## Device test plan (run on the next build)
 
@@ -65,3 +71,7 @@ Clean install → sign up (email) → sign out / in → every tab → Clubs (joi
 → claim → receipt → share receipt / Passport → OG check → gift → deep links from WhatsApp → kill the app mid-funding
 and reopen → airplane mode during claim → battery saver → background/foreground during Tap Rush. Record device model and
 Android version.
+
+Also on the next build: creator's drop → **Close drop** (stock back, drop Closed); a quest or club with an SKR-staked
+rule and a wallet without stake → **Stake on Solana Mobile** opens stake.solanamobile.com in the phone's browser and Back
+returns to Blink; Profile → SKR → Stake SKR does the same; no in-app staking screen anywhere.

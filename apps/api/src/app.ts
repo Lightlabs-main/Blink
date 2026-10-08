@@ -471,10 +471,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   /** Only wallets Privy has verified for the caller (SIWS-linked), so Blink never builds for someone else's wallet. */
   async function requireOwnSkrWallet(req: FastifyRequest, wallet: string) {
+    // D-48: disabled unless the server enables it; nothing is read or built.
+    if (!deps.skr) throw new ClaimError('SKR_STAKING_DISABLED', 'SKR staking happens at stake.solanamobile.com', 404)
     const auth = await requireAuth(req)
     const wallets = await deps.auth.getVerifiedExternalSolanaWallets(auth.privyUserId)
     if (!wallets.includes(wallet)) throw new ClaimError('WALLET_NOT_LINKED', 'link this wallet to your Blink account first', 403)
-    if (!deps.skr) throw new ClaimError('SKR_UNAVAILABLE', 'SKR staking is not available right now', 503)
     return { auth, skr: deps.skr }
   }
 

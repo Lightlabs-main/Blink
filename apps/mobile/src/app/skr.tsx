@@ -10,6 +10,8 @@ import { font } from '../design/fonts'
 import { color, radius, space } from '../design/tokens'
 import { Badge, Button, Card, Chip, DoubleRule, EmptyState, NavBar, Notice, Row, Screen, Skeleton, T } from '../design/ui'
 import { identity } from '../features/core/data-access/app-providers'
+import { FEATURES } from '../lib/features'
+import { openOfficialSkrStaking, SKR_SEED_VAULT_NOTE, SKR_STAKE_LABEL } from '../features/skr/official-staking'
 import { api, ApiError, type SkrAction, type SkrPosition } from '../lib/api'
 import { useMe } from '../lib/data'
 import { shortAddress } from '../lib/format'
@@ -36,10 +38,36 @@ function remaining(ms: number) {
 }
 
 /**
- * D-23: stake SKR with Solana Mobile's guardian pool from inside Blink. Real SKR on MAINNET: Blink builds and
+ * D-48: the route is kept (a stale deep link must not 404) but, with `FEATURES.inAppSkrStaking` off, it only points
+ * to Solana Mobile's official staking. The in-app screen below is preserved for possible use after the hackathon.
+ */
+export default function SkrRoute() {
+  return FEATURES.inAppSkrStaking ? <InAppSkrStaking /> : <OfficialSkrStaking />
+}
+
+function OfficialSkrStaking() {
+  const router = useRouter()
+  return (
+    <Screen>
+      <NavBar onBack={() => router.back()} />
+      <View style={{ gap: space.sm }}>
+        <T variant="overline">Solana Mobile</T>
+        <T variant="display">Stake SKR</T>
+        <T variant="body">Stake SKR with Solana Mobile, then come back: Blink reads your stake onchain for club rules, quests and the SKR mark.</T>
+      </View>
+      <Button icon="arrowUpRight" onPress={openOfficialSkrStaking}>
+        {SKR_STAKE_LABEL}
+      </Button>
+      <T variant="caption">{SKR_SEED_VAULT_NOTE}</T>
+    </Screen>
+  )
+}
+
+/**
+ * D-23 (disabled by D-48): stake SKR with Solana Mobile's guardian pool from inside Blink. Real SKR on MAINNET: Blink builds and
  * simulates the transaction, the user's own wallet app signs and sends it. Blink never holds SKR.
  */
-export default function SkrStaking() {
+function InAppSkrStaking() {
   const router = useRouter()
   const { getAccessToken } = usePrivy()
   const queryClient = useQueryClient()

@@ -10,7 +10,9 @@ import { Icon, type IconName } from '../../design/icons'
 import { PersonName } from '../../design/og'
 import { color, space } from '../../design/tokens'
 import { Avatar, Badge, Button, Card, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
+import { openOfficialSkrStaking } from '../../features/skr/official-staking'
 import { api, apiUrl } from '../../lib/api'
+import { FEATURES } from '../../lib/features'
 import { COUNTRIES } from '../../lib/countries'
 import { displayShares, useAssetMap, useMe, useMyCampaigns, useNetwork, useProfile } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_LABEL, networkLabel, shortAddress } from '../../lib/format'
@@ -216,7 +218,11 @@ export default function Profile() {
       <View style={{ gap: space.md }}>
         <SectionHeader title="SKR" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
-          <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/skr')} subtitle="Stake, unstake and withdraw · mainnet" title="SKR staking" />
+          {FEATURES.inAppSkrStaking ? (
+            <ListRow leading={<RowIcon icon="layers" />} onPress={() => router.push('/skr')} subtitle="Stake, unstake and withdraw · mainnet" title="SKR staking" />
+          ) : (
+            <ListRow leading={<RowIcon icon="layers" />} onPress={openOfficialSkrStaking} subtitle="stake.solanamobile.com or Seed Vault Wallet" title="Stake SKR" />
+          )}
         </Card>
       </View>
 

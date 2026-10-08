@@ -168,7 +168,10 @@ with `getAccountInfo` on the same day.
 | Verified | Lookups tested offline: 8.8.8.8 → US, 197.210.0.1 → NG, 81.2.69.142 → GB, loopback → null (fails closed) |
 | Limitation | The README says the code is no longer maintained (the author recommends `ip-location-api`, which downloads data at runtime). Data releases continue. Revisit before production. VPNs defeat IP checks, which is why the declaration + attestation is primary and the IP is a cross-check |
 
-## SKR staking instructions (D-23, checked 2026-10-02)
+## SKR staking instructions (D-23, checked 2026-10-02) — not used in the submitted build (D-48)
+
+Kept for possible use after the hackathon; off behind `FEATURES.inAppSkrStaking` / `SKR_IN_APP_STAKING`. Staking happens
+on stake.solanamobile.com or Seed Vault Wallet; Blink only reads stakes.
 
 Built by hand from the official IDL (`skr-staking/program/idl.json`); no generated client is vendored.
 
@@ -244,5 +247,6 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
 | SKR mint / staking program / stake config | `SKRbvo6G…hW3` / `SKRskrmt…4BZ` / `4HQy82s9…yqw` | docs.solanamobile.com/solana-mobile-stack/skr | VERIFIED (matches code) |
 | Devnet payout e2e | funding `2p8t7cnp…`, payouts `4W6SPeVn…`, `53xKvVnb…`, allowance 250000 → 50000 | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
 | Devnet send e2e | `2H5CLK4e…` (0-SOL sender, Blink paid fee + rent) | `scripts/devnet-send-e2e.ts` | VERIFIED (devnet) |
+| SKR stake made on official surfaces | 20/20 sampled real stakers detected; 47,618 UserStake accounts, active stake in 1 guardian pool | `scripts/skr-official-stake-check.ts` (mainnet, read-only, 2026-10-08) | VERIFIED |
 | Devnet creator wind-down (W-1) | close `4Bz9tGjd…`: delegate revoked, 50000 raw returned, account closed, 1,534,240 lamports net refunded | `scripts/devnet-claim-e2e.ts` on the server | VERIFIED (devnet) |
 | Postgres concurrency | 20 parallel claims → 5/5; double tap → 1 claim | `apps/api/src/claims.prisma.test.ts` on the server | VERIFIED |

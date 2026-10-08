@@ -105,6 +105,17 @@ describe('push tokens (D-24)', () => {
 })
 
 describe('SKR staking routes (D-23)', () => {
+  it('D-48: off unless the server enables it — nothing is read or built', async () => {
+    app = buildApp({ env, auth: fakeAuth(), campaigns: new InMemoryCampaignRepository(), rpc: {} as Rpc<GetAccountInfoApi>, assets: [] })
+    const pos = await app.inject({ method: 'GET', url: `/v1/skr/position?wallet=${LINKED}`, headers: auth('a') })
+    expect(pos.statusCode).toBe(404)
+    expect(pos.json().error.code).toBe('SKR_STAKING_DISABLED')
+    const prep = await app.inject({ method: 'POST', url: '/v1/skr/prepare', headers: auth('a'), payload: { wallet: LINKED, action: 'stake', amountRaw: '1000000' } })
+    expect(prep.statusCode).toBe(404)
+    expect(calls).toHaveLength(0)
+  })
+
+
   it('only serves wallets Privy verified for the caller', async () => {
     build()
     const other = await app.inject({ method: 'GET', url: `/v1/skr/position?wallet=${OTHER}`, headers: auth('a') })

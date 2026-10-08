@@ -20,6 +20,7 @@ import {
   VERIFIERS,
 } from '../../shared'
 import { ClaimReceipt, claimQueryKey, sentence, useClaimRefresh, useMyClaim } from './claim-panel'
+import { openOfficialSkrStaking, SKR_SEED_VAULT_NOTE, SKR_STAKE_LABEL } from '../skr/official-staking'
 import { XTaskPanel } from './x-task'
 
 const STATUS: Record<VerificationStatus, { icon: IconName; tint: string; text: string }> = {
@@ -106,9 +107,9 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
         : null
     }
     if (c.verifier === 'SEEKER_SGT') return { label: 'Connect my Seeker', icon: 'phone' as const, go: () => router.push({ pathname: '/login/wallet', params: { purpose: 'seeker' } }) }
-    // D-23: a verified wallet that is short on staked SKR can stake right here (mainnet; the wallet signs).
+    // D-48: a verified wallet that is short on staked SKR stakes on Solana Mobile's official site; Blink only reads it.
     if ((c.verifier === 'SKR_STAKED' || c.verifier === 'SKR_TOTAL') && r?.status === 'FAILED' && r.actualRaw !== undefined) {
-      return { label: 'Stake SKR in Blink', icon: 'layers' as const, go: () => router.push('/skr') }
+      return { label: SKR_STAKE_LABEL, icon: 'arrowUpRight' as const, go: openOfficialSkrStaking, note: SKR_SEED_VAULT_NOTE }
     }
     return { label: 'Verify a wallet', icon: 'wallet' as const, go: () => router.push('/login/wallet') }
   }
@@ -174,6 +175,7 @@ export function QuestPanel({ campaign, asset }: { campaign: CampaignSummary; ass
                           {action.label}
                         </Button>
                       ) : null}
+                      {action && live && 'note' in action ? <T variant="caption">{action.note}</T> : null}
                     </View>
                   )
                 })}
