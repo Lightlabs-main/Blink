@@ -23,13 +23,15 @@
       "extends": "base",
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "autoIncrement": true
       }
     },
     "production": {
       "extends": "base",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "autoIncrement": true
       }
     }
   }
