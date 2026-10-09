@@ -23,6 +23,20 @@ export const SUPPORTED_XSTOCKS: readonly SupportedXStock[] = [
   { symbol: 'TSLAx', name: 'Tesla xStock', mint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png', verifiedAt: '2026-09-29' },
   { symbol: 'AAPLx', name: 'Apple xStock', mint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/AAPLx.png', verifiedAt: '2026-09-29' },
   { symbol: 'SPYx', name: 'SP500 xStock', mint: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png', verifiedAt: '2026-09-29' },
+  // 2026-10-09: official API api.xstocks.fi/api/v2/public/assets/{SYMBOL} (Solana deployment) + onchain: Token-2022,
+  // 8 decimals, only REVIEWED_XSTOCK_EXTENSIONS, not paused, no transfer hook, DefaultAccountState initialized, no
+  // multiplier change pending. NFLXx carries a 10x multiplier (stock split); payouts use raw units.
+  { symbol: 'QQQx', name: 'Nasdaq xStock', mint: 'Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/QQQx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'MSFTx', name: 'Microsoft xStock', mint: 'XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/MSFTx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'GOOGLx', name: 'Alphabet xStock', mint: 'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/GOOGLx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'AMZNx', name: 'Amazon.com xStock', mint: 'Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/AMZNx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'METAx', name: 'Meta xStock', mint: 'Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/METAx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'COINx', name: 'Coinbase xStock', mint: 'Xs7ZdzSHLU9ftNJsii5fCeJhoRWSC32SQGzGQtePxNu', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/COINx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'MSTRx', name: 'MicroStrategy xStock', mint: 'XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/MSTRx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'HOODx', name: 'Robinhood xStock', mint: 'XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/HOODx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'CRCLx', name: 'Circle xStock', mint: 'XsueG8BtpquVJX9LVLLEGuViXUungE6WmK5YZ3p3bd1', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/CRCLx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'PLTRx', name: 'Palantir xStock', mint: 'XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/PLTRx.png', verifiedAt: '2026-10-09' },
+  { symbol: 'NFLXx', name: 'Netflix xStock', mint: 'XsEH7wWfJJu2ZT3UCFeVfALnVA6CP5ur7Ee11KmzVpL', decimals: 8, logo: 'https://xstocks-metadata.backed.fi/logos/tokens/NFLXx.png', verifiedAt: '2026-10-09' },
 ]
 
 export function findXStockByMint(mint: string): SupportedXStock | undefined {
