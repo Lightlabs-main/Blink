@@ -524,7 +524,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   /** Public: LIVE drops for the home feed. Empty until campaigns are funded and delegated. */
   app.get('/v1/campaigns', async () => ({
-    campaigns: (await deps.campaigns.listByStatus('LIVE', 50)).map(toSummary),
+    // Only drops that can pay on this network now: a devnet drop on a mainnet server, or one past its end, would only
+    // answer WRONG_NETWORK / CAMPAIGN_OVER at claim time.
+    campaigns: (await deps.campaigns.listByStatus('LIVE', 50, { cluster: deps.env.SOLANA_CLUSTER, endsAfter: new Date() })).map(toSummary),
   }))
 
   /** The authenticated user as the backend sees them (never trusts client-supplied identity). */

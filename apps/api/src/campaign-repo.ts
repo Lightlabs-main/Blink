@@ -48,8 +48,8 @@ export function assertTransition(from: CampaignStatus, to: CampaignStatus) {
 export interface CampaignRepository {
   create(campaign: NewCampaign): Promise<StoredCampaign>
   findById(id: string): Promise<StoredCampaign | null>
-  /** Newest first. */
-  listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]>
+  /** Newest first. `only` narrows to one network and to drops that have not ended at `endsAfter`. */
+  listByStatus(status: CampaignStatus, limit: number, only?: { cluster?: SolanaCluster; endsAfter?: Date }): Promise<StoredCampaign[]>
   /** Newest first. */
   listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]>
   /** Sets the delegate once; returns the stored campaign (existing delegate wins on races). */
@@ -111,8 +111,12 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     return this.rows.get(id) ?? null
   }
 
-  async listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]> {
-    return this.newestFirst().filter((c) => c.status === status).slice(0, limit)
+  async listByStatus(status: CampaignStatus, limit: number, only?: { cluster?: SolanaCluster; endsAfter?: Date }): Promise<StoredCampaign[]> {
+    return this.newestFirst()
+      .filter((c) => c.status === status)
+      .filter((c) => !only?.cluster || c.cluster === only.cluster)
+      .filter((c) => !only?.endsAfter || !c.endsAt || c.endsAt.getTime() > only.endsAfter.getTime())
+      .slice(0, limit)
   }
 
   async listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]> {

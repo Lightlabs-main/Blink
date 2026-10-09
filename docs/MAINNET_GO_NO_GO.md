@@ -5,6 +5,12 @@ write was made; no mainnet SOL, xStock, SKR or ORE was moved).
 
 ## MAINNET STATUS: **NO-GO**
 
+**2026-10-09: the owner switched the server to mainnet anyway** (time pressure; open gates below accepted by the owner).
+`switch-network.sh mainnet` run by Maris on the server; fee payer `5WeRQjUR…HaKhu` funded with 0.03 SOL (30,000,000
+lamports, onchain). Checked from outside: `/health` → `mainnet-beta`, demo mode off; `/v1/status` → payouts on, kill
+switch off, compliance `enforce`, fee payer not low. No mainnet payout made yet; the smoke test (MAINNET_SMOKE_TEST.md)
+still stops at step 21 for explicit approval. Rollback: `bash scripts/switch-network.sh devnet`.
+
 Seven critical gates were not VERIFIED at the audit. Update 2026-10-07: the three code gaps (corporate-action guard, budget
 buffer, creator wind-down) are fixed and verified; still open: Android build + device test, MWA edge cases, mainnet
 simulation, compliance sufficiency, controlled recipient. Status stays **NO-GO** until those close.
