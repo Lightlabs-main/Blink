@@ -265,3 +265,12 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
   APK v2 signing certificate SHA-256 `0F:0A:…:D3:6C` = previous build = assetlinks.json (App Links keep working).
 - **Not yet verified on a device** (MOBILE_STACK_VERIFICATION.md device plan).
 
+
+## xStocks on mainnet expanded to 15 (2026-10-09)
+
+- **Added:** QQQx, MSFTx, GOOGLx, AMZNx, METAx, COINx, MSTRx, HOODx, CRCLx, PLTRx, NFLXx (with NVDAx, TSLAx, AAPLx, SPYx).
+- **Source:** official `api.xstocks.fi/api/v2/public/assets/{SYMBOL}`, Solana deployment address; registry entries compared
+  to the API data by script (15/15 match, existing four unchanged).
+- **Onchain (mainnet, 2026-10-09):** every mint is Token-2022, 8 decimals, only the reviewed extensions, not paused, no
+  transfer hook, DefaultAccountState initialized, no multiplier change pending. NFLXx multiplier is 10 (stock split).
+- **Logos:** official `logo` URLs, HTTP 200. The app reads the list from `/v1/xstocks`, so no rebuild is needed.
