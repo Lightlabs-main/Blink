@@ -173,6 +173,22 @@ describe('read endpoints', () => {
     expect(res.json().campaigns).toEqual([])
   })
 
+  it('GET /v1/campaigns hides LIVE drops from another network and drops past their end', async () => {
+    const repo = new InMemoryCampaignRepository()
+    build({ repo })
+    const base = { type: 'GIFT' as const, creatorPrivyUserId: 'did:privy:test', creatorWallet: CREATOR, mint: MINT, xstockSymbol: 'NVDAx', allowanceRaw: 1n, rewardPerClaimRaw: 1n, tapRush: null }
+    const live = async (id: string, extra: { cluster: 'devnet' | 'mainnet-beta'; endsAt?: Date }) => {
+      const c = await repo.create({ ...base, id, campaignSeed: id, campaignTokenAccount: `acct-${id}`, ...extra })
+      c.status = 'LIVE'
+    }
+    await live('here-open', { cluster: env.SOLANA_CLUSTER as 'devnet' })
+    await live('here-later', { cluster: env.SOLANA_CLUSTER as 'devnet', endsAt: new Date(Date.now() + 3_600_000) })
+    await live('here-ended', { cluster: env.SOLANA_CLUSTER as 'devnet', endsAt: new Date(Date.now() - 1000) })
+    await live('other-network', { cluster: 'mainnet-beta' })
+    const res = await app.inject({ method: 'GET', url: '/v1/campaigns' })
+    expect(res.json().campaigns.map((c: { id: string }) => c.id).sort()).toEqual(['here-later', 'here-open'])
+  })
+
   it('GET /v1/me requires auth and returns verified wallets', async () => {
     build()
     expect((await app.inject({ method: 'GET', url: '/v1/me' })).statusCode).toBe(401)

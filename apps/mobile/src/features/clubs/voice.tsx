@@ -134,7 +134,9 @@ export function VoiceRecorder({ onSend, onClose, sending }: { onSend: (audio: st
       alive = false
       clearTimeout(limitTimer)
       if (started.current && !finishing.current) void recorder.stop().catch(() => {})
-      void setAudioModeAsync({ allowsRecording: false }).catch(() => {})
+      // Pass playsInSilentMode every time: on Android a missing field resets it to false, and then playback on a phone
+      // set to vibrate or silent does nothing (the sender couldn't hear their own notes after recording).
+      void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {})
     }
   }, [recorder])
 

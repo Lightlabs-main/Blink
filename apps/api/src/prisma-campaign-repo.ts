@@ -84,8 +84,16 @@ export class PrismaCampaignRepository implements CampaignRepository {
     return row ? toStored(row) : null
   }
 
-  async listByStatus(status: CampaignStatus, limit: number): Promise<StoredCampaign[]> {
-    const rows = await this.prisma.campaign.findMany({ where: { status }, orderBy: { createdAt: 'desc' }, take: limit })
+  async listByStatus(status: CampaignStatus, limit: number, only?: { cluster?: SolanaCluster; endsAfter?: Date }): Promise<StoredCampaign[]> {
+    const rows = await this.prisma.campaign.findMany({
+      where: {
+        status,
+        ...(only?.cluster ? { cluster: toDbCluster[only.cluster] } : {}),
+        ...(only?.endsAfter ? { OR: [{ endsAt: null }, { endsAt: { gt: only.endsAfter } }] } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
     return rows.map(toStored)
   }
 

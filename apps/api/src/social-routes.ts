@@ -236,8 +236,14 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const { club, member, social } = await visibleClub(req, auth, req.query.invite)
     const [summary] = await summaries([club], auth.privyUserId)
     const ids = await social.campaignIdsForClub(club.id, 30)
+    // Drops from another network (devnet test drops after the mainnet switch) are hidden: they can't pay here.
     const campaigns = (await Promise.all(ids.map((id) => deps.campaigns.findById(id)))).filter(
-      (c): c is StoredCampaign => Boolean(c) && c!.status !== 'DRAFT' && c!.status !== 'AWAITING_FUNDING' && c!.status !== 'AWAITING_DELEGATION',
+      (c): c is StoredCampaign =>
+        Boolean(c) &&
+        c!.status !== 'DRAFT' &&
+        c!.status !== 'AWAITING_FUNDING' &&
+        c!.status !== 'AWAITING_DELEGATION' &&
+        (!deps.env || c!.cluster === deps.env.SOLANA_CLUSTER),
     )
     const detail: ClubDetail = {
       ...summary!,
