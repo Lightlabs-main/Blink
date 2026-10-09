@@ -37,6 +37,10 @@ export interface StoredProfile {
   /** D-45: OG marks from the last check, and when it ran. */
   og: OgType[]
   ogCheckedAt: Date | null
+  /** D-52: verified .skr name (reverse + forward resolution of a SIWS-verified wallet); null when none or unverified. */
+  skrName: string | null
+  skrWallet: string | null
+  skrCheckedAt: Date | null
 }
 
 export class UsernameTakenError extends Error {
@@ -50,11 +54,13 @@ export interface ProfileStore {
   setAvatar(privyUserId: string, image: { bytes: Uint8Array; type: string } | null): Promise<StoredProfile>
   avatar(publicId: string): Promise<{ bytes: Uint8Array; type: string } | null>
   setOg(privyUserId: string, og: OgType[]): Promise<StoredProfile>
+  /** D-52: stores the result of a successful check (a name, or null for "verified: no .skr"). */
+  setSkr(privyUserId: string, skr: { name: string; wallet: string } | null): Promise<StoredProfile>
 }
 
-/** The participant fields every public view shares: username, picture and OG marks. */
-export function profileExtras(p: StoredProfile | null | undefined): { avatarUrl: string | null; og?: OgType[] } {
-  return p?.og.length ? { avatarUrl: avatarPath(p), og: p.og } : { avatarUrl: avatarPath(p) }
+/** The participant fields every public view shares: username, picture, OG marks and the verified .skr name. */
+export function profileExtras(p: StoredProfile | null | undefined): { avatarUrl: string | null; og?: OgType[]; skrName?: string } {
+  return { avatarUrl: avatarPath(p), ...(p?.og.length ? { og: p.og } : {}), ...(p?.skrName ? { skrName: p.skrName } : {}) }
 }
 
 const newPublicId = () => randomBytes(9).toString('base64url')
@@ -72,13 +78,13 @@ export class InMemoryProfileStore implements ProfileStore {
   private row(privyUserId: string) {
     let r = this.rows.get(privyUserId)
     if (!r) {
-      r = { privyUserId, publicId: newPublicId(), username: null, avatarVersion: 0, hasAvatar: false, og: [], ogCheckedAt: null, avatar: null }
+      r = { privyUserId, publicId: newPublicId(), username: null, avatarVersion: 0, hasAvatar: false, og: [], ogCheckedAt: null, skrName: null, skrWallet: null, skrCheckedAt: null, avatar: null }
       this.rows.set(privyUserId, r)
     }
     return r
   }
   private view(r: StoredProfile): StoredProfile {
-    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: r.hasAvatar, og: [...r.og], ogCheckedAt: r.ogCheckedAt }
+    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: r.hasAvatar, og: [...r.og], ogCheckedAt: r.ogCheckedAt, skrName: r.skrName, skrWallet: r.skrWallet, skrCheckedAt: r.skrCheckedAt }
   }
   async get(privyUserId: string) {
     const r = this.rows.get(privyUserId)
@@ -118,18 +124,25 @@ export class InMemoryProfileStore implements ProfileStore {
     r.ogCheckedAt = new Date()
     return this.view(r)
   }
+  async setSkr(privyUserId: string, skr: { name: string; wallet: string } | null) {
+    const r = this.row(privyUserId)
+    r.skrName = skr?.name ?? null
+    r.skrWallet = skr?.wallet ?? null
+    r.skrCheckedAt = new Date()
+    return this.view(r)
+  }
 }
 
-type Row = { privyUserId: string; publicId: string; username: string | null; avatarVersion: number; avatarType: string | null; og: string[]; ogCheckedAt: Date | null }
+type Row = { privyUserId: string; publicId: string; username: string | null; avatarVersion: number; avatarType: string | null; og: string[]; ogCheckedAt: Date | null; skrName: string | null; skrWallet: string | null; skrCheckedAt: Date | null }
 const toOg = (v: string[]) => OG_TYPES.filter((t) => v.includes(t))
 
 export class PrismaProfileStore implements ProfileStore {
   constructor(private readonly prisma: ReturnType<typeof createPrismaClient>) {}
 
   private view(r: Row): StoredProfile {
-    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: Boolean(r.avatarType), og: toOg(r.og), ogCheckedAt: r.ogCheckedAt }
+    return { privyUserId: r.privyUserId, publicId: r.publicId, username: r.username, avatarVersion: r.avatarVersion, hasAvatar: Boolean(r.avatarType), og: toOg(r.og), ogCheckedAt: r.ogCheckedAt, skrName: r.skrName, skrWallet: r.skrWallet, skrCheckedAt: r.skrCheckedAt }
   }
-  private readonly select = { privyUserId: true, publicId: true, username: true, avatarVersion: true, avatarType: true, og: true, ogCheckedAt: true } as const
+  private readonly select = { privyUserId: true, publicId: true, username: true, avatarVersion: true, avatarType: true, og: true, ogCheckedAt: true, skrName: true, skrWallet: true, skrCheckedAt: true } as const
 
   async get(privyUserId: string) {
     const r = await this.prisma.profile.findUnique({ where: { privyUserId }, select: this.select })
@@ -170,6 +183,11 @@ export class PrismaProfileStore implements ProfileStore {
       update: { ...data, avatarVersion: { increment: 1 } },
       select: this.select,
     })
+    return this.view(r)
+  }
+  async setSkr(privyUserId: string, skr: { name: string; wallet: string } | null) {
+    const data = { skrName: skr?.name ?? null, skrWallet: skr?.wallet ?? null, skrCheckedAt: new Date() }
+    const r = await this.prisma.profile.upsert({ where: { privyUserId }, create: { privyUserId, publicId: newPublicId(), ...data }, update: data, select: this.select })
     return this.view(r)
   }
   async avatar(publicId: string) {

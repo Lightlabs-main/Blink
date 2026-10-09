@@ -38,6 +38,29 @@ export const envSchema = z.object({
     .transform((v) => v === 'true'),
   /** D-48: Blink's own SKR stake/unstake builder (D-23). Off by default: SKR is staked on Solana Mobile's official surfaces. */
   SKR_IN_APP_STAKING: boolFlag,
+  /** D-49: SKR tips between members (sender's own wallet signs and pays; Blink never moves user funds). */
+  SKR_TIPS_ENABLED: boolFlag,
+  /** D-50: paid SKR boosts for funded drops. Live only when enabled AND price, hours and destination are all set. */
+  SKR_BOOST_ENABLED: boolFlag,
+  /** Owner-approved fixed package: raw SKR (6 decimals) per boost. No default — never guessed. */
+  SKR_BOOST_PRICE_RAW: z.string().regex(/^[1-9]\d*$/).transform((v) => BigInt(v)).optional(),
+  /** Owner-approved fixed package: featured hours per boost. */
+  SKR_BOOST_HOURS: z.coerce.number().int().min(1).max(168).optional(),
+  /** Owner-provided Blink wallet that receives boost payments (its SKR token account is created if missing). */
+  SKR_BOOST_DESTINATION: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
+  /** D-51: ORE live-grid deploys signed by the user's wallet. Reading the board is always on. */
+  ORE_DEPLOY_ENABLED: boolFlag,
+  /** Owner-approved hard cap per square (lamports). Required for deploys; no default. */
+  ORE_MAX_LAMPORTS_PER_SQUARE: lamports.optional(),
+  /** Owner-approved cap on squares per deploy. */
+  ORE_MAX_SQUARES: z.coerce.number().int().min(1).max(25).default(1),
+  /** Club slug shown as "ORE Miners Club" with the live board entry. */
+  ORE_CLUB_SLUG: z.string().regex(/^[a-z0-9-]{3,40}$/).optional(),
+  /**
+   * D-51 compliance gate: paid, chance-based ORE deploys never unlock xStock rewards unless the owner approves the
+   * legal treatment. Verified deploys still earn the non-financial ORE Miner mark and receipts.
+   */
+  ORE_REWARDS_ENABLED: boolFlag,
   /** D-24: optional Expo access token for push sends ("enhanced push security"). Backend .env only. */
   EXPO_ACCESS_TOKEN: z.string().min(10).optional(),
   /** D-20: xStocks eligibility gate. 'off' is refused on mainnet. */
@@ -96,6 +119,12 @@ export function assertConsistentCluster(env: BlinkEnv): void {
   }
   if (env.SOLANA_CLUSTER === 'mainnet-beta' && env.XSTOCK_COMPLIANCE !== 'enforce') {
     throw new ConfigError('XSTOCK_COMPLIANCE must be enforce on mainnet-beta (D-20)')
+  }
+  if (env.ORE_DEPLOY_ENABLED && env.ORE_MAX_LAMPORTS_PER_SQUARE === undefined) {
+    throw new ConfigError('ORE_DEPLOY_ENABLED=true requires an owner-approved ORE_MAX_LAMPORTS_PER_SQUARE')
+  }
+  if (env.SKR_BOOST_ENABLED && (env.SKR_BOOST_PRICE_RAW === undefined || env.SKR_BOOST_HOURS === undefined || !env.SKR_BOOST_DESTINATION)) {
+    throw new ConfigError('SKR_BOOST_ENABLED=true requires owner-approved SKR_BOOST_PRICE_RAW, SKR_BOOST_HOURS and SKR_BOOST_DESTINATION')
   }
   if (env.MAINNET_BUDGET_LAMPORTS > MAINNET_HARD_CEILING_LAMPORTS) {
     throw new ConfigError(

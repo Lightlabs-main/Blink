@@ -83,6 +83,8 @@ function build(
     sgt?: Record<string, string>
     eligibility?: EligibilityService
     chain?: ChainReader
+    /** D-51: owner approval for ORE mining quests inside reward drops. */
+    oreRewards?: boolean
   } = {},
 ) {
   campaigns = new InMemoryCampaignRepository()
@@ -103,6 +105,7 @@ function build(
       claims,
       chain: opts.chain,
       seeker: opts.sgt ? { findSgt: async (wallet: string) => opts.sgt![wallet] ?? null } : undefined,
+      oreRewardsEnabled: opts.oreRewards,
     }),
   })
   return payouts
@@ -770,13 +773,14 @@ describe('Verified Quest (D-21)', () => {
     await app.close()
     const oreChain = chain({}, {}, false, { 'seedvault-alice': 1_001n, 'seedvault-bob': 1_000n }, 1_000n)
     app = buildApp({
-      env,
+      // D-51: only with the owner's approval of paid-mining incentives.
+      env: loadEnv({ SOLANA_RPC_URL: 'https://api.devnet.solana.com', XSTOCK_COMPLIANCE: 'off', ORE_REWARDS_ENABLED: 'true' }),
       auth: creator,
       campaigns,
       rpc: { getAccountInfo: () => ({ send: async () => ({ context: { slot: 1n }, value: null }) }) } as unknown as Rpc<GetAccountInfoApi>,
       assets: ASSETS,
       claims,
-      quests: new QuestService({ auth: creator, claims, chain: oreChain }),
+      quests: new QuestService({ auth: creator, claims, chain: oreChain, oreRewardsEnabled: true }),
     })
     const requirements = { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY' }] }] }
     const made = await app.inject({ method: 'POST', url: '/v1/campaigns', headers: as('creator'), payload: { type: 'VERIFIED_QUEST', mint: MINT, allowanceRaw: '1000', rewardPerClaimRaw: '100', requirements } })
@@ -785,7 +789,7 @@ describe('Verified Quest (D-21)', () => {
 
     // Evaluation (each test user's verified wallet is "seedvault-<name>").
     await app.close()
-    build({ chain: oreChain })
+    build({ chain: oreChain, oreRewards: true })
     const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1000' }] }] } })
     const alice = (await verify(c.id, 'alice')).json().evaluation
     expect(alice.qualified).toBe(true)
@@ -795,8 +799,16 @@ describe('Verified Quest (D-21)', () => {
     expect(never.qualified).toBe(false)
   })
 
+  it('ORE mining never qualifies for a stock reward without the owner’s approval (D-51)', async () => {
+    build({ chain: chain({}, {}, false, { 'seedvault-alice': 1_001n }, 1_000n) })
+    const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1000' }] }] } })
+    const ev = (await verify(c.id, 'alice')).json().evaluation
+    expect(ev.actions[0].results[0]).toMatchObject({ status: 'FAILED', detail: 'REWARDS_DISABLED' })
+    expect(ev.qualified).toBe(false)
+  })
+
   it('ORE mining fails closed when ORE cannot be read', async () => {
-    build({ chain: chain({}, {}, true) })
+    build({ chain: chain({}, {}, true), oreRewards: true })
     const c = await liveCampaign({ type: 'VERIFIED_QUEST', requirements: { eligibility: [], actions: [{ mode: 'ALL', conditions: [{ verifier: 'ORE_ACTIVITY', afterRound: '1000' }] }] } })
     const ev = (await verify(c.id, 'alice')).json().evaluation
     expect(ev.actions[0].results[0].status).toBe('ERROR')

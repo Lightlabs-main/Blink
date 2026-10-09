@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import type { BlinkEnv } from '@blink/config'
-import { type HistoryItem, OG_TYPES, TAP_RUSH_DEFAULTS } from '@blink/domain'
+import { type CampaignSummary, type HistoryItem, OG_TYPES, TAP_RUSH_DEFAULTS } from '@blink/domain'
 import { campaignSeedFromUuid, checkCampaignAccountBeforeCreation, deriveCampaignTokenAccount } from '@blink/solana'
 import {
   claimRequest,
@@ -42,6 +42,7 @@ import { type FundingService, FundingRequestError } from './funding-service.ts'
 import { ClaimError, type PayoutService } from './payout-service.ts'
 import { LIMITS, RateLimiter } from './rate-limit.ts'
 import { registerSocialRoutes } from './social-routes.ts'
+import { chainHistoryItems, registerSkrOreRoutes, type SkrOreDeps } from './skr-ore-routes.ts'
 import type { SocialStore } from './social-store.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
@@ -85,6 +86,8 @@ export interface AppDeps {
   market?: XStockMarket
   /** Read-only mainnet xStock balances for creator wallets; optional. */
   holdings?: XStockHoldings
+  /** D-49..D-52: SKR tips and boosts, ORE live grid, .skr identity (user-signed; mainnet). Routes absent without it. */
+  chain?: Omit<SkrOreDeps, 'env' | 'auth' | 'requireAuth' | 'limiter' | 'campaigns' | 'social' | 'profiles' | 'notifier'>
   logger?: boolean
 }
 
@@ -230,6 +233,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   })
 
   registerSocialRoutes(app, deps, { requireAuth, throttle, limiter })
+  if (deps.chain) {
+    registerSkrOreRoutes(app, {
+      ...deps.chain, env: deps.env, auth: deps.auth, requireAuth, limiter, campaigns: deps.campaigns, social: deps.social, profiles: deps.profiles, notifier,
+    })
+  }
 
   // ---- D-38: history (every line opens a receipt) ----
 
@@ -329,6 +337,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         })
       }
     }
+    if (deps.chain) items.push(...(await chainHistoryItems(deps.chain.store, auth.privyUserId, deps.profiles)))
     items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     return { items: items.slice(0, 200) }
   })
@@ -344,6 +353,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     avatarUrl: avatarPath(p),
     og: p?.og ?? [],
     ogCheckedAt: p?.ogCheckedAt?.toISOString() ?? null,
+    // D-52: verified .skr name; null with a check time = verified "none", null without = never checked.
+    skrName: p?.skrName ?? null,
+    skrCheckedAt: p?.skrCheckedAt?.toISOString() ?? null,
   })
 
   /**
@@ -526,8 +538,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get('/v1/campaigns', async () => ({
     // Only drops that can pay on this network now: a devnet drop on a mainnet server, or one past its end, would only
     // answer WRONG_NETWORK / CAMPAIGN_OVER at claim time.
-    campaigns: (await deps.campaigns.listByStatus('LIVE', 50, { cluster: deps.env.SOLANA_CLUSTER, endsAfter: new Date() })).map(toSummary),
+    campaigns: await withBoosts((await deps.campaigns.listByStatus('LIVE', 50, { cluster: deps.env.SOLANA_CLUSTER, endsAfter: new Date() })).map(toSummary)),
   }))
+
+  /**
+   * D-50: attach the active paid boost window and put boosted drops first (newest-first order kept within each
+   * group). Only LIVE, unended drops reach this list, so a paused or ended drop never gets paid prominence.
+   */
+  async function withBoosts(list: CampaignSummary[]): Promise<CampaignSummary[]> {
+    if (!deps.chain || !list.length) return list
+    const active = await deps.chain.store.activeBoosts(list.map((c) => c.id), new Date())
+    const tagged = list.map((c) => ({ ...c, boostedUntil: active.get(c.id)?.toISOString() ?? null }))
+    return [...tagged.filter((c) => c.boostedUntil), ...tagged.filter((c) => !c.boostedUntil)]
+  }
 
   /** The authenticated user as the backend sees them (never trusts client-supplied identity). */
   app.get('/v1/me', async (req) => {
@@ -578,6 +601,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const parsed = createCampaignRequest.safeParse(req.body)
     if (!parsed.success) return sendError(reply, 400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'invalid')
     const body = parsed.data
+    // D-51: paying SOL into a chance-based ORE round must not unlock an xStock reward without owner/legal approval.
+    if (body.requirements && questUses(body.requirements, 'ORE_ACTIVITY') && !deps.env.ORE_REWARDS_ENABLED) {
+      return sendError(reply, 403, 'ORE_REWARDS_DISABLED', 'ORE mining quests can’t carry stock rewards yet')
+    }
 
     // D-40: a drop can be posted only in a club the creator belongs to.
     if (body.clubId) {

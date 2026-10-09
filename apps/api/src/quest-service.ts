@@ -118,6 +118,11 @@ export class QuestService {
       xTasks?: XTaskStore
       /** D-40: club membership and event check-ins. */
       social?: SocialStore
+      /**
+       * D-51 compliance gate: inside a drop (an xStock reward), ORE_ACTIVITY counts only when the owner approved
+       * paid-mining incentives. Club rules and OG marks (no reward) are unaffected.
+       */
+      oreRewardsEnabled?: boolean
       log?: { warn: (o: object, msg: string) => void }
     },
   ) {}
@@ -226,6 +231,10 @@ export class QuestService {
             return
           }
           if (!chain) throw new Error('mainnet reader not configured')
+          if (c.verifier === 'ORE_ACTIVITY' && campaign && !this.deps.oreRewardsEnabled) {
+            results.set(c, { verifier: c.verifier, status: 'FAILED', detail: 'REWARDS_DISABLED' })
+            return
+          }
           if (c.verifier === 'ORE_ACTIVITY') {
             // D-33: mined in a round after the one recorded when the campaign was created (any verified wallet).
             if (c.afterRound === undefined) throw new Error('ORE_ACTIVITY condition has no start round')
