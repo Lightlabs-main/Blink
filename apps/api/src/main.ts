@@ -30,6 +30,9 @@ import { InMemorySocialStore, PrismaSocialStore, type SocialStore } from './soci
 import { InMemoryXTaskStore, OEmbedXPostReader, PrismaXTaskStore, type XTaskStore } from './x-quest.ts'
 import { XStockHoldings } from './xstock-holdings.ts'
 import { XStockMarket } from './xstock-market.ts'
+import { type ChainActivityStore, InMemoryChainActivityStore, PrismaChainActivityStore } from './chain-activity-store.ts'
+import { AllDomainsSkrResolver } from './skr-identity.ts'
+import { WalletTxRelay } from './wallet-relay.ts'
 
 // Blink's own .env at the repository root, regardless of the process cwd.
 try {
@@ -53,10 +56,12 @@ let profiles: ProfileStore
 let transfers: TransferStore
 let xTasks: XTaskStore
 let social: SocialStore
+let chainStore: ChainActivityStore
 if (env.DATABASE_URL) {
   prisma = createPrismaClient(env.DATABASE_URL)
   xTasks = new PrismaXTaskStore(prisma)
   social = new PrismaSocialStore(prisma)
+  chainStore = new PrismaChainActivityStore(prisma)
   transfers = new PrismaTransferStore(prisma)
   pushTokens = new PrismaPushTokenStore(prisma)
   profiles = new PrismaProfileStore(prisma)
@@ -72,6 +77,7 @@ if (env.DATABASE_URL) {
   transfers = new InMemoryTransferStore()
   xTasks = new InMemoryXTaskStore()
   social = new InMemorySocialStore()
+  chainStore = new InMemoryChainActivityStore()
   claims = new InMemoryClaimRepository(memory)
   ledger = new InMemoryBudgetLedger(env)
 } else {
@@ -112,7 +118,10 @@ const auth = new PrivyAuthVerifier({ appId: env.PRIVY_APP_ID, appSecret: env.PRI
 // D-21: Verified Quest reads SKR/ORE from mainnet (the protocols exist only there), whatever cluster payouts use.
 const mainnetRead = createSolanaRpc(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com')
 const seeker = new MainnetSeekerVerifier(mainnetRead)
-const quests = new QuestService({ auth, claims, chain: new MainnetChainReader(mainnetRead), seeker, xTasks, social, log: { warn: (o, msg) => app.log.warn(o, msg) } })
+// D-49..D-52: SKR and ORE exist only on mainnet. On a mainnet server the main RPC builds and relays; otherwise the
+// mainnet read RPC serves the read-only parts (every spending route is disabled off mainnet by featureConfig).
+const chainRpc = env.SOLANA_CLUSTER === 'mainnet-beta' ? clusterRpc : mainnetRead
+const quests = new QuestService({ auth, claims, chain: new MainnetChainReader(mainnetRead), seeker, xTasks, social, oreRewardsEnabled: env.ORE_REWARDS_ENABLED, log: { warn: (o, msg) => app.log.warn(o, msg) } })
 // D-20: xStocks eligibility (self-declared + offline IP-country cross-check; no IP is stored or sent anywhere).
 const eligibility = new EligibilityService({ env, store: claims, ipCountry: new GeoipCountryResolver() })
 const app = buildApp({
@@ -153,6 +162,12 @@ const app = buildApp({
   xReader: new OEmbedXPostReader(),
   market: readRpc ? new XStockMarket(readRpc, 60_000, assets) : undefined,
   holdings: readRpc ? new XStockHoldings(readRpc, 30_000, assets) : undefined,
+  chain: {
+    store: chainStore,
+    rpc: chainRpc,
+    relay: new WalletTxRelay(chainRpc),
+    skrNames: new AllDomainsSkrResolver(env.SEEKER_RPC_URL ?? env.XSTOCK_READ_RPC_URL ?? 'https://api.mainnet.solana.com'),
+  },
   logger: true,
 })
 

@@ -40,6 +40,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import type { AuthContext, AuthVerifier } from './auth.ts'
 import { type CampaignRepository, type StoredCampaign, toSummary } from './campaign-repo.ts'
+import type { ChainActivityStore } from './chain-activity-store.ts'
 import type { ClaimRepository } from './claim-repo.ts'
 import { ClaimError } from './payout-service.ts'
 import type { QuestService } from './quest-service.ts'
@@ -71,6 +72,8 @@ export interface SocialDeps {
   send?: Pick<SendService, 'prepare' | 'submit'>
   eligibility?: Pick<EligibilityService, 'isEligibleStored'>
   notifier?: Notifier
+  /** D-50: paid SKR boost windows, to mark and order a club's featured drops. */
+  chain?: { store: Pick<ChainActivityStore, 'activeBoosts'> }
 }
 
 interface Ctx {
@@ -109,8 +112,20 @@ function clubNameProblem(name: string, slug: string): string | null {
   return null
 }
 
+/** Opaque per-club handle for a member (never the Privy user id); used to address gifts, tips, roles and mutes. */
+export const memberRef = (clubId: string, privyUserId: string) => createHash('sha256').update(`club-member:${clubId}:${privyUserId}`).digest('hex').slice(0, 16)
+
 export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx: Ctx) {
   const { requireAuth, throttle, limiter } = ctx
+
+  /** D-50: LIVE drops with an active paid boost first, marked; ended/paused drops keep no paid prominence. */
+  async function clubDropsWithBoosts(list: StoredCampaign[]) {
+    const summaries = list.map(toSummary)
+    if (!deps.chain || !summaries.length) return summaries
+    const active = await deps.chain.store.activeBoosts(list.filter((c) => c.status === 'LIVE').map((c) => c.id), new Date())
+    const tagged = summaries.map((c) => ({ ...c, boostedUntil: active.get(c.id)?.toISOString() ?? null }))
+    return [...tagged.filter((c) => c.boostedUntil), ...tagged.filter((c) => !c.boostedUntil)]
+  }
 
   function requireSocial(): SocialStore {
     if (!deps.social) throw new ClaimError('CLUBS_UNAVAILABLE', 'clubs are not available right now', 503)
@@ -248,7 +263,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const detail: ClubDetail = {
       ...summary!,
       inviteCode: member && club.visibility === 'PRIVATE' ? club.inviteCode : member?.role === 'OWNER' || member?.role === 'MOD' ? club.inviteCode : null,
-      campaigns: campaigns.map(toSummary),
+      campaigns: await clubDropsWithBoosts(campaigns),
       adminsOnly: club.adminsOnly,
       pinned: null,
       myMutedUntil: member?.mutedUntil && member.mutedUntil.getTime() > Date.now() ? member.mutedUntil.toISOString() : null,
@@ -469,7 +484,6 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
 
   // ---- D-43: admins — members list, roles, mute, remove, chat settings, pin ----
 
-  const memberRef = (clubId: string, privyUserId: string) => createHash('sha256').update(`club-member:${clubId}:${privyUserId}`).digest('hex').slice(0, 16)
 
   app.get<{ Params: { slug: string } }>('/v1/clubs/:slug/members', async (req) => {
     const auth = await requireAuth(req)

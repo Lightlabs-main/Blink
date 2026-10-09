@@ -249,6 +249,10 @@ model Profile {
   /// D-45: OG marks (ORE, SEEKER, SKR) from the last mainnet check.
   og            String[]  @default([])
   ogCheckedAt   DateTime?
+  /// D-52: verified .skr name — reverse-resolved from a SIWS-verified wallet AND forward-resolved back to it.
+  skrName       String?
+  skrWallet     String?
+  skrCheckedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -452,4 +456,66 @@ model ClubGift {
 
   @@index([recipientPrivyUserId, createdAt])
   @@index([senderPrivyUserId, createdAt])
+}
+
+/// D-49: SKR tips. The sender's own wallet signs and pays; Blink only builds, relays and verifies.
+/// Status: PREPARED → SUBMITTED → CONFIRMED | FAILED | EXPIRED. One confirmed transfer = one tip (signature unique).
+model SkrTip {
+  id                   String    @id @db.Uuid
+  senderPrivyUserId    String
+  recipientPrivyUserId String
+  senderWallet         String
+  recipientWallet      String
+  clubId               String?   @db.Uuid
+  amountRaw            Decimal   @db.Decimal(20, 0)
+  cluster              String
+  status               String
+  signature            String?   @unique
+  failure              String?
+  createdAt            DateTime  @default(now())
+  confirmedAt          DateTime?
+
+  @@index([senderPrivyUserId, createdAt])
+  @@index([recipientPrivyUserId, createdAt])
+}
+
+/// D-50: paid SKR boost of a funded drop. Confirmed transfer → fixed-duration featured entitlement, activated once.
+/// startsAt/endsAt are set by the server at confirmation; a later boost extends from the current end.
+model SkrBoost {
+  id               String    @id @db.Uuid
+  campaignId       String    @db.Uuid
+  payerPrivyUserId String
+  payerWallet      String
+  destination      String
+  amountRaw        Decimal   @db.Decimal(20, 0)
+  hours            Int
+  cluster          String
+  status           String
+  signature        String?   @unique
+  failure          String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  createdAt        DateTime  @default(now())
+  confirmedAt      DateTime?
+
+  @@index([campaignId, endsAt])
+  @@index([payerPrivyUserId, createdAt])
+}
+
+/// D-51: an ORE deploy verified onchain (DeployEvent logged by the ORE program, manual strategy, this user's wallet).
+/// The signature is unique: one deploy is one proof, whatever drop or mark it is used for.
+model OreDeployProof {
+  signature       String   @id
+  privyUserId     String
+  wallet          String
+  roundId         Decimal  @db.Decimal(20, 0)
+  squares         Int[]
+  amountPerSquare Decimal  @db.Decimal(20, 0)
+  totalLamports   Decimal  @db.Decimal(20, 0)
+  slot            Decimal  @db.Decimal(20, 0)
+  deployedAt      DateTime
+  campaignId      String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  @@index([privyUserId, createdAt])
 }

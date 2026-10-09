@@ -1,0 +1,175 @@
+{
+ "blockTime": 1791571904,
+ "meta": {
+  "computeUnitsConsumed": 37940,
+  "costUnits": 41503,
+  "err": null,
+  "fee": 5800,
+  "innerInstructions": [
+   {
+    "index": 3,
+    "instructions": [
+     {
+      "accounts": [
+       0,
+       7
+      ],
+      "data": "3Bxs4erQCJiTqhSw",
+      "programIdIndex": 10,
+      "stackHeight": 2
+     },
+     {
+      "accounts": [
+       2
+      ],
+      "data": "5u9ffikrRy9j8fBFjAnWvEczQHAB5jGGBGBmJxPhrcmVauAhFQAFQD6CtRiRE45NxvzYmRRCBNNdgzJuzLUiYhU2aDLBbmkMJRr28pwwNCJDxN8rBhs96p2tejtmZK2M8u97ncQEUDgzqgFTXWTENv8asZ1Eu6dMH5qH1",
+      "programIdIndex": 11,
+      "stackHeight": 2
+     }
+    ]
+   }
+  ],
+  "loadedAddresses": {
+   "readonly": [],
+   "writable": []
+  },
+  "logMessages": [
+   "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+   "Program ComputeBudget111111111111111111111111111111 success",
+   "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+   "Program ComputeBudget111111111111111111111111111111 success",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv invoke [1]",
+   "Program log: Round ID: 433849",
+   "Program log: Split rewards: 0.00321850799 ORE",
+   "Program log: Sending 0.01643903 SOL to authority",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv consumed 15964 of 79700 compute units",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv success",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv invoke [1]",
+   "Program log: Ore accounts: 10",
+   "Program log: Entropy accounts: 2",
+   "Program 11111111111111111111111111111111 invoke [2]",
+   "Program 11111111111111111111111111111111 success",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv invoke [2]",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv consumed 443 of 45072 compute units",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv success",
+   "Program log: Round #433850: deploying 0.001189101 SOL to 15 squares",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv consumed 21676 of 63736 compute units",
+   "Program oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv success"
+  ],
+  "postBalances": [
+   3256602062,
+   0,
+   3205636,
+   4480400,
+   690488999,
+   1378459326798,
+   2895360,
+   6980656538,
+   2561280,
+   1,
+   1,
+   43141440,
+   1141440
+  ],
+  "postTokenBalances": [],
+  "preBalances": [
+   3258005347,
+   0,
+   3205636,
+   4480400,
+   706928029,
+   1378459326798,
+   2895360,
+   6962820023,
+   2561280,
+   1,
+   1,
+   43141440,
+   1141440
+  ],
+  "preTokenBalances": [],
+  "rewards": [],
+  "status": {
+   "Ok": null
+  }
+ },
+ "slot": 454964824,
+ "transaction": {
+  "message": {
+   "accountKeys": [
+    "DLywT1TkpvWr5YmzmEbptxuXJR3ud3aEWKCC57cMdyJu",
+    "Bd3dtbcmNT3Bvt4nFFonqP6aZ6StNEyvGu2SKnjJqNpv",
+    "BrcSxdp1nXFzou1YyDnQJcPNBNHgoypZmTsyKBSLLXzi",
+    "6C9Tk5Kc2zSpYD9BrpJeeqZmBfBxhcKh3VdAEdWJpRPi",
+    "DiKR2EYZWaT9ox9fzJP43cb2X8FCACHfkrf3stcqFyFP",
+    "45db2FSR4mcXdSVVZbKbwojU6uYDpMyhpEi7cC8nHaWG",
+    "9c9X7aDRAF41faiDs94ELjT19UrGnn72wBW9hPsS4Awy",
+    "7sEULC4ipJCe6CQz9BHpxVyzKr2yScMudNwMiqLykzmu",
+    "BWCaDY96Xe4WkFq1M7UiCCRcChsJ3p51L5KrGzhxgm2E",
+    "ComputeBudget111111111111111111111111111111",
+    "11111111111111111111111111111111",
+    "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+    "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+   ],
+   "header": {
+    "numReadonlySignedAccounts": 0,
+    "numReadonlyUnsignedAccounts": 4,
+    "numRequiredSignatures": 1
+   },
+   "instructions": [
+    {
+     "accounts": [],
+     "data": "HN9tQF",
+     "programIdIndex": 9,
+     "stackHeight": 1
+    },
+    {
+     "accounts": [],
+     "data": "3GAG5eogvTjV",
+     "programIdIndex": 9,
+     "stackHeight": 1
+    },
+    {
+     "accounts": [
+      0,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      10
+     ],
+     "data": "3",
+     "programIdIndex": 11,
+     "stackHeight": 1
+    },
+    {
+     "accounts": [
+      0,
+      0,
+      1,
+      2,
+      6,
+      3,
+      7,
+      5,
+      10,
+      11,
+      8,
+      12
+     ],
+     "data": "aTinJDwBRKjdRWaZN",
+     "programIdIndex": 11,
+     "stackHeight": 1
+    }
+   ],
+   "recentBlockhash": "4554b91u5pTHKEq69udEpi1cNmmJNoUKNUfL2EXeJRub"
+  },
+  "signatures": [
+   "5wxaspdr86X9KjyEszUxVS4PBABpExz5tnpAcdYTYxXh4nbdBcf6oBhg4JPppKz2rB7DA2nszN9U9rgxM4FvfSDH"
+  ]
+ },
+ "transactionIndex": 108,
+ "version": "legacy"
+}

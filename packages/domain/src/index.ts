@@ -90,6 +90,11 @@ export interface CampaignSummary {
   /** D-41: only members of that club can take part (any mechanic). */
   membersOnly: boolean
   createdAt: string
+  /**
+   * D-50: end (ISO) of the paid SKR boost window active now, set by the server from confirmed payments only.
+   * Placement only: it never extends the drop, changes its rules or affects claims.
+   */
+  boostedUntil?: string | null
 }
 
 /** Mechanics recipients can claim (D-13, D-14, D-17, D-21). */
@@ -194,7 +199,20 @@ export interface ClaimSummary {
 
 /** D-38: one line of the user's history; every line opens a receipt. */
 /** CHECKIN and CLUB_JOINED (D-40) are offchain records: no amount, no transaction. */
-export type HistoryKind = 'REWARD' | 'INVITE_BONUS' | 'SENT' | 'FUNDED' | 'CHECKIN' | 'CLUB_JOINED' | 'GIFT_RECEIVED'
+export type HistoryKind =
+  | 'REWARD'
+  | 'INVITE_BONUS'
+  | 'SENT'
+  | 'FUNDED'
+  | 'CHECKIN'
+  | 'CLUB_JOINED'
+  | 'GIFT_RECEIVED'
+  // D-49..D-51: user-signed SKR and ORE activity, recorded only after the server verified the transaction onchain.
+  | 'SKR_TIP_SENT'
+  | 'SKR_TIP_RECEIVED'
+  | 'SKR_BOOST_PURCHASED'
+  | 'ORE_DEPLOY_CONFIRMED'
+  | 'ORE_MINER_VERIFIED'
 
 export interface HistoryItem {
   /** `<kind>:<source id>`, stable across refreshes. */
@@ -216,6 +234,8 @@ export interface HistoryItem {
   title?: string | null
   /** CLUB_JOINED: the club's slug, to open it. */
   clubSlug?: string | null
+  /** D-50 boost window; D-51 ORE round and squares — only values read from the verified transaction or server records. */
+  details?: { startsAt?: string; endsAt?: string; roundId?: string; squares?: number[]; lamportsPerSquare?: string }
   at: string
 }
 
@@ -541,6 +561,8 @@ export interface PublicParticipant {
   avatarUrl?: string | null
   /** D-45: OG marks (ORE, SEEKER, SKR), in that order. */
   og?: OgType[]
+  /** D-52: verified .skr name (e.g. "maris.skr"); absent when the person has none or it could not be verified. */
+  skrName?: string
 }
 
 export interface LiveEvent {
