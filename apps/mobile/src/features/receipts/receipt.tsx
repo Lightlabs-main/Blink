@@ -36,16 +36,29 @@ export function receiptTitle(item: HistoryItem): string {
       return 'Joined a club'
     case 'GIFT_RECEIVED':
       return item.title ? `Gift from ${item.title}` : 'Gift received'
+    case 'SKR_TIP_SENT':
+      return item.title ? `SKR tip to ${item.title}` : 'SKR tip sent'
+    case 'SKR_TIP_RECEIVED':
+      return item.title ? `SKR tip from ${item.title}` : 'SKR tip received'
+    case 'SKR_BOOST_PURCHASED':
+      return 'Drop boosted with SKR'
+    case 'ORE_DEPLOY_CONFIRMED':
+      return 'ORE deploy'
+    case 'ORE_MINER_VERIFIED':
+      return 'Verified ORE Miner'
   }
 }
 
 /** D-40: check-ins and club joins are Blink records, not Solana transactions: no amount, no network. */
 export const isOffchain = (item: HistoryItem) => item.kind === 'CHECKIN' || item.kind === 'CLUB_JOINED'
+/** D-51: a profile mark backed by a verified deploy (the deploy itself has its own receipt). No amount. */
+const isMark = (item: HistoryItem) => item.kind === 'ORE_MINER_VERIFIED'
 
 /** The big line on the receipt and the trailing text in the list. */
 export function receiptHeadline(item: HistoryItem, asset: XStockListing | undefined): string {
   if (item.kind === 'CHECKIN') return `${item.title ?? item.symbol} event ✓`
   if (item.kind === 'CLUB_JOINED') return item.title ?? 'Club'
+  if (isMark(item)) return 'ORE Miner ✓'
   return receiptAmount(item, asset)
 }
 
@@ -57,7 +70,8 @@ export function receiptRef(item: HistoryItem): string {
 export function receiptAmount(item: HistoryItem, asset: XStockListing | undefined): string {
   const shares = item.mint ? displayShares(asset, item.amountRaw) : null
   const amount = shares ?? formatRaw(BigInt(item.amountRaw), item.decimals, 4)
-  const sign = item.kind === 'SENT' || item.kind === 'FUNDED' ? '−' : '+'
+  const outgoing: HistoryItem['kind'][] = ['SENT', 'FUNDED', 'SKR_TIP_SENT', 'SKR_BOOST_PURCHASED', 'ORE_DEPLOY_CONFIRMED']
+  const sign = outgoing.includes(item.kind) ? '−' : '+'
   return `${sign}${amount} ${item.symbol}`
 }
 
@@ -67,6 +81,8 @@ const STATUS_TEXT: Record<HistoryItem['status'], string> = { CONFIRMED: 'Confirm
 function statusText(item: HistoryItem) {
   if (isOffchain(item)) return 'Recorded by Blink ✓'
   if (item.kind === 'GIFT_RECEIVED') return 'Gift received ✓'
+  if (isMark(item)) return 'Verified onchain ✓'
+  if (item.kind === 'ORE_DEPLOY_CONFIRMED') return 'Deploy confirmed on Solana ✓'
   if (item.kind === 'REWARD' || item.kind === 'INVITE_BONUS') return item.status === 'CONFIRMED' ? 'Reward settled ✓' : item.status === 'PENDING' ? 'Completed · reward sending' : 'Completed · payout failed'
   return STATUS_TEXT[item.status]
 }
@@ -111,7 +127,13 @@ export const ReceiptCard = forwardRef<View, { item: HistoryItem; asset: XStockLi
         <Line label="Time" value={when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} />
         <Line label="Status" value={statusText(item)} />
         {item.kind === 'SENT' && item.counterparty ? <Line label="To" value={shortAddress(item.counterparty, 5, 5)} /> : null}
-        {isOffchain(item) ? null : <Line label="Network" value={item.cluster === 'mainnet-beta' ? 'Solana' : 'Solana devnet (test)'} />}
+        {item.kind === 'SKR_TIP_SENT' && item.counterparty ? <Line label="To wallet" value={shortAddress(item.counterparty, 5, 5)} /> : null}
+        {item.kind === 'SKR_BOOST_PURCHASED' && item.details?.startsAt && item.details.endsAt ? (
+          <Line label="Featured" value={`${shortTime(item.details.startsAt)} → ${shortTime(item.details.endsAt)}`} />
+        ) : null}
+        {item.details?.roundId ? <Line label="Round" value={`#${item.details.roundId}`} /> : null}
+        {item.details?.squares?.length ? <Line label={item.details.squares.length === 1 ? 'Square' : 'Squares'} value={item.details.squares.map((q) => q + 1).join(', ')} /> : null}
+        {isOffchain(item) || isMark(item) ? null : <Line label="Network" value={item.cluster === 'mainnet-beta' ? 'Solana Mainnet' : 'Solana devnet (test)'} />}
         <Line label="Receipt" value={receiptRef(item)} />
         {item.signature ? <Line label="Transaction" value={shortAddress(item.signature, 6, 6)} /> : null}
       </View>
@@ -120,6 +142,10 @@ export const ReceiptCard = forwardRef<View, { item: HistoryItem; asset: XStockLi
     </View>
   )
 })
+
+function shortTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
 
 /** Captures the card and opens the share sheet (X, WhatsApp, Photos…). */
 export async function shareReceiptImage(ref: React.RefObject<View | null>) {

@@ -89,6 +89,32 @@ export default function Profile() {
           ? 'Not available in this build'
           : 'Rewards, invite bonuses, your drops going live'
 
+  // D-52: .skr names are looked up by the server from the wallets you verified; you can't type one in.
+  const [skrCheck, setSkrCheck] = useState<'idle' | 'checking' | 'none' | 'unavailable' | 'nowallet' | 'error'>('idle')
+  async function onCheckSkr() {
+    if (!creatorWallets.length) return setSkrCheck('nowallet')
+    setSkrCheck('checking')
+    try {
+      const res = await api.checkSkrIdentity(getAccessToken)
+      setSkrCheck(res.status === 'VERIFIED' ? 'idle' : res.status === 'NONE' ? 'none' : 'unavailable')
+      await queryClient.invalidateQueries({ queryKey: ['profile'] })
+    } catch {
+      setSkrCheck('error')
+    }
+  }
+  const skrSubtitle =
+    skrCheck === 'checking'
+      ? 'Checking on Solana…'
+      : skrCheck === 'nowallet'
+        ? 'Add the wallet that holds your .skr name first'
+        : skrCheck === 'unavailable' || skrCheck === 'error'
+          ? 'Unable to verify right now · tap to try again'
+          : profile.data?.profile.skrName
+            ? 'Verified .skr ✓ · tap to re-check'
+            : skrCheck === 'none' || profile.data?.profile.skrCheckedAt
+              ? 'No .skr name on your verified wallets · tap to re-check'
+              : 'Tap to check your verified wallets'
+
   async function onLogout() {
     await unregisterPush(getAccessToken)
     if (account) await disconnect().catch(() => {})
@@ -107,8 +133,14 @@ export default function Profile() {
             <PersonName
               iconSize={16}
               style={{ ...font('display'), fontSize: 22, color: color.text }}
-              who={{ label: username ? `@${username}` : (email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account')), og: profile.data?.profile.og }}
+              who={{
+                label: username ? `@${username}` : (email ?? (creatorWallets[0] ? shortAddress(creatorWallets[0]) : 'Your account')),
+                og: profile.data?.profile.og,
+                skrName: profile.data?.profile.skrName ?? undefined,
+              }}
             />
+            {/* D-52: the verified .skr name leads; the Blink username stays as the secondary identity. */}
+            {profile.data?.profile.skrName && username ? <T variant="label">{`@${username}`}</T> : null}
             {username && email ? (
               <T variant="caption" numberOfLines={1}>
                 {email}
@@ -116,6 +148,7 @@ export default function Profile() {
             ) : null}
             <Row gap={space.sm}>
               {creatorWallets.length ? <Badge label="Creator" tone="live" /> : <Badge label="Member" tone="neutral" />}
+              {profile.data?.profile.og.includes('SEEKER') ? <Badge label="Verified Seeker" tone="live" /> : null}
               <Badge label={net.label} tone={net.isTest ? 'warn' : 'live'} />
             </Row>
           </View>
@@ -216,6 +249,37 @@ export default function Profile() {
       ) : null}
 
       <View style={{ gap: space.md }}>
+        <SectionHeader title="Solana Mobile identity" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow
+            leading={<RowIcon icon="user" tint={color.ogSeeker} />}
+            onPress={() => void onCheckSkr()}
+            subtitle={skrSubtitle}
+            title={profile.data?.profile.skrName ?? '.skr name'}
+          />
+          <Divider />
+          <ListRow
+            chevron={false}
+            leading={<RowIcon icon="phone" tint={color.ogSeeker} />}
+            subtitle={profile.data?.profile.og.includes('SEEKER') ? 'Seeker Genesis Token found in your verified wallet' : 'Checked with your OG marks in Stock Passport'}
+            title={profile.data?.profile.og.includes('SEEKER') ? 'Verified Seeker ✓' : 'Seeker not verified'}
+          />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="ORE Miners" />
+        <Card padded={false} style={{ paddingHorizontal: space.lg }}>
+          <ListRow
+            leading={<RowIcon icon="target" tint={color.ogOre} />}
+            onPress={() => router.push('/ore')}
+            subtitle={profile.data?.profile.og.includes('ORE') ? 'Verified ORE Miner · live board & your deploys' : 'Live board · verify your deploys'}
+            title="ORE live board"
+          />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
         <SectionHeader title="SKR" />
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           {FEATURES.inAppSkrStaking ? (
@@ -255,6 +319,26 @@ export default function Profile() {
               <ListRow leading={<RowIcon icon="layers" tint={color.textDim} />} onPress={() => router.push('/dev/wallet-lab')} subtitle="Developer wallet tests" title="Wallet lab" />
             </>
           ) : null}
+        </Card>
+      </View>
+
+      {/* Owner roadmap: shown as coming, never as available (no actions). */}
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Coming to Blink" />
+        <Card style={{ gap: space.md }} tone="raised">
+          {[
+            ['Club community funds', 'Pool SKR as a club for shared drops, with clear ownership and rules.'],
+            ['Premium Clubs', 'Members-only clubs with perks from creators.'],
+            ['SKR voting', 'Clubs decide together with SKR.'],
+          ].map(([title, body]) => (
+            <View key={title} style={{ gap: 2 }}>
+              <Row gap={space.sm}>
+                <T variant="bodyStrong">{title}</T>
+                <Badge label="Coming" tone="neutral" />
+              </Row>
+              <T variant="caption">{body}</T>
+            </View>
+          ))}
         </Card>
       </View>
 

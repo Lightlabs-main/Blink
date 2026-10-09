@@ -51,7 +51,8 @@ export function PersonName({
   iconSize = 13,
   numberOfLines = 1,
 }: {
-  who: Pick<PublicParticipant, 'label' | 'og'>
+  /** D-52: a verified .skr name (server-checked, never typed by the user) is shown instead of the label. */
+  who: Pick<PublicParticipant, 'label' | 'og' | 'skrName'>
   style?: StyleProp<TextStyle>
   /** Override the shown text (e.g. "You"); the marks still come from `who`. */
   text?: string
@@ -63,7 +64,7 @@ export function PersonName({
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
       <OgIcons og={who.og} size={iconSize} />
       <T numberOfLines={numberOfLines} style={[style, { flexShrink: 1 }, full ? { color: color.og } : null]}>
-        {text ?? who.label}
+        {text ?? who.skrName ?? who.label}
       </T>
     </View>
   )

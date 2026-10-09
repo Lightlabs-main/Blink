@@ -119,7 +119,7 @@ export default function Drops() {
                     </Row>
                   </View>
                 </Row>
-                <Badge dot label="Live" tone="live" />
+                {c.boostedUntil ? <Badge label="Boosted with SKR" tone="skr" /> : <Badge dot label="Live" tone="live" />}
               </Row>
               {facts.length ? <T variant="caption">{facts.join(' · ')}</T> : null}
               <Row style={{ justifyContent: 'space-between' }}>

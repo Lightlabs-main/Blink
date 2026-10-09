@@ -681,7 +681,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get<{ Params: { id: string } }>('/v1/campaigns/:id', async (req, reply) => {
     const campaign = /^[0-9a-f-]{36}$/.test(req.params.id) ? await deps.campaigns.findById(req.params.id) : null
     if (!campaign) return sendError(reply, 404, 'NOT_FOUND', 'campaign not found')
-    return { campaign: toSummary(campaign) }
+    // D-50: the active boost window applies only while the drop is LIVE.
+    const [summary] = campaign.status === 'LIVE' ? await withBoosts([toSummary(campaign)]) : [toSummary(campaign)]
+    return { campaign: summary }
   })
 
   /** Loads a campaign the caller created; 404 otherwise (never reveal others' campaigns via these routes). */

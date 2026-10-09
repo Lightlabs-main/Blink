@@ -13,10 +13,11 @@ import { LiveRoom } from '../../features/campaign/live-room'
 import { QuestPanel } from '../../features/campaign/quest-panel'
 import { FundCampaign } from '../../features/campaign/fund-campaign'
 import { CloseCampaign } from '../../features/campaign/close-campaign'
+import { BoostCampaign, BoostedBadge } from '../../features/campaign/boost-campaign'
 import { EventQrCard } from '../../features/campaign/event-qr'
 import { SquadPanel } from '../../features/campaign/squad-panel'
 import { api, ApiError } from '../../lib/api'
-import { displayShares, useAssetMap, useMe } from '../../lib/data'
+import { displayShares, useAssetMap, useFeatures, useMe } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, campaignLink, networkLabel, pauseReasonText, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { maxClaims, PRODUCT_COPY, REFERRAL_CODE_RE } from '../../shared'
@@ -41,6 +42,7 @@ export default function CampaignScreen() {
   const { user, getAccessToken } = usePrivy()
   const queryClient = useQueryClient()
   const me = useMe()
+  const features = useFeatures()
   const assets = useAssetMap()
   const campaign = useQuery({ queryKey: ['campaign', id], queryFn: () => api.campaign(String(id)), enabled: Boolean(id) })
   // D-41: members-only drops: is the viewer in the club?
@@ -111,6 +113,11 @@ export default function CampaignScreen() {
           </Row>
           <T variant="hero">{c.xstockSymbol}</T>
           <T style={{ fontSize: 17 }}>{amount ? `${amount} shares to give away` : (asset?.name ?? 'Stock campaign')}</T>
+          {c.boostedUntil ? (
+            <View style={{ marginTop: space.xs, alignSelf: 'flex-start' }}>
+              <BoostedBadge until={c.boostedUntil} />
+            </View>
+          ) : null}
           {rewardShares ? <T variant="label">{`${rewardShares} ${c.xstockSymbol} per person`}</T> : null}
         </View>
         <View style={{ marginTop: space.xl }}>
@@ -186,6 +193,9 @@ export default function CampaignScreen() {
           </T>
         </Card>
       ) : null}
+
+      {/* D-50: paid SKR placement for the creator's own funded, live drop (owner-approved package only). */}
+      {isCreator && isLive && features.data?.boost.enabled ? <BoostCampaign boost={features.data.boost} campaign={c} /> : null}
 
       {/* W-1: the creator can end the drop and take the unused stock back. */}
       {isCreator && ['LIVE', 'PAUSED', 'ENDED', 'AWAITING_DELEGATION'].includes(c.status) ? <CloseCampaign asset={asset} campaign={c} /> : null}
