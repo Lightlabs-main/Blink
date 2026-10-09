@@ -323,7 +323,8 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
 
 /* ───────────────────────────── Status ───────────────────────────── */
 
-type BadgeTone = 'live' | 'warn' | 'neutral' | 'test' | 'danger'
+/** `skr`: paid promotion with SKR (D-50) — the SKR violet, clearly distinct from live/status badges. */
+type BadgeTone = 'live' | 'warn' | 'neutral' | 'test' | 'danger' | 'skr'
 
 const BADGE: Record<BadgeTone, { bg: string; fg: string }> = {
   live: { bg: color.successSoft, fg: color.success },
@@ -331,6 +332,7 @@ const BADGE: Record<BadgeTone, { bg: string; fg: string }> = {
   neutral: { bg: color.surface3, fg: color.textDim },
   test: { bg: color.violetSoft, fg: color.violet },
   danger: { bg: color.dangerSoft, fg: color.danger },
+  skr: { bg: color.violetSoft, fg: color.ogSkr },
 }
 
 export function Badge({ label, tone = 'neutral', dot }: { label: string; tone?: BadgeTone; dot?: boolean }) {

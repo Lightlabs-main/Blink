@@ -101,3 +101,18 @@ export function usePositions() {
   }, [holdings.data, assets.data, mine.data])
   return { positions, isLoading: holdings.isPending || assets.isPending, available: holdings.data?.available ?? false, error: holdings.error }
 }
+
+/** D-49..D-51: server feature switches; refreshed every few minutes. */
+export function useFeatures() {
+  return useQuery({ queryKey: ['features'], queryFn: api.features, staleTime: 3 * 60_000 })
+}
+
+/** The live ORE board: polled while a screen shows it (rounds last ~1.5 min). */
+export function useOreBoard(enabled = true) {
+  return useQuery({ queryKey: ['ore-board'], queryFn: api.oreBoard, enabled, refetchInterval: 2500, staleTime: 2000 })
+}
+
+export function useOreMe() {
+  const { getAccessToken, user } = usePrivy()
+  return useQuery({ queryKey: ['ore-me'], queryFn: () => api.oreMe(getAccessToken), enabled: Boolean(user), staleTime: 10_000 })
+}

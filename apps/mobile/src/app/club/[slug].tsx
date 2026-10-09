@@ -2,7 +2,7 @@ import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Share, StyleSheet, TextInput, View } from 'react-native'
+import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native'
 
 import { Icon } from '../../design/icons'
 import { font } from '../../design/fonts'
@@ -13,7 +13,7 @@ import { ClubChat } from '../../features/clubs/chat'
 import { ClubRulesList } from '../../features/clubs/club-rules'
 import { ClubMark, memberLabel } from '../../features/clubs/club-ui'
 import { api, ApiError, apiUrl } from '../../lib/api'
-import { displayShares, useAssetMap } from '../../lib/data'
+import { displayShares, useAssetMap, useFeatures } from '../../lib/data'
 import { CAMPAIGN_TYPE_LABEL, clubLink } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
 import { type CampaignSummary, CLUB_CATEGORY_LABEL, type ClubDetail, type QuestEvaluation } from '../../shared'
@@ -60,7 +60,7 @@ function Drops({ club }: { club: ClubDetail }) {
                       onPress={() => router.push(`/campaign/${c.id}`)}
                       subtitle={`${CAMPAIGN_TYPE_LABEL[c.type]}${reward ? ` · ${reward} each` : ''}${c.tapRush ? ` · ${c.tapRush.goal.toLocaleString()} taps` : ''}`}
                       title={c.xstockSymbol}
-                      trailing={p === 'live' ? <Badge dot label="Live" tone="live" /> : p === 'upcoming' ? <Badge label="Soon" tone="warn" /> : null}
+                      trailing={p === 'live' && c.boostedUntil ? <Badge label="Boosted" tone="skr" /> : p === 'live' ? <Badge dot label="Live" tone="live" /> : p === 'upcoming' ? <Badge label="Soon" tone="warn" /> : null}
                     />
                   </View>
                 )
@@ -217,6 +217,7 @@ export default function ClubScreen() {
   const { getAccessToken } = usePrivy()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('chat')
+  const features = useFeatures()
   const club = useQuery({ queryKey: ['club', String(slug)], queryFn: () => api.club(getAccessToken, String(slug), inviteCode) })
   const back = () => (router.canGoBack() ? router.back() : router.replace('/clubs'))
   const refresh = () => {
@@ -272,6 +273,17 @@ export default function ClubScreen() {
         <ClubRulesList evaluation={join.error instanceof ApiError && join.error.code === 'CLUB_RULES_NOT_MET' ? ((join.error.details as { evaluation?: QuestEvaluation })?.evaluation ?? null) : null} rules={c.rules} />
       ) : null}
       <Notice message={join.error && !(join.error instanceof ApiError && join.error.code === 'CLUB_RULES_NOT_MET') ? join.error.message : null} />
+      {/* D-51: the ORE Miners Club (slug set by the server) opens the native live board. Joining awards nothing. */}
+      {features.data?.ore.clubSlug === c.slug ? (
+        <Pressable accessibilityRole="button" onPress={() => router.push('/ore')} style={styles.oreCard}>
+          <Icon name="target" size={20} stroke={color.ogOre} />
+          <View style={{ flex: 1 }}>
+            <T variant="bodyStrong">ORE live board</T>
+            <T variant="caption">Watch the current round, deploy from your wallet, earn the verified ORE Miner mark.</T>
+          </View>
+          <Icon name="arrowRight" size={18} stroke={color.textDim} />
+        </Pressable>
+      ) : null}
       <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <Chip key={t.key} label={t.label} onPress={() => setTab(t.key)} selected={tab === t.key} />
@@ -313,6 +325,7 @@ export default function ClubScreen() {
 }
 
 const styles = StyleSheet.create({
+  oreCard: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border },
   input: {
     minHeight: 80,
     paddingHorizontal: space.md,

@@ -43,7 +43,7 @@ function DropTicket({ c, onPress }: { c: CampaignSummary; onPress: () => void })
     <Pressable onPress={onPress} style={({ pressed }) => [styles.ticket, pressed && { opacity: 0.85 }]}>
       <Row style={{ justifyContent: 'space-between' }}>
         <StockAvatar isTest={asset?.isTest} logo={asset?.logo} size={42} symbol={c.xstockSymbol} />
-        <Badge dot label="Live" tone="live" />
+        {c.boostedUntil ? <Badge label="Boosted with SKR" tone="skr" /> : <Badge dot label="Live" tone="live" />}
       </Row>
       <View style={{ gap: 2 }}>
         <T style={{ ...font('display'), fontSize: 26, color: color.text }}>{c.xstockSymbol}</T>
@@ -85,7 +85,9 @@ export default function Home() {
   const net = networkLabel(network.data?.cluster)
   const isCreator = (me.data?.verifiedCreatorWallets.length ?? 0) > 0
   const myCampaigns = mine.data?.campaigns ?? []
-  const liveDrops = live.data?.campaigns ?? []
+  // D-50: drops with an active, verified SKR boost get a labelled Featured row; the rest keep their normal order.
+  const featured = (live.data?.campaigns ?? []).filter((c) => c.boostedUntil)
+  const liveDrops = (live.data?.campaigns ?? []).filter((c) => !c.boostedUntil)
   const rewards = (claims.data?.claims ?? []).filter((c) => c.status !== 'FAILED')
 
   async function onRefresh() {
@@ -178,6 +180,18 @@ export default function Home() {
         <QuickAction icon="wallet" label="Wallet" onPress={() => router.push('/wallet')} />
       </Row>
 
+      {featured.length ? (
+        <View style={{ gap: space.md }}>
+          <SectionHeader title="Featured" />
+          <ScrollView contentContainerStyle={{ gap: space.md, paddingRight: space.xl }} horizontal showsHorizontalScrollIndicator={false} style={{ marginRight: -20 }}>
+            {featured.map((c) => (
+              <DropTicket c={c} key={c.id} onPress={() => router.push(`/campaign/${c.id}`)} />
+            ))}
+          </ScrollView>
+          <T variant="caption">Featured drops are sponsored: their creators paid SKR for this spot.</T>
+        </View>
+      ) : null}
+
       {/* Live drops */}
       <View style={{ gap: space.md }}>
         <SectionHeader action={liveDrops.length ? 'See all' : undefined} onAction={() => router.push('/drops')} title="Live drops" />
@@ -186,7 +200,7 @@ export default function Home() {
             <Skeleton height={176} radius={radius.lg} width={220} />
             <Skeleton height={176} radius={radius.lg} width={220} />
           </Row>
-        ) : liveDrops.length === 0 ? (
+        ) : liveDrops.length === 0 && featured.length === 0 ? (
           <EmptyState
             action={isCreator ? 'Start a campaign' : undefined}
             body="When a creator funds a campaign, it lands here. Got a QR from a friend? Scan it."

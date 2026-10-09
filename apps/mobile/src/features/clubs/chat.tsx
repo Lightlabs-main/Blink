@@ -8,6 +8,7 @@ import { Icon } from '../../design/icons'
 import { color, radius, space } from '../../design/tokens'
 import { Avatar, Button, IconButton, Notice, Row, T } from '../../design/ui'
 import { api, ApiError, apiUrl } from '../../lib/api'
+import { useFeatures } from '../../lib/data'
 import { haptics } from '../../lib/haptics'
 import { type ChatMessage, CLUB_LIMITS, CLUB_REACTIONS, type ClubReaction, formatRaw } from '../../shared'
 import { PersonName } from '../../design/og'
@@ -75,6 +76,7 @@ export function ClubChat({
   const { getAccessToken } = usePrivy()
   const router = useRouter()
   const playback = useVoicePlayback()
+  const features = useFeatures()
   const [recording, setRecording] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(true)
@@ -348,6 +350,19 @@ export function ClubChat({
                           style={styles.reaction}
                         >
                           <T style={{ fontSize: 13 }}>🎁 Gift</T>
+                        </Pressable>
+                      ) : null}
+                      {/* D-49: tips are switched on by the server; the person's own wallet signs and pays. */}
+                      {!m.mine && m.authorId && features.data?.tips.enabled ? (
+                        <Pressable
+                          accessibilityLabel="Tip SKR"
+                          onPress={() => {
+                            setSelected(null)
+                            router.push({ pathname: '/club-tip', params: { slug, to: m.authorId!, name: m.author.skrName ?? m.author.label } })
+                          }}
+                          style={styles.reaction}
+                        >
+                          <T style={{ fontSize: 13 }}>Tip SKR</T>
                         </Pressable>
                       ) : null}
                       {canModerate ? (

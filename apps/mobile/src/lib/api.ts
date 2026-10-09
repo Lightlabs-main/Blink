@@ -109,6 +109,9 @@ export interface MyProfile {
   /** D-45: OG marks from the last mainnet check. */
   og: OgType[]
   ogCheckedAt: string | null
+  /** D-52: server-verified .skr name; null + checkedAt = verified none; null + no checkedAt = never checked. */
+  skrName: string | null
+  skrCheckedAt: string | null
 }
 
 /** Absolute URL for a path the API returned (e.g. a profile picture). */
@@ -133,6 +136,124 @@ export interface XTask {
   verified: boolean
   postUrl: string | null
   authorHandle: string | null
+}
+
+/** D-49..D-51: what the server has switched on, and the owner-approved packages. Nothing else is shown. */
+export interface Features {
+  network: 'localnet' | 'devnet' | 'mainnet-beta'
+  tips: { enabled: boolean; maxRaw: string }
+  boost: { enabled: false } | { enabled: true; priceRaw: string; hours: number; destination: string; refundable: false }
+  ore: { deployEnabled: boolean; maxLamportsPerSquare: string | null; maxSquares: number; clubSlug: string | null; rewardsEnabled: boolean }
+}
+
+export interface SkrPerson {
+  label: string
+  username?: string
+  skrName?: string
+  avatarUrl: string | null
+  og?: OgType[]
+}
+
+export interface TipReview {
+  amountRaw: string
+  recipient: SkrPerson
+  recipientWallet: string
+  recipientWalletKind: 'VERIFIED_WALLET' | 'BLINK_WALLET'
+  senderWallet: string
+  createsRecipientAccount: boolean
+  rentLamports: string
+  networkFeeLamports: string
+  network: string
+}
+
+export interface TipView {
+  id: string
+  direction: 'SENT' | 'RECEIVED'
+  amountRaw: string
+  status: 'PREPARED' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED' | 'EXPIRED'
+  signature: string | null
+  network: string
+  from: SkrPerson
+  to: SkrPerson
+  recipientWallet: string
+  createdAt: string
+  confirmedAt: string | null
+}
+
+export interface BoostReview {
+  amountRaw: string
+  hours: number
+  destination: string
+  payerWallet: string
+  placement: string
+  startsAt: string
+  refundable: false
+  ifDropEnds: string
+  createsRecipientAccount: boolean
+  rentLamports: string
+  networkFeeLamports: string
+  network: string
+}
+
+export interface BoostView {
+  id: string
+  campaignId: string
+  amountRaw: string
+  hours: number
+  destination: string
+  status: TipView['status']
+  signature: string | null
+  startsAt: string | null
+  endsAt: string | null
+  network: string
+}
+
+export interface OreBoard {
+  roundId: string
+  phase: 'WAITING' | 'MINING' | 'BETWEEN'
+  slot: string
+  endSlot: string | null
+  slotsLeft: string
+  secondsLeftEstimate: number
+  squares: { index: number; deployedLamports: string; miners: number }[]
+  totalDeployedLamports: string
+  totalMiners: number
+  readAt: string
+  config: Features['ore']
+}
+
+export interface OreMe {
+  wallet: string | null
+  roundId: string | null
+  squaresThisRound: number[]
+  verifiedDeploys: number
+  minerMark: boolean
+  recent: { signature: string; roundId: string; squares: number[]; totalLamports: string; at: string }[]
+}
+
+export interface OreReview {
+  wallet: string
+  roundId: string
+  squares: number[]
+  lamportsPerSquare: string
+  cost: { stake: string; checkpointFee: string; minerRent: string; networkFee: string; total: string }
+  includesCheckpoint: boolean
+  roundEndsInSlots: string
+  risk: string
+  network: string
+}
+
+export interface OreDeployResult {
+  signature: string
+  created: boolean
+  roundId: string
+  squares: number[]
+  lamportsPerSquare: string
+  totalLamports: string
+  slot: string
+  deployedAt: string
+  network: string
+  minerMark: true
 }
 
 export const api = {
@@ -327,4 +448,27 @@ export const api = {
   joinSquad: (t: GetAccessToken, code: string) => authed<{ squad: SquadSummary }>(t, '/v1/squads/join', { method: 'POST', body: JSON.stringify({ code }) }),
   leaveSquad: (t: GetAccessToken, id: string) => authed<{ ok: true; disbanded: boolean }>(t, `/v1/squads/${encodeURIComponent(id)}/leave`, { method: 'POST', body: '{}' }),
   passport: (t: GetAccessToken) => authed<{ passport: Passport }>(t, '/v1/me/passport'),
+  // ── D-49..D-52 ──
+  features: () => request<Features>('/v1/features'),
+  checkSkrIdentity: (t: GetAccessToken) =>
+    authed<{ status: 'VERIFIED' | 'NONE' | 'UNAVAILABLE'; skrName: string | null; skrWallet: string | null; checkedAt: string | null }>(t, '/v1/me/skr-identity', { method: 'POST', body: '{}' }),
+  tipPrepare: (t: GetAccessToken, slug: string, body: { to: string; amountRaw: string; wallet?: string }) =>
+    authed<{ tipId: string; transaction: string; review: TipReview }>(t, `/v1/clubs/${encodeURIComponent(slug)}/tips/prepare`, { method: 'POST', body: JSON.stringify(body) }),
+  tipSubmit: (t: GetAccessToken, tipId: string, signedTransaction: string) =>
+    authed<{ tip: TipView }>(t, `/v1/skr/tips/${encodeURIComponent(tipId)}/submit`, { method: 'POST', body: JSON.stringify({ signedTransaction }) }),
+  tip: (t: GetAccessToken, tipId: string) => authed<{ tip: TipView }>(t, `/v1/skr/tips/${encodeURIComponent(tipId)}`),
+  boostPrepare: (t: GetAccessToken, campaignId: string, wallet?: string) =>
+    authed<{ boostId: string; transaction: string; review: BoostReview }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/boost/prepare`, { method: 'POST', body: JSON.stringify(wallet ? { wallet } : {}) }),
+  boostSubmit: (t: GetAccessToken, campaignId: string, boostId: string, signedTransaction: string) =>
+    authed<{ boost: BoostView }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/boost/${encodeURIComponent(boostId)}/submit`, { method: 'POST', body: JSON.stringify({ signedTransaction }) }),
+  boost: (t: GetAccessToken, campaignId: string, boostId: string) =>
+    authed<{ boost: BoostView }>(t, `/v1/campaigns/${encodeURIComponent(campaignId)}/boost/${encodeURIComponent(boostId)}`),
+  oreBoard: () => request<OreBoard>('/v1/ore/board'),
+  oreMe: (t: GetAccessToken) => authed<OreMe>(t, '/v1/ore/me'),
+  orePrepare: (t: GetAccessToken, body: { squares: number[]; amountLamports: string; wallet?: string }) =>
+    authed<{ transaction: string; review: OreReview }>(t, '/v1/ore/deploy/prepare', { method: 'POST', body: JSON.stringify(body) }),
+  oreSubmit: (t: GetAccessToken, signedTransaction: string) =>
+    authed<{ deploy: OreDeployResult }>(t, '/v1/ore/deploy/submit', { method: 'POST', body: JSON.stringify({ signedTransaction }) }),
+  oreVerify: (t: GetAccessToken, signature: string) =>
+    authed<{ deploy: OreDeployResult }>(t, '/v1/ore/deploy/verify', { method: 'POST', body: JSON.stringify({ signature }) }),
 }
