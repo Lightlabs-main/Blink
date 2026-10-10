@@ -90,6 +90,8 @@ export interface CampaignSummary {
   /** D-41: only members of that club can take part (any mechanic). */
   membersOnly: boolean
   createdAt: string
+  /** Gift drop to named people: how many (0 = open to anyone eligible). Who they are is never exposed here. */
+  recipientCount?: number
   /**
    * D-50: end (ISO) of the paid SKR boost window active now, set by the server from confirmed payments only.
    * Placement only: it never extends the drop, changes its rules or affects claims.

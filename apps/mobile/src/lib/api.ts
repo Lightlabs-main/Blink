@@ -209,6 +209,12 @@ export interface BoostView {
   network: string
 }
 
+/** A person found by name on Blink (never their wallet or email). `handle` is how to address them again. */
+export interface FoundPerson extends SkrPerson {
+  handle: string
+}
+export type NameLookup = { input: string; found: true; isYou: boolean; person: FoundPerson } | { input: string; found: false; reason: 'NOT_FOUND' | 'INVALID' }
+
 export interface OreBoard {
   roundId: string
   phase: 'WAITING' | 'MINING' | 'BETWEEN'
@@ -336,6 +342,8 @@ export const api = {
       endsAt?: string
       clubId?: string
       membersOnly?: boolean
+      /** Gift drop to named people (Blink usernames or .skr names). */
+      recipients?: string[]
     },
     creatorWallet?: string,
   ) =>
@@ -449,6 +457,14 @@ export const api = {
   joinSquad: (t: GetAccessToken, code: string) => authed<{ squad: SquadSummary }>(t, '/v1/squads/join', { method: 'POST', body: JSON.stringify({ code }) }),
   leaveSquad: (t: GetAccessToken, id: string) => authed<{ ok: true; disbanded: boolean }>(t, `/v1/squads/${encodeURIComponent(id)}/leave`, { method: 'POST', body: '{}' }),
   passport: (t: GetAccessToken) => authed<{ passport: Passport }>(t, '/v1/me/passport'),
+  resolvePeople: (t: GetAccessToken, names: string[]) => authed<{ results: NameLookup[] }>(t, '/v1/people/resolve', { method: 'POST', body: JSON.stringify({ names }) }),
+  giftPersonPrepare: (t: GetAccessToken, body: { to: string; asset: string; amountRaw: string }) =>
+    authed<{ prepared: { transaction: string; createsRecipientAccount: boolean }; person: FoundPerson }>(t, '/v1/gifts/prepare', { method: 'POST', body: JSON.stringify(body) }),
+  giftPersonSubmit: (t: GetAccessToken, signedTransaction: string) =>
+    authed<{ gift: { id: string; signature: string; status: 'CONFIRMED' | 'PENDING' } }>(t, '/v1/gifts/submit', { method: 'POST', body: JSON.stringify({ signedTransaction }) }),
+  skrGiftPrepare: (t: GetAccessToken, body: { to: string; amountRaw: string; wallet?: string }) =>
+    authed<{ tipId: string; transaction: string; review: TipReview }>(t, '/v1/skr/gifts/prepare', { method: 'POST', body: JSON.stringify(body) }),
+  giftsForMe: (t: GetAccessToken) => authed<{ drops: { campaign: CampaignSummary; from: string }[] }>(t, '/v1/me/gifts-for-me'),
   memberProfile: (t: GetAccessToken, slug: string, ref: string) =>
     authed<{ profile: ClubMemberProfile }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members/${encodeURIComponent(ref)}/profile`),
   deleteClub: (t: GetAccessToken, slug: string) => authed<{ deleted: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}`, { method: 'DELETE' }),

@@ -1,5 +1,5 @@
 import { usePrivy } from '@privy-io/expo'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
@@ -23,7 +23,7 @@ import {
   StockAvatar,
   T,
 } from '../../design/ui'
-import { apiUrl } from '../../lib/api'
+import { api, apiUrl } from '../../lib/api'
 import { displayShares, useAssetMap, useLiveCampaigns, useMe, useMyCampaigns, useMyClaims, useNetwork, usePositions, useProfile } from '../../lib/data'
 import { CAMPAIGN_STATUS_LABEL, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, greeting, networkLabel, shortAddress } from '../../lib/format'
 import { PersonName } from '../../design/og'
@@ -66,7 +66,7 @@ function DropTicket({ c, onPress }: { c: CampaignSummary; onPress: () => void })
 export default function Home() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { user } = usePrivy()
+  const { user, getAccessToken } = usePrivy()
   const me = useMe()
   const network = useNetwork()
   const live = useLiveCampaigns()
@@ -86,6 +86,8 @@ export default function Home() {
   const isCreator = (me.data?.verifiedCreatorWallets.length ?? 0) > 0
   const myCampaigns = mine.data?.campaigns ?? []
   // D-50: drops with an active, verified SKR boost get a labelled Featured row; the rest keep their normal order.
+  // Gift drops that name this person (private: never in the public feed).
+  const giftsForMe = useQuery({ queryKey: ['gifts-for-me'], queryFn: () => api.giftsForMe(getAccessToken), enabled: Boolean(user) })
   const featured = (live.data?.campaigns ?? []).filter((c) => c.boostedUntil)
   const liveDrops = (live.data?.campaigns ?? []).filter((c) => !c.boostedUntil)
   const rewards = (claims.data?.claims ?? []).filter((c) => c.status !== 'FAILED')
@@ -179,6 +181,22 @@ export default function Home() {
         <QuickAction icon="target" label="Squad" onPress={() => router.push({ pathname: '/drops', params: { filter: 'TAP_RUSH' } })} />
         <QuickAction icon="wallet" label="Wallet" onPress={() => router.push('/wallet')} />
       </Row>
+
+      {giftsForMe.data?.drops.length ? (
+        <View style={{ gap: space.md }}>
+          <SectionHeader title="Gifts for you" />
+          {giftsForMe.data.drops.map(({ campaign: g, from }) => (
+            <Pressable key={g.id} onPress={() => router.push(`/campaign/${g.id}`)} style={styles.giftForMe}>
+              <Icon name="gift" size={22} stroke={color.lime} />
+              <View style={{ flex: 1 }}>
+                <T variant="bodyStrong">{`${from} sent you ${g.xstockSymbol}`}</T>
+                <T variant="caption">{`${displayShares(assets.get(g.mint), g.rewardPerClaimRaw ?? '0') ?? ''} ${g.xstockSymbol} · tap to claim`}</T>
+              </View>
+              <Badge label="Claim" tone="live" />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {featured.length ? (
         <View style={{ gap: space.md }}>
@@ -318,6 +336,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
+  giftForMe: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: color.limeLine, backgroundColor: color.limeSoft },
   netPill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -76,6 +76,9 @@ model Campaign {
   clubId               String?        @db.Uuid
   /// D-41: only members of clubId can take part.
   membersOnly          Boolean        @default(false)
+  /// Gift drop to named people (Blink usernames / .skr names resolved at creation): only these Privy users can claim.
+  /// Empty = open to anyone eligible.
+  recipientIds         String[]       @default([])
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -442,7 +445,8 @@ model ClubVoice {
 /// D-44: an xStock gift between club members, sent from the sender's Blink wallet (Blink pays the fee).
 model ClubGift {
   id                   String   @id @db.Uuid
-  clubId               String   @db.Uuid
+  /// null = a direct gift to a person (Create → Gift a person), not sent in a club chat.
+  clubId               String?  @db.Uuid
   senderPrivyUserId    String
   recipientPrivyUserId String
   senderWallet         String?

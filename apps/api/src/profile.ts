@@ -56,6 +56,8 @@ export interface ProfileStore {
   setOg(privyUserId: string, og: OgType[]): Promise<StoredProfile>
   /** D-52: stores the result of a successful check (a name, or null for "verified: no .skr"). */
   setSkr(privyUserId: string, skr: { name: string; wallet: string } | null): Promise<StoredProfile>
+  /** Profiles with one of these Blink usernames or verified .skr names (lowercase, exact). */
+  findByNames(usernames: string[], skrNames: string[]): Promise<StoredProfile[]>
 }
 
 /** The participant fields every public view shares: username, picture, OG marks and the verified .skr name. */
@@ -124,6 +126,9 @@ export class InMemoryProfileStore implements ProfileStore {
     r.ogCheckedAt = new Date()
     return this.view(r)
   }
+  async findByNames(usernames: string[], skrNames: string[]) {
+    return [...this.rows.values()].filter((r) => (r.username && usernames.includes(r.username)) || (r.skrName && skrNames.includes(r.skrName))).map((r) => this.view(r))
+  }
   async setSkr(privyUserId: string, skr: { name: string; wallet: string } | null) {
     const r = this.row(privyUserId)
     r.skrName = skr?.name ?? null
@@ -184,6 +189,11 @@ export class PrismaProfileStore implements ProfileStore {
       select: this.select,
     })
     return this.view(r)
+  }
+  async findByNames(usernames: string[], skrNames: string[]) {
+    if (!usernames.length && !skrNames.length) return []
+    const rows = await this.prisma.profile.findMany({ where: { OR: [{ username: { in: usernames } }, { skrName: { in: skrNames } }] }, select: this.select, take: 200 })
+    return rows.map((r) => this.view(r))
   }
   async setSkr(privyUserId: string, skr: { name: string; wallet: string } | null) {
     const data = { skrName: skr?.name ?? null, skrWallet: skr?.wallet ?? null, skrCheckedAt: new Date() }

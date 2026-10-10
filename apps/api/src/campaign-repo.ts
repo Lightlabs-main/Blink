@@ -24,6 +24,8 @@ export interface NewCampaign {
   clubId?: string | null
   /** D-41: only members of clubId can take part. */
   membersOnly?: boolean
+  /** Gift drop to named people: only these Privy users can claim (never exposed to clients). Empty = open. */
+  recipientIds?: string[]
 }
 
 export interface StoredCampaign extends NewCampaign {
@@ -52,6 +54,8 @@ export interface CampaignRepository {
   listByStatus(status: CampaignStatus, limit: number, only?: { cluster?: SolanaCluster; endsAfter?: Date }): Promise<StoredCampaign[]>
   /** Newest first. */
   listByCreator(creatorPrivyUserId: string, limit: number): Promise<StoredCampaign[]>
+  /** LIVE gift drops on `cluster` that name this person as a recipient, newest first. */
+  listForRecipient(privyUserId: string, cluster: SolanaCluster, limit: number): Promise<StoredCampaign[]>
   /** Sets the delegate once; returns the stored campaign (existing delegate wins on races). */
   setDelegate(id: string, delegate: { address: string; walletRef: string }): Promise<StoredCampaign>
   /** Compare-and-set status along an allowed transition; returns null if the status was not `from`. */
@@ -81,6 +85,7 @@ export function toSummary(c: StoredCampaign): CampaignSummary {
     clubId: c.clubId ?? null,
     membersOnly: Boolean(c.membersOnly && c.clubId),
     createdAt: c.createdAt.toISOString(),
+    recipientCount: c.recipientIds?.length ?? 0,
   }
 }
 
@@ -116,6 +121,12 @@ export class InMemoryCampaignRepository implements CampaignRepository {
       .filter((c) => c.status === status)
       .filter((c) => !only?.cluster || c.cluster === only.cluster)
       .filter((c) => !only?.endsAfter || !c.endsAt || c.endsAt.getTime() > only.endsAfter.getTime())
+      .slice(0, limit)
+  }
+
+  async listForRecipient(privyUserId: string, cluster: SolanaCluster, limit: number): Promise<StoredCampaign[]> {
+    return this.newestFirst()
+      .filter((c) => c.status === 'LIVE' && c.cluster === cluster && (c.recipientIds ?? []).includes(privyUserId))
       .slice(0, limit)
   }
 

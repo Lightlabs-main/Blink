@@ -73,7 +73,8 @@ export interface NewMessage {
 
 export interface StoredGift {
   id: string
-  clubId: string
+  /** null = a direct gift (not sent in a club). */
+  clubId: string | null
   senderPrivyUserId: string
   recipientPrivyUserId: string
   senderWallet: string | null

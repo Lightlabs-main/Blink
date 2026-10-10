@@ -41,6 +41,7 @@ export function toStored(row: Campaign): StoredCampaign {
     endsAt: row.endsAt,
     clubId: row.clubId,
     membersOnly: row.membersOnly,
+    recipientIds: row.recipientIds,
     createdAt: row.createdAt,
   }
 }
@@ -74,6 +75,7 @@ export class PrismaCampaignRepository implements CampaignRepository {
         endsAt: c.endsAt ?? null,
         clubId: c.clubId ?? null,
         membersOnly: Boolean(c.membersOnly && c.clubId),
+        recipientIds: c.recipientIds ?? [],
       },
     })
     return toStored(row)
@@ -91,6 +93,15 @@ export class PrismaCampaignRepository implements CampaignRepository {
         ...(only?.cluster ? { cluster: toDbCluster[only.cluster] } : {}),
         ...(only?.endsAfter ? { OR: [{ endsAt: null }, { endsAt: { gt: only.endsAfter } }] } : {}),
       },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+    return rows.map(toStored)
+  }
+
+  async listForRecipient(privyUserId: string, cluster: SolanaCluster, limit: number): Promise<StoredCampaign[]> {
+    const rows = await this.prisma.campaign.findMany({
+      where: { status: 'LIVE', cluster: toDbCluster[cluster], recipientIds: { has: privyUserId } },
       orderBy: { createdAt: 'desc' },
       take: limit,
     })

@@ -331,7 +331,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     const reactions = await social.reactions(messages.map((m) => m.id))
     const gifts = new Map((await social.giftsByIds(messages.map((m) => m.giftId).filter((x): x is string => Boolean(x)))).map((g) => [g.id, g]))
     const giftWallets = new Map(
-      await Promise.all([...gifts.values()].map(async (g) => [g.recipientPrivyUserId, (await social.membership(g.clubId, g.recipientPrivyUserId))?.publicWallet ?? null] as const)),
+      await Promise.all([...gifts.values()].map(async (g) => [g.recipientPrivyUserId, (g.clubId ? (await social.membership(g.clubId, g.recipientPrivyUserId))?.publicWallet : null) ?? null] as const)),
     )
     const who = await people([
       ...messages.map((m) => m.authorPrivyUserId),

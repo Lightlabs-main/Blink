@@ -11,7 +11,8 @@ import { Badge, Button, Card, Chip, EmptyState, Notice, Row, Screen, Skeleton, S
 import { describeCondition } from '../../features/campaign/quest-panel'
 import { useMyClubs } from '../../features/clubs/club-ui'
 import { type TokenRule, tokenGroup, TokenRuleCard } from '../../features/rules/rule-builder'
-import { api, ApiError } from '../../lib/api'
+import { AvatarStack, PeoplePicker } from '../../features/gifts/people-picker'
+import { api, ApiError, type FoundPerson } from '../../lib/api'
 import { useAssets, useHoldings, useMe } from '../../lib/data'
 import { CAMPAIGN_TYPE_BLURB, CAMPAIGN_TYPE_ICON, CAMPAIGN_TYPE_LABEL, shortAddress } from '../../lib/format'
 import { haptics } from '../../lib/haptics'
@@ -31,10 +32,11 @@ import {
 } from '../../shared'
 
 type Conversion = { ok: true; raw: bigint; display: string } | { ok: false; error: string }
-type StepId = 'experience' | 'eligibility' | 'action' | 'reward' | 'limits' | 'review'
+type StepId = 'experience' | 'people' | 'eligibility' | 'action' | 'reward' | 'limits' | 'review'
 
 const STEP_TITLE: Record<StepId, string> = {
   experience: 'What do you want your community to do?',
+  people: 'Who gets it?',
   eligibility: 'Who can join?',
   action: 'What must they complete?',
   reward: 'Choose the reward',
@@ -47,8 +49,8 @@ const EXPERIENCES: { type: CampaignType; label: string; blurb: string; icon: Ico
   { type: 'TAP_RUSH', label: 'Tap Rush', blurb: 'A fast, live tapping challenge.', icon: 'target' },
   { type: 'EARLY_CLAIM', label: 'Flash Drop', blurb: 'Limited rewards. First qualified people win.', icon: 'clock' },
   { type: 'VERIFIED_QUEST', label: 'Verified Quest', blurb: 'Combine onchain requirements like Seeker, SKR or ORE.', icon: 'shield' },
-  { type: 'GIFT', label: 'Gift', blurb: 'Send stock directly through a link or QR.', icon: 'gift' },
-  { type: 'REFERRAL', label: 'Referral', blurb: 'People invite friends — both get rewarded.', icon: 'users' },
+  { type: 'GIFT', label: 'Gift drop', blurb: 'Gift stock to people you name: paste their Blink usernames or .skr names.', icon: 'gift' },
+  { type: 'REFERRAL', label: 'Referral', blurb: 'A drop anyone can claim, plus a personal invite link: when a friend joins with it, both get stock.', icon: 'users' },
 ]
 
 /** D-36: round lengths, and preset goals at about 3, 5 and 8 taps a second. */
@@ -239,9 +241,16 @@ export default function Create() {
   const [questX, setQuestX] = useState(false)
   const [xText, setXText] = useState('')
   const [questTap, setQuestTap] = useState(true)
+  // Gift drop: the people it's for (found by name on Blink).
+  const [giftees, setGiftees] = useState<FoundPerson[]>([])
 
   const isQuest = type === 'VERIFIED_QUEST'
-  const steps: StepId[] = isQuest ? ['experience', 'eligibility', 'action', 'reward', 'limits', 'review'] : ['experience', 'reward', 'limits', 'review']
+  const giftMode = type === 'GIFT'
+  const steps: StepId[] = isQuest
+    ? ['experience', 'eligibility', 'action', 'reward', 'limits', 'review']
+    : giftMode
+      ? ['experience', 'people', 'reward', 'limits', 'review']
+      : ['experience', 'reward', 'limits', 'review']
   const step = steps[Math.min(stepIndex, steps.length - 1)]!
   const hasTapRush = type === 'TAP_RUSH' || (isQuest && questTap)
 
@@ -262,10 +271,17 @@ export default function Create() {
 
   const conversion = useMemo(() => toRaw(selected, shares), [selected, shares])
   const reward = useMemo(() => toRaw(selected, perPerson), [selected, perPerson])
-  const people = conversion?.ok && reward?.ok ? maxClaims(conversion.raw, reward.raw) : null
+  // Gift drop: the total is exactly one reward per named person.
+  const total = useMemo((): Conversion | null => {
+    if (!giftMode) return conversion
+    if (!reward?.ok || !selected || selected.multiplier === null || !giftees.length) return null
+    const raw = reward.raw * BigInt(giftees.length)
+    return { ok: true, raw, display: rawToUiShares(raw, selected.decimals, selected.multiplier) }
+  }, [giftMode, conversion, reward, selected, giftees.length])
+  const people = total?.ok && reward?.ok ? maxClaims(total.raw, reward.raw) : null
   const rewardError =
-    reward && !reward.ok ? reward.error : conversion?.ok && reward?.ok && reward.raw > conversion.raw ? 'Each person can’t get more than the total.' : null
-  const overHoldings = conversion?.ok && heldRaw !== null && conversion.raw > heldRaw
+    reward && !reward.ok ? reward.error : !giftMode && total?.ok && reward?.ok && reward.raw > total.raw ? 'Each person can’t get more than the total.' : null
+  const overHoldings = total?.ok && heldRaw !== null && total.raw > heldRaw
 
   // Requirements built from the simple choices (amounts converted with bigint, never floats).
   const quest = useMemo((): { ok: true; requirements: QuestRequirements } | { ok: false; error: string } => {
@@ -299,20 +315,21 @@ export default function Create() {
 
   const create = useMutation({
     mutationFn: async () => {
-      if (!selected || !conversion?.ok || !reward?.ok) throw new Error('Complete the form first')
+      if (!selected || !total?.ok || !reward?.ok) throw new Error('Complete the form first')
       if (isQuest && !quest.ok) throw new Error(quest.error)
       return api.createCampaign(
         getAccessToken,
         {
           type,
           mint: selected.mint,
-          allowanceRaw: conversion.raw.toString(),
+          allowanceRaw: total.raw.toString(),
           rewardPerClaimRaw: reward.raw.toString(),
           tapRush: hasTapRush ? { goal: tapGoal, seconds: tapSeconds } : undefined,
           requirements: isQuest && quest.ok ? quest.requirements : undefined,
           endsAt: endsAtFrom(hours),
           clubId: clubId ?? undefined,
           membersOnly: clubId ? membersOnly : undefined,
+          recipients: giftMode ? giftees.map((g) => g.handle) : undefined,
         },
         creatorWallet,
       )
@@ -323,6 +340,7 @@ export default function Create() {
       setStepIndex(0)
       setShares('')
       setPerPerson('')
+      setGiftees([])
       router.push(`/campaign/${campaign.id}`)
     },
     onError: () => haptics.error(),
@@ -363,9 +381,10 @@ export default function Create() {
 
   const canNext =
     (step === 'experience' && Boolean(type)) ||
+    (step === 'people' && giftees.length > 0) ||
     step === 'eligibility' ||
     (step === 'action' && quest.ok) ||
-    (step === 'reward' && Boolean(selected) && !selected?.paused && Boolean(conversion?.ok) && Boolean(reward?.ok) && !rewardError && (people ?? 0n) > 0n) ||
+    (step === 'reward' && Boolean(selected) && !selected?.paused && Boolean(total?.ok) && Boolean(reward?.ok) && !rewardError && (people ?? 0n) > 0n) ||
     step === 'limits'
 
   // Plain-English summary for the review step (update §11 step 6).
@@ -373,12 +392,17 @@ export default function Create() {
   const audience = clubId && membersOnly ? 'Club members' : 'People'
   const who = conditions.length ? `${audience} who ${conditions.map((c) => describeCondition(c).replace(/^\w/, (m) => m.toLowerCase())).join(' and ')}` : clubId && membersOnly ? 'Club members' : 'Anyone'
   const doWhat = `${hasTapRush ? ` and win Tap Rush (${tapGoal} taps in ${secondsLabel(tapSeconds)})` : ''}${isQuest && questOre ? ' and mine ORE after it starts' : ''}${isQuest && questX ? ' and post on X with their code' : ''}${isQuest && questCheckin ? ' and check in at your event' : ''}`
+  const giftSentence =
+    giftMode && selected && reward?.ok
+      ? `${giftees.length} ${giftees.length === 1 ? 'person you named gets' : 'people you named each get'} ${reward.display} ${selected.symbol}. Only they can claim it${hours ? `, for ${DURATIONS.find((d) => d.hours === hours)?.label}` : ''}.`
+      : null
   const sentence =
-    selected && reward?.ok && people !== null
+    giftSentence ??
+    (selected && reward?.ok && people !== null
       ? `${who}${doWhat} can receive ${reward.display} ${selected.symbol} each. Up to ${people.toString()} ${people === 1n ? 'winner' : 'winners'}${
           hours ? `, for ${DURATIONS.find((d) => d.hours === hours)?.label}` : ''
         }.`
-      : ''
+      : '')
 
   return (
     <Screen tabBar>
@@ -397,6 +421,15 @@ export default function Create() {
 
       {step === 'experience' ? (
         <View style={{ gap: space.md }}>
+          {/* One person, right now: stock from your Blink wallet or SKR from your own wallet. */}
+          <Pressable accessibilityRole="button" onPress={() => router.push('/gift')} style={styles.giftCta}>
+            <Icon name="gift" size={22} stroke={color.lime} />
+            <View style={{ flex: 1 }}>
+              <T variant="bodyStrong">Gift a person</T>
+              <T variant="caption">Find someone by @username or .skr name and send them stock or SKR now.</T>
+            </View>
+            <Icon name="arrowRight" size={18} stroke={color.textDim} />
+          </Pressable>
           {EXPERIENCES.map((e) => (
             <Option
               body={e.blurb}
@@ -424,6 +457,13 @@ export default function Create() {
             title="QR Event"
           />
           <T variant="caption">Squads are built into every Tap Rush drop: up to 4 friends team up for a combined goal.</T>
+        </View>
+      ) : null}
+
+      {step === 'people' ? (
+        <View style={{ gap: space.md }}>
+          <T variant="label">Paste Blink usernames or .skr names. Only these people can claim this gift; each gets the same amount.</T>
+          <PeoplePicker multiple onChange={setGiftees} value={giftees} />
         </View>
       ) : null}
 
@@ -543,6 +583,7 @@ export default function Create() {
           })}
           {selected ? (
             <>
+              {giftMode ? null : (
               <Card style={{ gap: space.md }}>
                 <T variant="heading">Total pool</T>
                 <View style={styles.amountWrap}>
@@ -570,8 +611,9 @@ export default function Create() {
                 {conversion && !conversion.ok ? <Notice message={conversion.error} /> : null}
                 {overHoldings ? <Notice message="That’s more than your wallet holds. You can save a draft, but you’ll need enough stock to fund it." tone="warn" /> : null}
               </Card>
+              )}
               <Card style={{ gap: space.md }}>
-                <T variant="heading">Each winner gets</T>
+                <T variant="heading">{giftMode ? 'Each person gets' : 'Each winner gets'}</T>
                 <View style={styles.amountWrap}>
                   <TextInput
                     inputMode="decimal"
@@ -586,7 +628,13 @@ export default function Create() {
                     {selected.symbol}
                   </T>
                 </View>
-                {people !== null && !rewardError ? (
+                {giftMode && total?.ok ? (
+                  <>
+                    <T variant="label" color={color.text}>{`Total ${total.display} ${selected.symbol} for ${giftees.length} ${giftees.length === 1 ? 'person' : 'people'}.`}</T>
+                    <T variant="caption">{`Wallet ${shortAddress(creatorWallet)} holds ${heldFor(selected.mint) ?? '0'} ${selected.symbol}`}</T>
+                    {overHoldings ? <Notice message="That’s more than your wallet holds. You’ll need enough stock to fund it." tone="warn" /> : null}
+                  </>
+                ) : people !== null && !rewardError ? (
                   <T variant="label" color={color.text}>{`Enough for ${people.toString()} ${people === 1n ? 'winner' : 'winners'}.`}</T>
                 ) : null}
                 <Notice message={rewardError} />
@@ -618,12 +666,14 @@ export default function Create() {
           ) : null}
           <Card style={{ gap: space.sm }}>
             <T variant="heading">Maximum winners</T>
-            <T variant="label" color={color.text}>{people !== null ? `${people.toString()}, set by your pool and amount per winner.` : 'Set a reward first.'}</T>
+            <T variant="label" color={color.text}>
+              {giftMode ? `${giftees.length}: only the people you named.` : people !== null ? `${people.toString()}, set by your pool and amount per winner.` : 'Set a reward first.'}
+            </T>
           </Card>
         </View>
       ) : null}
 
-      {step === 'review' && selected && conversion?.ok && reward?.ok ? (
+      {step === 'review' && selected && total?.ok && reward?.ok ? (
         <Card style={{ gap: space.lg }}>
           <Row>
             <StockAvatar isTest={selected.isTest} logo={selected.logo} size={48} symbol={selected.symbol} />
@@ -634,10 +684,16 @@ export default function Create() {
             <Icon name={CAMPAIGN_TYPE_ICON[type]} size={22} stroke={color.lime} />
           </Row>
           <T variant="heading">{sentence}</T>
+          {giftMode ? (
+            <View style={{ gap: space.sm }}>
+              <AvatarStack people={giftees} />
+              <T variant="caption">{giftees.map((g) => g.handle).join(', ')}</T>
+            </View>
+          ) : null}
           <View style={{ gap: space.md }}>
             {[
-              ['Maximum you can pay out', `${conversion.display} ${selected.symbol}`],
-              ['Each winner', `${reward.display} ${selected.symbol}`],
+              ['Maximum you can pay out', `${total.display} ${selected.symbol}`],
+              [giftMode ? 'Each person' : 'Each winner', `${reward.display} ${selected.symbol}`],
               ['Funding wallet', shortAddress(creatorWallet)],
             ].map(([k, v]) => (
               <Row key={k} style={{ justifyContent: 'space-between' }}>
@@ -688,6 +744,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
   },
   optionOn: { borderColor: color.limeLine, backgroundColor: color.limeSoft },
+  giftCta: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: color.limeLine, backgroundColor: color.limeSoft },
   optionIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: color.limeSoft },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.lime },
