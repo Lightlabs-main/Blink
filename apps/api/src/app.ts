@@ -589,7 +589,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get('/v1/me/campaigns', async (req) => {
     const auth = await requireAuth(req)
-    return { campaigns: (await deps.campaigns.listByCreator(auth.privyUserId, 50)).map(toSummary) }
+    // Only this network's drops: after the mainnet switch, devnet test drops can't be funded, claimed or boosted here.
+    return { campaigns: (await deps.campaigns.listByCreator(auth.privyUserId, 50)).filter((c) => c.cluster === deps.env.SOLANA_CLUSTER).map(toSummary) }
   })
 
   /**
@@ -882,7 +883,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     const out = []
     for (const claim of claims) {
       const campaign = await deps.campaigns.findById(claim.campaignId)
-      if (campaign) out.push(toClaimSummary(claim, campaign))
+      // Rewards from another network (devnet test stock) stay in Receipts, labelled, but not in the live lists.
+      if (campaign && campaign.cluster === deps.env.SOLANA_CLUSTER) out.push(toClaimSummary(claim, campaign))
     }
     return { claims: out }
   })
