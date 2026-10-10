@@ -72,11 +72,13 @@ export default function ClubMembers() {
             {i > 0 ? <Divider /> : null}
             <Pressable disabled={!canActOn(m)} onPress={() => setOpen((o) => (o === m.id ? null : m.id))} style={{ paddingVertical: space.md, gap: space.sm }}>
               <Row>
+                <Pressable accessibilityLabel={`Open ${m.who.skrName ?? m.who.label}'s profile`} onPress={() => router.push({ pathname: '/club-member', params: { slug: String(slug), ref: m.id } })} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                 <Avatar label={m.who.username ?? m.who.label} size={38} uri={apiUrl(m.who.avatarUrl)} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} text={`${m.who.label}${m.me ? ' (you)' : ''}`} who={m.who} />
+                  <PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} text={`${m.who.skrName ?? m.who.label}${m.me ? ' (you)' : ''}`} who={m.who} />
                   <T variant="caption">{m.mutedUntil ? `Muted until ${until(m.mutedUntil)}` : `Joined ${new Date(m.joinedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}</T>
                 </View>
+                </Pressable>
                 {m.role === 'OWNER' ? <Badge label="Owner" tone="live" /> : m.role === 'MOD' ? <Badge label="Admin" tone="neutral" /> : null}
                 {!m.me && !club.data?.club.myMutedUntil ? (
                   <Pressable accessibilityLabel={`Gift stock to ${m.who.label}`} hitSlop={8} onPress={() => router.push({ pathname: '/club-gift', params: { slug: String(slug), to: m.id, name: m.who.label } })}>

@@ -137,6 +137,10 @@ export interface SocialStore {
   /** Creates the club and, when there is an owner, their OWNER membership. Throws SlugTakenError. */
   createClub(club: NewClub, owner: { privyUserId: string; publicWallet: string | null } | null): Promise<StoredClub>
   findClub(idOrSlug: string): Promise<StoredClub | null>
+  /** Owner deletion: the club disappears from every lookup and its slug is freed; rows stay for receipts. */
+  deleteClub(clubId: string): Promise<void>
+  /** Days (any time that day) the person posted in any club chat since `since` — for the activity streak. */
+  messageTimesOf(privyUserId: string, since: Date): Promise<Date[]>
   setRules(clubId: string, rules: QuestGroup[]): Promise<void>
   /** D-43: chat settings (owner/admins). */
   setSettings(clubId: string, s: { adminsOnly?: boolean; description?: string; pinnedMessageId?: bigint | null }): Promise<void>
@@ -238,7 +242,17 @@ export class InMemorySocialStore implements SocialStore {
   }
   async findClub(idOrSlug: string) {
     const c = isUuid(idOrSlug) ? this.clubs.get(idOrSlug) : [...this.clubs.values()].find((x) => x.slug === idOrSlug)
-    return c ? { ...c } : null
+    return c && !this.deleted.has(c.id) ? { ...c } : null
+  }
+  private readonly deleted = new Set<string>()
+  async deleteClub(clubId: string) {
+    const c = this.clubs.get(clubId)
+    if (!c) return
+    this.deleted.add(clubId)
+    c.slug = freedSlug(c.slug, clubId)
+  }
+  async messageTimesOf(privyUserId: string, since: Date) {
+    return this.messages.filter((m) => m.authorPrivyUserId === privyUserId && m.createdAt >= since).map((m) => m.createdAt)
   }
   async setRules(clubId: string, rules: QuestGroup[]) {
     const c = this.clubs.get(clubId)
@@ -298,19 +312,20 @@ export class InMemorySocialStore implements SocialStore {
     return this.gifts.filter((g) => g.senderPrivyUserId === privyUserId).reverse().slice(0, limit)
   }
   async findClubByInvite(code: string) {
-    return [...this.clubs.values()].find((c) => c.inviteCode === code) ?? null
+    return [...this.clubs.values()].find((c) => c.inviteCode === code && !this.deleted.has(c.id)) ?? null
   }
   async listClubs({ privyUserId, q, limit }: { privyUserId: string; q?: string; limit: number }) {
     const mine = new Set((await this.membershipsOf(privyUserId)).map((m) => m.clubId))
     const needle = q?.toLowerCase()
     return [...this.clubs.values()]
+      .filter((c) => !this.deleted.has(c.id))
       .filter((c) => c.visibility === 'PUBLIC' || mine.has(c.id))
       .filter((c) => !needle || c.name.toLowerCase().includes(needle) || c.slug.includes(needle) || c.tags.some((t) => t.includes(needle)))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit)
   }
   async clubsByIds(ids: string[]) {
-    return ids.map((id) => this.clubs.get(id)).filter((c): c is StoredClub => Boolean(c))
+    return ids.map((id) => this.clubs.get(id)).filter((c): c is StoredClub => Boolean(c) && !this.deleted.has(c!.id))
   }
   async countClubsOwnedSince(privyUserId: string, since: Date) {
     return [...this.clubs.values()].filter((c) => c.ownerPrivyUserId === privyUserId && c.createdAt >= since).length
@@ -448,8 +463,13 @@ export class InMemorySocialStore implements SocialStore {
 type Prisma = ReturnType<typeof createPrismaClient>
 const isUnique = (err: unknown) => (err as { code?: string }).code === 'P2002'
 
-function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; rulesJson: unknown; adminsOnly: boolean; pinnedMessageId: bigint | null; createdAt: Date }): StoredClub {
-  const { rulesJson, ...rest } = r
+/** A deleted club gives its slug back (slugs are unique), so the name can be used again. */
+function freedSlug(slug: string, clubId: string) {
+  return `${slug.slice(0, 40)}--deleted-${clubId.slice(0, 8)}`
+}
+
+function toClub(r: { id: string; slug: string; name: string; description: string; category: string; tags: string[]; visibility: string; inviteCode: string; ownerPrivyUserId: string | null; rulesJson: unknown; adminsOnly: boolean; pinnedMessageId: bigint | null; createdAt: Date; deletedAt?: Date | null }): StoredClub {
+  const { rulesJson, deletedAt: _deleted, ...rest } = r
   return { ...rest, category: r.category as ClubCategory, visibility: r.visibility as ClubVisibility, rules: Array.isArray(rulesJson) ? (rulesJson as QuestGroup[]) : [] }
 }
 const toGift = (r: Omit<StoredGift, 'amountRaw' | 'status'> & { amountRaw: { toFixed(d: number): string }; status: string }): StoredGift => ({
@@ -478,7 +498,16 @@ export class PrismaSocialStore implements SocialStore {
   }
   async findClub(idOrSlug: string) {
     const row = await this.prisma.club.findUnique({ where: isUuid(idOrSlug) ? { id: idOrSlug } : { slug: idOrSlug } })
-    return row ? toClub(row) : null
+    return row && !row.deletedAt ? toClub(row) : null
+  }
+  async deleteClub(clubId: string) {
+    const row = await this.prisma.club.findUnique({ where: { id: clubId } })
+    if (!row || row.deletedAt) return
+    await this.prisma.club.update({ where: { id: clubId }, data: { deletedAt: new Date(), slug: freedSlug(row.slug, clubId) } })
+  }
+  async messageTimesOf(privyUserId: string, since: Date) {
+    const rows = await this.prisma.clubMessage.findMany({ where: { authorPrivyUserId: privyUserId, createdAt: { gte: since } }, select: { createdAt: true }, take: 5000 })
+    return rows.map((r) => r.createdAt)
   }
   async setRules(clubId: string, rules: QuestGroup[]) {
     await this.prisma.club.update({ where: { id: clubId }, data: { rulesJson: rules.length ? (rules as object[]) : Db.DbNull } })
@@ -532,7 +561,7 @@ export class PrismaSocialStore implements SocialStore {
   }
   async findClubByInvite(code: string) {
     const row = await this.prisma.club.findUnique({ where: { inviteCode: code } })
-    return row ? toClub(row) : null
+    return row && !row.deletedAt ? toClub(row) : null
   }
   async listClubs({ privyUserId, q, limit }: { privyUserId: string; q?: string; limit: number }) {
     const mine = (await this.prisma.clubMember.findMany({ where: { privyUserId }, select: { clubId: true } })).map((m) => m.clubId)
@@ -540,6 +569,7 @@ export class PrismaSocialStore implements SocialStore {
     const rows = await this.prisma.club.findMany({
       where: {
         AND: [
+          { deletedAt: null },
           { OR: [{ visibility: 'PUBLIC' }, { id: { in: mine } }] },
           needle ? { OR: [{ name: { contains: needle, mode: 'insensitive' } }, { slug: { contains: needle } }, { tags: { has: needle } }] } : {},
         ],
@@ -550,7 +580,7 @@ export class PrismaSocialStore implements SocialStore {
     return rows.map(toClub)
   }
   async clubsByIds(ids: string[]) {
-    return ids.length ? (await this.prisma.club.findMany({ where: { id: { in: ids } } })).map(toClub) : []
+    return ids.length ? (await this.prisma.club.findMany({ where: { id: { in: ids }, deletedAt: null } })).map(toClub) : []
   }
   async countClubsOwnedSince(privyUserId: string, since: Date) {
     return this.prisma.club.count({ where: { ownerPrivyUserId: privyUserId, createdAt: { gte: since } } })

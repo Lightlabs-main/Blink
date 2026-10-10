@@ -3,6 +3,7 @@ import type {
   ClubCategory,
   ClubDetail,
   ClubLeaderboardEntry,
+  ClubMemberProfile,
   ClubMemberView,
   OgType,
   PublicParticipant,
@@ -448,6 +449,9 @@ export const api = {
   joinSquad: (t: GetAccessToken, code: string) => authed<{ squad: SquadSummary }>(t, '/v1/squads/join', { method: 'POST', body: JSON.stringify({ code }) }),
   leaveSquad: (t: GetAccessToken, id: string) => authed<{ ok: true; disbanded: boolean }>(t, `/v1/squads/${encodeURIComponent(id)}/leave`, { method: 'POST', body: '{}' }),
   passport: (t: GetAccessToken) => authed<{ passport: Passport }>(t, '/v1/me/passport'),
+  memberProfile: (t: GetAccessToken, slug: string, ref: string) =>
+    authed<{ profile: ClubMemberProfile }>(t, `/v1/clubs/${encodeURIComponent(slug)}/members/${encodeURIComponent(ref)}/profile`),
+  deleteClub: (t: GetAccessToken, slug: string) => authed<{ deleted: true }>(t, `/v1/clubs/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
   // ── D-49..D-52 ──
   features: () => request<Features>('/v1/features'),
   checkSkrIdentity: (t: GetAccessToken) =>

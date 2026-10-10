@@ -317,6 +317,8 @@ model Club {
   /// D-43: only the owner and admins can send messages.
   adminsOnly       Boolean  @default(false)
   pinnedMessageId  BigInt?
+  /// Deleted by its owner: hidden everywhere and its slug freed; rows are kept for receipts (gifts, tips, drops).
+  deletedAt        DateTime?
   createdAt        DateTime @default(now())
 
   @@index([ownerPrivyUserId, createdAt])
