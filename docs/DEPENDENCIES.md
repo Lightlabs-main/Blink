@@ -274,3 +274,15 @@ play / pause / seekTo`. Status: VERIFIED (types); on-device recording NOT yet ve
 - **Onchain (mainnet, 2026-10-09):** every mint is Token-2022, 8 decimals, only the reviewed extensions, not paused, no
   transfer hook, DefaultAccountState initialized, no multiplier change pending. NFLXx multiplier is 10 (stock split).
 - **Logos:** official `logo` URLs, HTTP 200. The app reads the list from `/v1/xstocks`, so no rebuild is needed.
+
+## Android build 2026-10-10 (versionCode 4)
+
+- **Build:** EAS Build `918ce913-8fa3-4348-adf6-5a624dfe2c2d` (profile `preview`) from commit `686ac9e`, FINISHED.
+  versionCode now auto-increments (eas.json); code 3 was consumed by a local upload failure, no build created.
+- **APK:** 178,836,993 bytes, SHA-256 `295b8b87c0a89cb6ced9d7094fe864a3a2a4ac8614a230fed275aac992919660`.
+- **Verified from the APK:** package `com.blinktostock.app`, not test-only/debuggable, all CRCs OK, arm64 libs
+  16K-aligned, v2 signing certificate `0F:0A:…:D3:6C` (same as every build and assetlinks.json). Permissions:
+  CAMERA, RECORD_AUDIO, POST_NOTIFICATIONS, READ_MEDIA_IMAGES (+ user-selected) for Save image; no server secret
+  in any asset. Bundle contains SKR tips/boosts, ORE board, gift a person / gift drops by name, Gifts for you,
+  club delete, member card, Post on X (@Blinksols) + Save image, Appearance.
+- **Not yet verified on a device.**
