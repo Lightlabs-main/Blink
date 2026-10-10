@@ -11,6 +11,7 @@
     "test": "vitest run",
     "api:dev": "npm run dev -w @blink/api",
     "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate",
     "inspect-xstock": "tsx scripts/inspect-xstock.ts",
     "estimate-rent": "tsx scripts/estimate-rent.ts",
     "verify-delegation": "tsx scripts/verify-delegation.ts",
