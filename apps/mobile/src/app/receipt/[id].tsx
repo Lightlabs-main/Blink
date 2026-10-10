@@ -4,7 +4,7 @@ import { Linking, View } from 'react-native'
 
 import { space } from '../../design/tokens'
 import { Button, Loading, NavBar, Notice, Row, Screen, T } from '../../design/ui'
-import { postReceiptOnX, ReceiptCard, shareReceiptImage } from '../../features/receipts/receipt'
+import { BLINK_X_HANDLE, postReceiptOnX, ReceiptCard, saveReceiptImage, shareReceiptImage } from '../../features/receipts/receipt'
 import { apiUrl } from '../../lib/api'
 import { useAssetMap, useProfile } from '../../lib/data'
 import { explorerTxUrl } from '../../lib/format'
@@ -21,6 +21,8 @@ export default function Receipt() {
   const card = useRef<View>(null)
   const [error, setError] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [busy, setBusy] = useState<'x' | 'save' | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
   const item = history.data?.items.find((i) => i.id === id)
   // A brand-new reward may not be in the cached list yet: wait for the refresh before saying it's missing.
@@ -48,6 +50,34 @@ export default function Receipt() {
     }
   }
 
+  async function onPostX() {
+    if (!item) return
+    setError(null)
+    setBusy('x')
+    try {
+      await postReceiptOnX(card, item, asset)
+      setInfo(`Caption with ${BLINK_X_HANDLE} copied — in X, long-press the text box and paste.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open X.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function onSave() {
+    setError(null)
+    setBusy('save')
+    try {
+      await saveReceiptImage(card)
+      haptics.success()
+      setInfo('Saved to your photos.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the receipt.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <Screen>
       <NavBar onBack={() => router.back()} title="Receipt" />
@@ -57,9 +87,14 @@ export default function Receipt() {
           Share receipt
         </Button>
         <Row gap={space.sm}>
-          <Button onPress={() => void postReceiptOnX(item, asset)} style={{ flex: 1 }} variant="secondary">
+          <Button loading={busy === 'x'} onPress={() => void onPostX()} style={{ flex: 1 }} variant="secondary">
             Post on X
           </Button>
+          <Button icon="arrowRight" loading={busy === 'save'} onPress={() => void onSave()} style={{ flex: 1 }} variant="secondary">
+            Save image
+          </Button>
+        </Row>
+        <Row gap={space.sm}>
           {item.signature ? (
             <Button onPress={() => void Linking.openURL(explorerTxUrl(item.signature!, item.cluster))} style={{ flex: 1 }} variant="secondary">
               Explorer
@@ -72,9 +107,10 @@ export default function Receipt() {
           </Button>
         ) : null}
       </View>
+      <Notice message={info} tone="info" />
       <Notice message={error} />
       <T align="center" variant="caption">
-        “Share receipt” saves this card as an image you can post on X or send anywhere.
+        {`“Post on X” shares this card as a picture and copies a caption that tags ${BLINK_X_HANDLE}. “Save image” puts it in your photos.`}
       </T>
     </Screen>
   )

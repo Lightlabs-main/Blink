@@ -98,6 +98,17 @@
         {
           "photosPermission": "Blink uses a photo you choose as your profile picture."
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Blink saves the receipts you choose to download to your photos.",
+          "savePhotosPermission": "Blink saves the receipts you choose to download to your photos.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo"
+          ]
+        }
       ]
     ],
     "icon": "./assets/icon.png"

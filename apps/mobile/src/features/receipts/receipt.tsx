@@ -1,3 +1,5 @@
+import * as Clipboard from 'expo-clipboard'
+import * as MediaLibrary from 'expo-media-library'
 import * as Sharing from 'expo-sharing'
 import { forwardRef } from 'react'
 import { Image, Linking, StyleSheet, View } from 'react-native'
@@ -149,28 +151,70 @@ function shortTime(iso: string) {
 
 /** Captures the card and opens the share sheet (X, WhatsApp, Photos…). */
 export async function shareReceiptImage(ref: React.RefObject<View | null>) {
-  const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
+  const uri = await captureCard(ref)
   if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this phone')
   await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your Blink receipt' })
 }
 
-/** Opens X with a ready-to-post line and a link (the image can be attached from the share sheet). */
-export function postReceiptOnX(item: HistoryItem, asset: XStockListing | undefined) {
+/** Blink's official X account, tagged on every post (owner, 2026-10-10). */
+export const BLINK_X_HANDLE = '@Blinksols'
+
+/** The text for a post about this receipt: what actually happened, Blink's handle and a link. */
+export function receiptCaption(item: HistoryItem, asset: XStockListing | undefined): string {
   const amount = receiptAmount(item, asset).replace(/^[+−]/, '')
-  const text =
-    item.kind === 'CHECKIN'
-      ? `Checked in at a ${item.title ?? item.symbol} event on Blink ✓`
-      : item.kind === 'CLUB_JOINED'
-        ? `I just joined ${item.title ?? 'a club'} on Blink — tokenized stocks, made social.`
-        : item.kind === 'GIFT_RECEIVED'
-          ? `Just got ${amount} as a gift on Blink 🎁 tokenized stocks, made social.`
-        : item.kind === 'SENT'
-      ? `Just sent ${amount} on Blink — tokenized stocks, made social.`
-      : item.kind === 'FUNDED'
-        ? `I just launched a ${amount} drop on Blink. Come get some.`
-        : `Just earned ${amount} on Blink ⚡ tokenized stocks, made social.`
-  const url = item.kind === 'CLUB_JOINED' && item.clubSlug ? `https://blinksol.site/club/${item.clubSlug}` : item.campaignId && item.kind !== 'SENT' ? `https://blinksol.site/c/${item.campaignId}` : item.signature ? explorerTxUrl(item.signature, item.cluster) : 'https://blinksol.site'
-  return Linking.openURL(`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
+  const line: Record<HistoryItem['kind'], string> = {
+    REWARD: `Just earned ${amount} on Blink ⚡ tokenized stocks, made social.`,
+    INVITE_BONUS: `Just earned ${amount} for inviting a friend on Blink ⚡`,
+    SENT: `Just sent ${amount} on Blink — tokenized stocks, made social.`,
+    FUNDED: `I just launched a ${amount} drop on Blink. Come get some.`,
+    CHECKIN: `Checked in at a ${item.title ?? item.symbol} event on Blink ✓`,
+    CLUB_JOINED: `I just joined ${item.title ?? 'a club'} on Blink — tokenized stocks, made social.`,
+    GIFT_RECEIVED: `Just got ${amount} as a gift on Blink 🎁 tokenized stocks, made social.`,
+    SKR_TIP_SENT: `Just tipped ${item.title ?? 'a club member'} ${amount} on Blink ⚡`,
+    SKR_TIP_RECEIVED: `Just got tipped ${amount} on Blink ⚡`,
+    SKR_BOOST_PURCHASED: `Boosted my drop with ${amount} on Blink ⚡`,
+    ORE_DEPLOY_CONFIRMED: `Deployed on the ORE board from Blink ⛏️ ${item.title ?? ''}`.trim(),
+    ORE_MINER_VERIFIED: 'Verified ORE Miner on Blink ⛏️',
+  }
+  const url =
+    item.kind === 'CLUB_JOINED' && item.clubSlug
+      ? `https://blinksol.site/club/${item.clubSlug}`
+      : item.campaignId && item.kind !== 'SENT'
+        ? `https://blinksol.site/c/${item.campaignId}`
+        : item.signature
+          ? explorerTxUrl(item.signature, item.cluster)
+          : 'https://blinksol.site'
+  return `${line[item.kind]} ${BLINK_X_HANDLE}
+${url}`
+}
+
+/** Captures the receipt card to a temporary PNG. */
+async function captureCard(ref: React.RefObject<View | null>) {
+  return captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' })
+}
+
+/**
+ * Post on X with the picture: X can't take an image and text together from another app, so the caption (with
+ * @Blinksols and the link) goes to the clipboard and the share sheet opens with the image — pick X and paste.
+ */
+export async function postReceiptOnX(ref: React.RefObject<View | null>, item: HistoryItem, asset: XStockListing | undefined) {
+  const caption = receiptCaption(item, asset)
+  await Clipboard.setStringAsync(caption)
+  const uri = await captureCard(ref)
+  if (!(await Sharing.isAvailableAsync())) {
+    // No share sheet: fall back to a text post (no picture).
+    await Linking.openURL(`https://x.com/intent/post?text=${encodeURIComponent(caption)}`)
+    return
+  }
+  await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Pick X, then paste the caption' })
+}
+
+/** Saves the receipt card to the phone's photos (write-only access, photos only). */
+export async function saveReceiptImage(ref: React.RefObject<View | null>) {
+  const perm = await MediaLibrary.requestPermissionsAsync(true, ['photo'])
+  if (!perm.granted) throw new Error('Allow Blink to save photos to download receipts (Settings → Apps → Blink → Permissions).')
+  const uri = await captureCard(ref)
+  await MediaLibrary.Asset.create(uri)
 }
 
 const styles = StyleSheet.create({

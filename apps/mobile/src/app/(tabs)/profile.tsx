@@ -8,8 +8,8 @@ import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native
 import { font } from '../../design/fonts'
 import { Icon, type IconName } from '../../design/icons'
 import { PersonName } from '../../design/og'
-import { color, space } from '../../design/tokens'
-import { Avatar, Badge, Button, Card, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
+import { type AppearancePref, appearancePref, color, setAppearancePref, space } from '../../design/tokens'
+import { Avatar, Badge, Button, Card, Chip, Divider, GlowCard, ListRow, Row, Screen, SectionHeader, StockAvatar, T } from '../../design/ui'
 import { openOfficialSkrStaking } from '../../features/skr/official-staking'
 import { api, apiUrl } from '../../lib/api'
 import { FEATURES } from '../../lib/features'
@@ -114,6 +114,13 @@ export default function Profile() {
             : skrCheck === 'none' || profile.data?.profile.skrCheckedAt
               ? 'No .skr name on your verified wallets · tap to re-check'
               : 'Tap to check your verified wallets'
+
+  const [appearance, setAppearance] = useState<AppearancePref>(appearancePref)
+  function onAppearance(p: AppearancePref) {
+    setAppearancePref(p)
+    setAppearance(p)
+    if (p !== appearancePref) Alert.alert('Appearance saved', 'Close and reopen Blink to switch.')
+  }
 
   async function onLogout() {
     await unregisterPush(getAccessToken)
@@ -287,6 +294,18 @@ export default function Profile() {
           ) : (
             <ListRow leading={<RowIcon icon="layers" />} onPress={openOfficialSkrStaking} subtitle="stake.solanamobile.com or Seed Vault Wallet" title="Stake SKR" />
           )}
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Appearance" />
+        <Card style={{ gap: space.md }}>
+          <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+            {(['system', 'light', 'dark'] as const).map((p) => (
+              <Chip key={p} label={p === 'system' ? 'Match phone' : p === 'light' ? 'Light' : 'Dark'} onPress={() => onAppearance(p)} selected={appearance === p} />
+            ))}
+          </Row>
+          <T variant="caption">{appearance === appearancePref ? 'Light is cream with ink text; Dark is ink with cream text.' : 'Close and reopen Blink to switch.'}</T>
         </Card>
       </View>
 

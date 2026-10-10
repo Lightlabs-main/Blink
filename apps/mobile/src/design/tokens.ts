@@ -1,3 +1,4 @@
+import * as SecureStore from 'expo-secure-store'
 import { Appearance } from 'react-native'
 
 /**
@@ -6,9 +7,31 @@ import { Appearance } from 'react-native'
  * Legacy key names stay so every screen follows: `lime` is the accent for icons/text (darkened in Day so it
  * stays readable), `marker` is the pure brand lime for fills, `primary` is the main button.
  *
- * Night (ink) or Day (cream) is chosen at launch from the system setting.
+ * Night (ink) or Day (cream) is chosen at launch: the person's choice in You → Appearance, else the system setting.
  */
-export const isNight = Appearance.getColorScheme() !== 'light'
+/** The person's choice in You → Appearance; 'system' follows the phone. Read synchronously so the first frame is right. */
+export type AppearancePref = 'system' | 'light' | 'dark'
+const APPEARANCE_KEY = 'blink.appearance'
+
+function readAppearancePref(): AppearancePref {
+  try {
+    const v = SecureStore.getItem(APPEARANCE_KEY)
+    return v === 'light' || v === 'dark' ? v : 'system'
+  } catch {
+    return 'system'
+  }
+}
+
+export const appearancePref: AppearancePref = readAppearancePref()
+// Native parts (keyboard, system dialogs) follow the same choice.
+if (appearancePref !== 'system') Appearance.setColorScheme(appearancePref)
+
+export const isNight = appearancePref === 'system' ? Appearance.getColorScheme() !== 'light' : appearancePref === 'dark'
+
+/** Saves the choice; colours apply the next time Blink opens (every screen reads them at launch). */
+export function setAppearancePref(pref: AppearancePref) {
+  SecureStore.setItem(APPEARANCE_KEY, pref)
+}
 
 const night = {
   bg: '#0D0D0B',
