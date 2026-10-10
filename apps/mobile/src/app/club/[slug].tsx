@@ -2,7 +2,7 @@ import { usePrivy } from '@privy-io/expo'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native'
+import { Alert, Pressable, Share, StyleSheet, TextInput, View } from 'react-native'
 
 import { Icon } from '../../design/icons'
 import { font } from '../../design/fonts'
@@ -74,6 +74,7 @@ function Drops({ club }: { club: ClubDetail }) {
 }
 
 function Leaderboard({ club }: { club: ClubDetail }) {
+  const router = useRouter()
   const { getAccessToken } = usePrivy()
   const [period, setPeriod] = useState<'week' | 'all'>('week')
   const board = useQuery({ queryKey: ['club-board', club.slug, period], queryFn: () => api.clubLeaderboard(getAccessToken, club.slug, period) })
@@ -102,6 +103,7 @@ function Leaderboard({ club }: { club: ClubDetail }) {
                     <Avatar label={e.who.username ?? e.who.label} size={32} uri={apiUrl(e.who.avatarUrl)} />
                   </Row>
                 }
+                onPress={e.id ? () => router.push({ pathname: '/club-member', params: { slug: club.slug, ref: e.id! } }) : undefined}
                 subtitle={[e.rewards && `${e.rewards} won`, e.qualified && `${e.qualified} qualified`, e.checkins && `${e.checkins} check-ins`].filter(Boolean).join(' · ')}
                 title={<PersonName style={{ ...font('bodySemi'), fontSize: 15.5, color: color.text }} who={e.who} />}
                 trailing={<T variant="numeric">{`${e.points} pts`}</T>}
@@ -152,6 +154,35 @@ function AdminSettings({ club, onChanged }: { club: ClubDetail; onChanged: () =>
 
 function About({ club, onLeave, leaving, onChanged }: { club: ClubDetail; onLeave: () => void; leaving: boolean; onChanged: () => void }) {
   const router = useRouter()
+  const { getAccessToken } = usePrivy()
+  const queryClient = useQueryClient()
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  function confirmDelete() {
+    Alert.alert(`Delete ${club.name}?`, 'The club, its chat and member list disappear for everyone. Receipts for gifts and tips stay. This can’t be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          void (async () => {
+            setDeleting(true)
+            setDeleteError(null)
+            try {
+              await api.deleteClub(getAccessToken, club.slug)
+              haptics.success()
+              await queryClient.invalidateQueries({ queryKey: ['clubs'] })
+              router.replace('/clubs')
+            } catch (e) {
+              haptics.error()
+              setDeleteError(e instanceof Error ? e.message : 'Could not delete the club')
+            } finally {
+              setDeleting(false)
+            }
+          })(),
+      },
+    ])
+  }
   const link = clubLink(club.slug, club.visibility === 'PRIVATE' ? club.inviteCode : null)
   return (
     <View style={{ gap: space.lg }}>
@@ -205,6 +236,14 @@ function About({ club, onLeave, leaving, onChanged }: { club: ClubDetail; onLeav
         <Button loading={leaving} onPress={onLeave} variant="ghost">
           Leave club
         </Button>
+      ) : null}
+      {club.role === 'OWNER' ? (
+        <>
+          <Notice message={deleteError} />
+          <Button icon="trash" loading={deleting} onPress={confirmDelete} variant="danger">
+            Delete club
+          </Button>
+        </>
       ) : null}
     </View>
   )

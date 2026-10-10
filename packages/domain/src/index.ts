@@ -697,6 +697,8 @@ export const CLUB_POINTS = { REWARD: 10, QUALIFIED: 5, CHECKIN: 5 } as const
 
 export interface ClubLeaderboardEntry {
   rank: number
+  /** Opaque member id to open their card; null when they've left the club. */
+  id: string | null
   who: PublicParticipant
   points: number
   rewards: number
@@ -765,3 +767,32 @@ export type ScanTarget =
   | { kind: 'CAMPAIGN'; campaignId: string; ref?: string }
   | { kind: 'EVENT'; token: string }
   | { kind: 'CLUB'; slug: string; invite?: string }
+
+/**
+ * Activity streak: consecutive UTC days with at least one Blink action (chat message, claim, event check-in,
+ * SKR tip, ORE deploy), counted back from today — or from yesterday, so a streak isn't lost before the day ends.
+ */
+export function activityStreak(times: readonly Date[], now: Date): number {
+  const day = (d: Date) => Math.floor(d.getTime() / 86_400_000)
+  const days = new Set(times.map(day))
+  let cursor = day(now)
+  if (!days.has(cursor)) cursor -= 1
+  let streak = 0
+  while (days.has(cursor)) {
+    streak += 1
+    cursor -= 1
+  }
+  return streak
+}
+
+/** A member's public card, opened by tapping their name in a club. Never shows wallets, email or private clubs. */
+export interface ClubMemberProfile {
+  who: PublicParticipant
+  /** Their role in the club the card was opened from. */
+  role: ClubRole
+  joinedAt: string
+  /** Public clubs they belong to (plus this one), with their role there. */
+  clubs: { name: string; slug: string; role: ClubRole }[]
+  stats: { streakDays: number; rewards: number; checkins: number; oreDeploys: number }
+  me: boolean
+}

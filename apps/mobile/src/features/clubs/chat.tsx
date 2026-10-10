@@ -287,7 +287,13 @@ export function ClubChat({
                 <Avatar label={m.author.username ?? m.author.label} size={30} uri={apiUrl(m.author.avatarUrl)} />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Row gap={6}>
-                    <PersonName style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }} who={m.author} />
+                    {m.authorId ? (
+                      <Pressable accessibilityLabel={`Open ${m.author.skrName ?? m.author.label}'s profile`} hitSlop={6} onPress={() => router.push({ pathname: '/club-member', params: { slug, ref: m.authorId! } })}>
+                        <PersonName style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }} who={m.author} />
+                      </Pressable>
+                    ) : (
+                      <PersonName style={{ ...font('bodySemi'), fontSize: 13, color: m.mine ? color.lime : color.text }} who={m.author} />
+                    )}
                     <T variant="caption">{time(m.createdAt)}</T>
                   </Row>
                   {m.replyTo ? (

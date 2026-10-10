@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import {
+  activityStreak,
   type CampaignType,
   type ChatMessage,
   CLUB_LIMITS,
@@ -8,6 +9,7 @@ import {
   CLUB_REACTIONS,
   type ClubDetail,
   type ClubLeaderboardEntry,
+  type ClubMemberProfile,
   type ClubMemberView,
   type ClubReaction,
   type ClubSummary,
@@ -73,7 +75,7 @@ export interface SocialDeps {
   eligibility?: Pick<EligibilityService, 'isEligibleStored'>
   notifier?: Notifier
   /** D-50: paid SKR boost windows, to mark and order a club's featured drops. */
-  chain?: { store: Pick<ChainActivityStore, 'activeBoosts'> }
+  chain?: { store: Pick<ChainActivityStore, 'activeBoosts' | 'tipsFor' | 'oreDeploysFor'> }
 }
 
 interface Ctx {
@@ -511,6 +513,68 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
     return { members, removed }
   })
 
+  /** A member's public card (tap a name in chat, members or the leaderboard). Opaque id; no wallet, email or private clubs. */
+  app.get<{ Params: { slug: string; ref: string } }>('/v1/clubs/:slug/members/:ref/profile', async (req) => {
+    const auth = await requireAuth(req)
+    const { club, member, social } = await visibleClub(req, auth)
+    if (club.visibility === 'PRIVATE' && !member) throw new ClaimError('NOT_A_MEMBER', 'join the club first', 403)
+    const target = (await social.members(club.id, 5000)).find((m) => memberRef(club.id, m.privyUserId) === req.params.ref)
+    if (!target) throw new ClaimError('NOT_FOUND', 'that person is not in this club', 404)
+    const who = await people([target.privyUserId])
+
+    const memberships = await social.membershipsOf(target.privyUserId)
+    const byId = new Map((await social.clubsByIds(memberships.map((m) => m.clubId))).map((c) => [c.id, c]))
+    const clubs = memberships
+      .map((m) => ({ m, c: byId.get(m.clubId) }))
+      .filter((x): x is { m: typeof x.m; c: StoredClub } => Boolean(x.c) && (x.c!.visibility === 'PUBLIC' || x.c!.id === club.id))
+      .map(({ m, c }) => ({ name: c.name, slug: c.slug, role: m.role }))
+
+    const since = new Date(Date.now() - 400 * 86_400_000)
+    const [messages, claims, checkins, tips, deploys] = await Promise.all([
+      social.messageTimesOf(target.privyUserId, since),
+      deps.claims ? deps.claims.listForUser(target.privyUserId, 500) : Promise.resolve([]),
+      social.checkinsOf(target.privyUserId),
+      deps.chain ? deps.chain.store.tipsFor(target.privyUserId, 500) : Promise.resolve([]),
+      deps.chain ? deps.chain.store.oreDeploysFor(target.privyUserId, 500) : Promise.resolve([]),
+    ])
+    const times = [
+      ...messages,
+      ...claims.map((c) => c.createdAt),
+      ...checkins.map((c) => c.at),
+      ...tips.filter((t) => t.senderPrivyUserId === target.privyUserId && t.status === 'CONFIRMED').map((t) => t.confirmedAt ?? t.createdAt),
+      ...deploys.map((d) => d.deployedAt),
+    ]
+    const profile: ClubMemberProfile = {
+      who: who(target.privyUserId, target.publicWallet),
+      role: target.role,
+      joinedAt: target.joinedAt.toISOString(),
+      clubs,
+      stats: {
+        streakDays: activityStreak(times, new Date()),
+        rewards: claims.filter((c) => c.status === 'PAID').length,
+        checkins: checkins.length,
+        oreDeploys: deploys.length,
+      },
+      me: target.privyUserId === auth.privyUserId,
+    }
+    return { profile }
+  })
+
+  /** The owner deletes their club: hidden everywhere, slug freed; refused while a funded drop is still running in it. */
+  app.delete<{ Params: { slug: string } }>('/v1/clubs/:slug', async (req) => {
+    const auth = await requireAuth(req)
+    throttle(req, auth)
+    const { club, member, social } = await memberOnly(req, auth)
+    if (!club.ownerPrivyUserId || member.role !== 'OWNER') throw new ClaimError('NOT_OWNER', 'only the club’s owner can delete it', 403)
+    const ids = await social.campaignIdsForClub(club.id, 500)
+    const running = (await Promise.all(ids.map((id) => deps.campaigns.findById(id)))).filter((c) => c && (c.status === 'LIVE' || c.status === 'PAUSED'))
+    if (running.length) {
+      throw new ClaimError('CLUB_HAS_LIVE_DROPS', `close the ${running.length === 1 ? 'drop' : `${running.length} drops`} still running in this club first (Close drop on the drop’s page)`, 409)
+    }
+    await social.deleteClub(club.id)
+    return { deleted: true }
+  })
+
   /** The acting admin and the target member (by opaque id). Only the owner manages admins; nobody acts on the owner. */
   async function adminAction(req: FastifyRequest<{ Params: { slug: string; ref: string } }>) {
     const auth = await requireAuth(req)
@@ -695,6 +759,7 @@ export function registerSocialRoutes(app: FastifyInstance, deps: SocialDeps, ctx
       .slice(0, 50)
     const leaderboard: ClubLeaderboardEntry[] = entries.map((e, i) => ({
       rank: i + 1,
+      id: members.has(e.u) ? memberRef(club.id, e.u) : null,
       who: who(e.u, members.get(e.u)?.publicWallet ?? null),
       points: e.points,
       rewards: e.rewards,
