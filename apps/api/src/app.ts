@@ -43,6 +43,7 @@ import { ClaimError, type PayoutService } from './payout-service.ts'
 import { LIMITS, RateLimiter } from './rate-limit.ts'
 import { registerSocialRoutes } from './social-routes.ts'
 import { chainHistoryItems, registerSkrOreRoutes, type SkrOreDeps } from './skr-ore-routes.ts'
+import { MAX_NAMES, registerGiftRoutes, resolveNames, splitNames } from './gift-routes.ts'
 import type { SocialStore } from './social-store.ts'
 import type { XStockHoldings } from './xstock-holdings.ts'
 import type { XStockMarket } from './xstock-market.ts'
@@ -233,6 +234,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   })
 
   registerSocialRoutes(app, deps, { requireAuth, throttle, limiter })
+  registerGiftRoutes(app, {
+    env: deps.env, auth: deps.auth, requireAuth, throttle, limiter, assets: deps.assets, profiles: deps.profiles, social: deps.social, send: deps.send,
+    eligibility: deps.eligibility, notifier,
+  })
   if (deps.chain) {
     registerSkrOreRoutes(app, {
       ...deps.chain, env: deps.env, auth: deps.auth, requireAuth, limiter, campaigns: deps.campaigns, social: deps.social, profiles: deps.profiles, notifier,
@@ -538,7 +543,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get('/v1/campaigns', async () => ({
     // Only drops that can pay on this network now: a devnet drop on a mainnet server, or one past its end, would only
     // answer WRONG_NETWORK / CAMPAIGN_OVER at claim time.
-    campaigns: await withBoosts((await deps.campaigns.listByStatus('LIVE', 50, { cluster: deps.env.SOLANA_CLUSTER, endsAfter: new Date() })).map(toSummary)),
+    // Gift drops to named people are private: they appear only for their recipients (/v1/me/gifts-for-me).
+    campaigns: await withBoosts(
+      (await deps.campaigns.listByStatus('LIVE', 50, { cluster: deps.env.SOLANA_CLUSTER, endsAfter: new Date() })).filter((c) => !c.recipientIds?.length).map(toSummary),
+    ),
   }))
 
   /**
@@ -587,6 +595,22 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return { available, wallets: result }
   })
 
+  /** Gift drops that name the caller and are live now, minus ones they already claimed. */
+  app.get('/v1/me/gifts-for-me', async (req) => {
+    const auth = await requireAuth(req)
+    const drops = await deps.campaigns.listForRecipient(auth.privyUserId, deps.env.SOLANA_CLUSTER, 20)
+    const claimed = new Set((deps.claims ? await deps.claims.listForUser(auth.privyUserId, 200) : []).map((c) => c.campaignId))
+    const people = deps.profiles ? await deps.profiles.getMany(drops.map((d) => d.creatorPrivyUserId)) : new Map()
+    return {
+      drops: drops
+        .filter((d) => !claimed.has(d.id))
+        .map((d) => {
+          const p = people.get(d.creatorPrivyUserId)
+          return { campaign: toSummary(d), from: p ? (p.skrName ?? (p.username ? `@${p.username}` : 'A Blink creator')) : 'A Blink creator' }
+        }),
+    }
+  })
+
   app.get('/v1/me/campaigns', async (req) => {
     const auth = await requireAuth(req)
     // Only this network's drops: after the mainnet switch, devnet test drops can't be funded, claimed or boosted here.
@@ -605,6 +629,23 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     // D-51: paying SOL into a chance-based ORE round must not unlock an xStock reward without owner/legal approval.
     if (body.requirements && questUses(body.requirements, 'ORE_ACTIVITY') && !deps.env.ORE_REWARDS_ENABLED) {
       return sendError(reply, 403, 'ORE_REWARDS_DISABLED', 'ORE mining quests can’t carry stock rewards yet')
+    }
+
+    // Gift drop to named people: every name must be on Blink, the creator isn't one of them, and the pool is
+    // exactly one reward per person (so nobody else can claim and nothing is left over).
+    let recipientIds: string[] = []
+    if (body.recipients) {
+      if (!deps.profiles) return sendError(reply, 503, 'PROFILES_UNAVAILABLE', 'people search is not available right now')
+      const names = splitNames(body.recipients)
+      if (names.length > MAX_NAMES) return sendError(reply, 400, 'TOO_MANY_NAMES', `up to ${MAX_NAMES} people per gift drop`)
+      const results = await resolveNames(deps.profiles, names)
+      const unknown = results.filter((r) => !r.found).map((r) => r.input)
+      if (unknown.length) return sendError(reply, 422, 'UNKNOWN_RECIPIENTS', `not on Blink: ${unknown.join(', ')}`)
+      recipientIds = [...new Set(results.flatMap((r) => (r.found ? [r.privyUserId] : [])))]
+      if (recipientIds.includes(auth.privyUserId)) return sendError(reply, 400, 'SELF_GIFT', 'you can’t include yourself')
+      if (BigInt(body.allowanceRaw) !== BigInt(body.rewardPerClaimRaw!) * BigInt(recipientIds.length)) {
+        return sendError(reply, 400, 'POOL_MISMATCH', 'the total must be the amount each × the number of people')
+      }
     }
 
     // D-40: a drop can be posted only in a club the creator belongs to.
@@ -675,6 +716,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
       clubId: body.clubId ?? null,
       membersOnly: Boolean(body.membersOnly),
+      recipientIds,
     })
     return reply.status(201).send({ campaign: toSummary(stored) })
   })
@@ -786,9 +828,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (wentLive) {
       void notifier.notify(wentLive.creatorPrivyUserId, {
         title: 'Your drop is live',
-        body: `Your ${wentLive.xstockSymbol} drop is open. Share the link or QR to start the room.`,
+        body: wentLive.recipientIds?.length
+          ? `Your ${wentLive.xstockSymbol} gift is ready. ${wentLive.recipientIds.length === 1 ? 'Your recipient has' : `All ${wentLive.recipientIds.length} recipients have`} been told.`
+          : `Your ${wentLive.xstockSymbol} drop is open. Share the link or QR to start the room.`,
         url: `/campaign/${wentLive.id}`,
       })
+      // Named recipients hear about it only once it's funded and live (never before the stock is in place).
+      for (const r of wentLive.recipientIds ?? []) {
+        void notifier.notify(r, { title: 'You’ve got a gift 🎁', body: `Someone sent you ${wentLive.xstockSymbol} on Blink — open it to claim.`, url: `/campaign/${wentLive.id}` })
+      }
     }
     return { campaign: wentLive ?? funded, verified: true }
   }

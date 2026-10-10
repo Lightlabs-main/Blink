@@ -370,6 +370,10 @@ export class ClaimService {
       throw new ClaimError('NOT_CLAIMABLE', 'this drop does not support claiming yet')
     }
     if (campaign.creatorPrivyUserId === auth.privyUserId) throw new ClaimError('OWN_CAMPAIGN', 'you cannot claim your own drop', 403)
+    // Gift drop to named people: only they can claim (checked on every claim, never instead of the xStocks gate).
+    if (campaign.recipientIds?.length && !campaign.recipientIds.includes(auth.privyUserId)) {
+      throw new ClaimError('NOT_A_RECIPIENT', 'this gift is for specific people', 403)
+    }
     // D-41: members-only drops (any mechanic): checked on every play, verify and claim. Never replaces the xStocks gate.
     if (campaign.membersOnly && campaign.clubId) {
       if (!this.deps.social) throw new ClaimError('CLUBS_UNAVAILABLE', 'club checks are not available right now', 503)

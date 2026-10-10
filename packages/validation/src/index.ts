@@ -128,9 +128,12 @@ export const createCampaignRequest = z
     clubId: z.uuid().optional(),
     /** D-41: only that club's members can take part. */
     membersOnly: z.boolean().optional(),
+    /** Gift drop to named people: Blink usernames or verified .skr names; only they can claim. */
+    recipients: z.array(z.string().min(1).max(70)).min(1).max(50).optional(),
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (v.recipients && v.type !== 'GIFT') ctx.addIssue({ code: 'custom', path: ['recipients'], message: 'only gift drops can name their recipients' })
     if (v.membersOnly && !v.clubId) ctx.addIssue({ code: 'custom', path: ['membersOnly'], message: 'pick the club whose members can take part' })
     if (v.requirements && questUses(v.requirements, 'CLUB_MEMBER') && !v.clubId) {
       ctx.addIssue({ code: 'custom', path: ['clubId'], message: 'pick the club whose members can join' })

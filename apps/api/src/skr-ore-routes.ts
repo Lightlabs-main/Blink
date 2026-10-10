@@ -27,6 +27,7 @@ import { ClaimError } from './payout-service.ts'
 import type { Notifier } from './push.ts'
 import type { RateLimiter } from './rate-limit.ts'
 import { profileExtras, type ProfileStore } from './profile.ts'
+import { resolveNames } from './gift-routes.ts'
 import { resolveSkrIdentity, type SkrNameResolver } from './skr-identity.ts'
 import { memberRef } from './social-routes.ts'
 import type { SocialStore } from './social-store.ts'
@@ -63,6 +64,7 @@ const MAX_TIP_RAW = 10_000_000_000n
 const raw = z.string().regex(/^[1-9]\d{0,19}$/)
 const walletField = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional()
 const tipPrepare = z.object({ to: z.string().regex(/^[0-9a-f]{16}$/), amountRaw: raw, wallet: walletField })
+const directTip = z.object({ to: z.string().min(1).max(70), amountRaw: raw, wallet: walletField })
 const signed = z.object({ signedTransaction: z.string().min(100).max(4000) })
 const boostPrepare = z.object({ wallet: walletField })
 const orePrepare = z.object({
@@ -175,18 +177,39 @@ export function registerSkrOreRoutes(app: FastifyInstance, deps: SkrOreDeps) {
     if (!target) throw new ClaimError('NOT_FOUND', 'that person is not in this club', 404)
     if (target.privyUserId === auth.privyUserId) throw new ClaimError('SELF_TIP', 'you can’t tip yourself', 400)
 
-    const from = await callerWallet(auth, body.data.wallet)
+    return prepareTip(auth, target.privyUserId, club.id, amountRaw, body.data.wallet)
+  })
+
+  /** "Gift a person" with SKR: the recipient is found by Blink username or verified .skr name (no club needed). */
+  app.post('/v1/skr/gifts/prepare', async (req) => {
+    const auth = await deps.requireAuth(req)
+    if (!features().tips.enabled) throw new ClaimError('SKR_TIPS_DISABLED', 'SKR gifts aren’t available right now', 503)
+    if (!deps.profiles) throw new ClaimError('PROFILES_UNAVAILABLE', 'people search is not available right now', 503)
+    const body = directTip.safeParse(req.body)
+    if (!body.success) throw new ClaimError('INVALID_REQUEST', body.error.issues[0]?.message ?? 'invalid gift', 400)
+    const amountRaw = BigInt(body.data.amountRaw)
+    if (amountRaw > MAX_TIP_RAW) throw new ClaimError('SKR_TIP_TOO_LARGE', 'that is larger than Blink allows (10,000 SKR)', 400)
+    if (!deps.limiter.hit(`tip:${auth.privyUserId}`, 30, DAY)) throw new ClaimError('RATE_LIMITED', 'you have reached today’s SKR sending limit', 429)
+    const [target] = await resolveNames(deps.profiles, [body.data.to])
+    if (!target?.found) throw new ClaimError('PERSON_NOT_FOUND', `${body.data.to} isn’t on Blink`, 404)
+    if (target.privyUserId === auth.privyUserId) throw new ClaimError('SELF_TIP', 'you can’t gift yourself', 400)
+    return prepareTip(auth, target.privyUserId, null, amountRaw, body.data.wallet)
+  })
+
+  /** Builds and records a sender-paid SKR transfer to `recipient` (club tip or direct gift). */
+  async function prepareTip(auth: AuthContext, recipient: string, clubId: string | null, amountRaw: bigint, requestedWallet?: string) {
+    const from = await callerWallet(auth, requestedWallet)
     // Recipient: their most recently verified (SIWS) wallet, else their Blink wallet — both bound to their login.
-    const [external] = await deps.auth.getVerifiedExternalSolanaWallets(target.privyUserId)
-    const [embedded] = await deps.auth.getEmbeddedSolanaWallets(target.privyUserId)
+    const [external] = await deps.auth.getVerifiedExternalSolanaWallets(recipient)
+    const [embedded] = await deps.auth.getEmbeddedSolanaWallets(recipient)
     const to = external ?? embedded
-    if (!to) throw new ClaimError('NO_RECIPIENT_WALLET', 'this member has no wallet that can receive SKR yet', 409)
+    if (!to) throw new ClaimError('NO_RECIPIENT_WALLET', 'this person has no wallet that can receive SKR yet', 409)
     if (to === from) throw new ClaimError('SELF_TIP', 'that’s your own wallet', 400)
 
     const plan = await buildSkrTransferTransaction(deps.rpc, { from: address(from), to: address(to), amountRaw }).catch(toClaimError)
     const tip = await store.createTip({
-      id: randomUUID(), senderPrivyUserId: auth.privyUserId, recipientPrivyUserId: target.privyUserId, senderWallet: from, recipientWallet: to,
-      clubId: club.id, amountRaw, cluster: env.SOLANA_CLUSTER,
+      id: randomUUID(), senderPrivyUserId: auth.privyUserId, recipientPrivyUserId: recipient, senderWallet: from, recipientWallet: to,
+      clubId, amountRaw, cluster: env.SOLANA_CLUSTER,
     })
     relay.remember(`tip:${tip.id}`, plan.transaction, from)
     return {
@@ -195,7 +218,7 @@ export function registerSkrOreRoutes(app: FastifyInstance, deps: SkrOreDeps) {
       review: {
         amountRaw: amountRaw.toString(),
         token: { symbol: 'SKR', mint: SKR_MINT, decimals: 6 },
-        recipient: await personView(target.privyUserId),
+        recipient: await personView(recipient),
         recipientWallet: to,
         recipientWalletKind: external ? 'VERIFIED_WALLET' : 'BLINK_WALLET',
         senderWallet: from,
@@ -205,7 +228,7 @@ export function registerSkrOreRoutes(app: FastifyInstance, deps: SkrOreDeps) {
         network: 'Solana Mainnet',
       },
     }
-  })
+  }
 
   /** Submit the signed tip; idempotent by signature. A client callback alone never marks a tip as sent. */
   app.post<{ Params: { id: string } }>('/v1/skr/tips/:id/submit', async (req) => {

@@ -113,6 +113,7 @@ export default function CampaignScreen() {
           </Row>
           <T variant="hero">{c.xstockSymbol}</T>
           <T style={{ fontSize: 17 }}>{amount ? `${amount} shares to give away` : (asset?.name ?? 'Stock campaign')}</T>
+          {c.recipientCount ? <T variant="label">{`Private gift for ${c.recipientCount} named ${c.recipientCount === 1 ? 'person' : 'people'} · only they can claim`}</T> : null}
           {c.boostedUntil ? (
             <View style={{ marginTop: space.xs, alignSelf: 'flex-start' }}>
               <BoostedBadge until={c.boostedUntil} />
