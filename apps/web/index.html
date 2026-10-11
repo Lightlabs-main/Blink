@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Blink-to-Stock — Programmable social stock campaigns</title>
-    <meta name="description" content="Blink turns tokenized stocks into programmable social campaigns: set the conditions, create the action, fund it with stock and share it anywhere. xStocks on Solana, built for Android and Seeker." />
+    <title>Blink — Tokenized stocks, made social</title>
+    <meta name="description" content="Blink is a social app for tokenized stocks on Solana. Give stock to friends, join clubs, run drops and tip SKR. Android, built for Solana Seeker." />
     <meta name="theme-color" content="#f5f2ea" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0d0d0b" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
-    <meta property="og:title" content="Blink-to-Stock — Programmable social stock campaigns" />
-    <meta property="og:description" content="Tokenized stocks as shareable drops on Solana. Claim, play or invite a friend — and xStocks land in your wallet." />
+    <meta property="og:title" content="Blink — Tokenized stocks, made social" />
+    <meta property="og:description" content="Give stock to friends, join clubs and run drops on Solana. Android, built for Solana Seeker." />
     <meta property="og:image" content="https://blinksol.site/icon.png" />
     <meta property="og:url" content="https://blinksol.site/" />
     <meta name="twitter:card" content="summary" />
@@ -36,8 +36,8 @@
         <nav class="nav-links" aria-label="Sections">
           <a href="#drops">Live drops</a>
           <a href="#how">How it works</a>
-          <a href="#campaigns">Campaigns</a>
-          <a href="#creators">Creators</a>
+          <a href="#features">Features</a>
+          <a href="#stocks">Stocks</a>
           <a href="#faq">FAQ</a>
         </nav>
         <div class="nav-end">
@@ -57,11 +57,11 @@
       <section class="hero">
         <div class="container hero-grid">
           <div>
-            <span class="eyebrow"><span class="dot"></span>Live on Solana</span>
-            <h1 class="headline">Tokenized stocks, now <span class="mark">programmable.</span></h1>
+            <span class="eyebrow"><span class="dot"></span>Live on Solana mainnet</span>
+            <h1 class="headline">Tokenized stocks, <span class="mark">made social.</span></h1>
             <p class="lead">
-              Set the conditions. Create the action. Fund it with stock. Share it anywhere. Blink turns xStocks into social
-              campaigns that communities take part in together.
+              Blink is an Android app where you give stock to friends, join clubs, run drops and tip SKR. Every reward and
+              transfer is a real transaction you can check on Solana.
             </p>
             <div class="hero-actions">
               <a class="btn btn-ink" href="/download/blink-to-stock.apk">
@@ -70,12 +70,12 @@
               </a>
               <a class="btn btn-line" href="#drops">See live drops</a>
             </div>
-            <div class="hero-meta"><span>No seed phrase</span><span>Free to claim</span><span>Built for Solana Seeker</span></div>
+            <div class="hero-meta"><span>No seed phrase</span><span>Claiming is free</span><span>Built for Solana Seeker</span></div>
           </div>
           <aside class="qr-card">
             <img class="logo" src="/icon.png" alt="" width="56" height="56" />
             <h3>Scan to get Blink</h3>
-            <img class="qr" src="/qr-download.svg" alt="QR code linking to the Blink-to-Stock Android download" width="210" height="210" />
+            <img class="qr" src="/qr-download.svg" alt="QR code linking to the Blink Android download" width="210" height="210" />
             <p id="side-drops-note">Point your Android camera here to download. Loading today's drops…</p>
             <p class="label" id="side-drops" style="margin-top: 10px">&nbsp;</p>
           </aside>
@@ -84,11 +84,11 @@
 
       <div class="ticker" aria-label="Supported stocks and live drops">
         <div class="ticker-track" id="ticker">
-          <span class="ticker-item"><b>NVDAx</b>NVIDIA Corp.</span>
-          <span class="ticker-item"><b>TSLAx</b>Tesla Inc.</span>
-          <span class="ticker-item"><b>AAPLx</b>Apple Inc.</span>
+          <span class="ticker-item"><b>NVDAx</b>NVIDIA</span>
+          <span class="ticker-item"><b>TSLAx</b>Tesla</span>
+          <span class="ticker-item"><b>AAPLx</b>Apple</span>
           <span class="ticker-item"><b>SPYx</b>S&amp;P 500</span>
-          <span class="ticker-item"><b>FREE</b>No fees to claim · no seed phrase</span>
+          <span class="ticker-item"><b>+11</b>more xStocks</span>
         </div>
       </div>
 
@@ -97,21 +97,21 @@
           <div class="section-head">
             <div class="kicker">Live drops</div>
             <h2>Open right now</h2>
-            <p class="lead">Campaigns funded by creators. Tap one to open it, then claim, play or invite from your phone.</p>
+            <p class="lead">Drops funded by creators. Open one to claim, play or invite a friend from your phone.</p>
           </div>
           <div class="table-wrap">
             <table class="listing">
               <thead>
                 <tr>
                   <th>Stock</th>
-                  <th>Campaign</th>
+                  <th>Drop</th>
                   <th class="num">Per person</th>
                   <th>Claimed</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody id="drop-rows">
-                <tr class="empty-row"><td colspan="5">Fetching live drops…</td></tr>
+                <tr class="empty-row"><td colspan="5">Loading live drops…</td></tr>
               </tbody>
             </table>
           </div>
@@ -128,54 +128,78 @@
           <div class="steps">
             <div class="card">
               <span class="step-num">1</span>
-              <h3>Someone drops stock</h3>
-              <p>A creator funds a campaign from their own wallet, sets who can join and what to do, and shares it as a link or QR.</p>
+              <h3>A creator funds a drop</h3>
+              <p>They choose the stock, the amount per person and who can take part, then approve it from their own wallet.</p>
             </div>
             <div class="card">
               <span class="step-num">2</span>
               <h3>You open it in Blink</h3>
-              <p>Scan or tap. Sign in with your email — a secure Solana wallet is created for you automatically.</p>
+              <p>Scan the QR or tap the link. Sign in with your email and Blink creates a Solana wallet for you — no seed phrase.</p>
             </div>
             <div class="card">
               <span class="step-num">3</span>
-              <h3>The share is <span class="mark">yours</span></h3>
-              <p>Qualify and the stock arrives in your wallet, with a public receipt on Solana. Then challenge a friend.</p>
+              <h3>Everything is on the record</h3>
+              <p>When you qualify, the stock arrives and you get a receipt with a Solana transaction you can check yourself.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="section" id="campaigns">
+      <section class="section" id="features">
         <div class="container">
           <div class="section-head">
-            <div class="kicker">Campaigns</div>
-            <h2>Four ways to run one</h2>
-            <p class="lead">Eligibility, action, verification, reward — all checked by Blink before a single share moves.</p>
+            <div class="kicker">What you can do</div>
+            <h2>More than a claim button</h2>
+            <p class="lead">Gifts, clubs and drops for people you know, plus the Solana Mobile features that come with a Seeker.</p>
           </div>
           <div class="types">
+            <div class="card featured">
+              <div class="kicker">Gift</div>
+              <h3>Give stock to a friend</h3>
+              <p>Find someone by their Blink username or .skr name and send them stock or SKR. Or gift a drop to a list of names: only those people can claim it.</p>
+              <div class="label">Live</div>
+            </div>
+            <div class="card">
+              <div class="kicker">Clubs</div>
+              <h3>Chat, compete, belong</h3>
+              <p>Join communities around a stock or a topic. Chat with text or voice notes, see members and their roles, and open anyone’s profile.</p>
+              <div class="label">Live</div>
+            </div>
+            <div class="card">
+              <div class="kicker">Tap Rush</div>
+              <h3>Your goal. Your clock.</h3>
+              <p>A tapping challenge with a round of 10 seconds to 2 minutes. Reach the goal in time and the reward is yours.</p>
+              <div class="label">Live</div>
+            </div>
             <div class="card">
               <div class="kicker">Verified Quest</div>
               <h3>Set the conditions</h3>
-              <p>Verified Seeker owners, SKR held or staked, ORE held, staked or mined — plus an action like Tap Rush. Checked onchain.</p>
-              <div class="label">Live · server-verified</div>
-            </div>
-            <div class="card featured">
-              <div class="kicker">Tap Rush</div>
-              <h3>Your goal. Your clock.</h3>
-              <p>A full-screen tapping challenge — up to 1,000 taps in up to two minutes. Beat the buzzer and the reward is yours.</p>
-              <div class="label">Live · limited tries</div>
+              <p>Require a verified Seeker, SKR or ORE holdings, a check-in at your event, or a post on X. Blink checks each one before a reward moves.</p>
+              <div class="label">Live</div>
             </div>
             <div class="card">
-              <div class="kicker">Flash Drop</div>
-              <h3>First come, first served</h3>
-              <p>When the pool runs dry, the drop is over. Be quick.</p>
-              <div class="label">Live · while stocks last</div>
-            </div>
-            <div class="card">
-              <div class="kicker">Gift &amp; Referral</div>
+              <div class="kicker">Referral</div>
               <h3>Bring a friend</h3>
-              <p>Send stock with a link, or share your invite — when a friend claims through it, you both get rewarded.</p>
-              <div class="label">Live · free to claim</div>
+              <p>Each person gets a personal invite link. When a friend joins through it, you both get stock.</p>
+              <div class="label">Live</div>
+            </div>
+            <div class="card">
+              <div class="kicker">SKR</div>
+              <h3>Tip and boost in SKR</h3>
+              <p>Tip a club member from your own wallet. Creators can pay SKR to feature a live drop for a set time, clearly marked as sponsored.</p>
+              <div class="label">Live</div>
+            </div>
+            <div class="card">
+              <div class="kicker">ORE</div>
+              <h3>ORE live board</h3>
+              <p>Follow the ORE mining board in real time and deploy from your own wallet. Deploying commits real SOL, so it can be lost; rewards are not guaranteed.</p>
+              <div class="label">Live, you approve each deploy</div>
+            </div>
+            <div class="card">
+              <div class="kicker">Receipts</div>
+              <h3>A receipt for everything</h3>
+              <p>Every reward, gift, tip and deploy has a receipt. Post it to X with a picture, or save it to your photos.</p>
+              <div class="label">Live</div>
             </div>
           </div>
         </div>
@@ -184,18 +208,18 @@
       <section class="section" id="creators">
         <div class="container split">
           <blockquote class="quote">
-            “Your campaign stock stays in an account you own. Blink can only distribute the amount you approve.”
-            <cite>The creator's guarantee</cite>
+            “Your stock stays in an account you own. Blink can only distribute the amount you approve.”
+            <cite>How creators stay in control</cite>
           </blockquote>
           <div>
             <div class="kicker">For creators</div>
             <h2 style="font-size: clamp(32px, 4.4vw, 50px); margin-top: 12px">Give stock away. Keep control.</h2>
-            <p class="lead" style="margin-top: 14px">Pick a stock, set the amount per person, fund it with one signature, share the QR.</p>
+            <p class="lead" style="margin-top: 14px">Pick a stock, set the amount per person, fund it with one approval in your wallet, and share the link or QR.</p>
             <ul class="checklist">
-              <li>Your stock moves into a campaign account you own — never into a Blink wallet.</li>
-              <li>You approve an exact amount. Blink can hand out that much, and not a single share more.</li>
-              <li>Each campaign gets its own distribution key, so one campaign can never touch another.</li>
-              <li>Revoke from your wallet at any time. Blink notices and pauses the drop before the next payout.</li>
+              <li>Stock moves into a campaign account you own, never into a Blink wallet.</li>
+              <li>You approve an exact amount. Blink can distribute that much and not a single share more.</li>
+              <li>Each drop gets its own distribution key, so one drop can never touch another.</li>
+              <li>You can close a drop at any time and take back what hasn’t been claimed.</li>
             </ul>
           </div>
         </div>
@@ -204,25 +228,25 @@
       <section class="section" id="security">
         <div class="container">
           <div class="section-head">
-            <div class="kicker">Security</div>
-            <h2>Verifiable, by design</h2>
-            <p class="lead">Blink decides who is eligible. Settlement happens openly on Solana, where anyone can check it.</p>
+            <div class="kicker">Trust</div>
+            <h2>Checked before anything moves</h2>
+            <p class="lead">Blink decides who is eligible. Every transfer settles openly on Solana, where anyone can check it.</p>
           </div>
           <div class="trio">
             <div class="card">
               <div class="kicker">No custody</div>
               <h3>Blink never holds the stock</h3>
-              <p>No central treasury. Creators' stock stays in accounts they own, and nobody at Blink ever sees your keys.</p>
+              <p>There is no central treasury. Stock stays in accounts creators and members own.</p>
             </div>
             <div class="card">
-              <div class="kicker">Checked every time</div>
-              <h3>Re-verified before each payout</h3>
-              <p>Every transfer is simulated first, and each campaign's approval is re-checked onchain before a share moves.</p>
+              <div class="kicker">Checked each time</div>
+              <h3>Verified before each payout</h3>
+              <p>Every transfer is simulated first, and each drop’s approval is re-checked on-chain before a share moves.</p>
             </div>
             <div class="card">
               <div class="kicker">Public record</div>
               <h3>A receipt for every share</h3>
-              <p>Each reward is a real Solana transaction with a public receipt you can open in the Solana explorer.</p>
+              <p>Each reward and transfer is a real Solana transaction you can open in the Solana explorer.</p>
             </div>
           </div>
         </div>
@@ -232,8 +256,8 @@
         <div class="container">
           <div class="section-head">
             <div class="kicker">Supported stocks</div>
-            <h2>What you can own</h2>
-            <p class="lead">xStocks are tokenized tracker certificates on Solana that give economic exposure to a listed stock. Every mint is verified onchain before Blink supports it.</p>
+            <h2>What you can give and receive</h2>
+            <p class="lead">xStocks are tokenized tracker certificates on Solana that give economic exposure to a listed stock. Each mint is verified on-chain before Blink supports it.</p>
           </div>
           <div class="table-wrap">
             <table class="listing">
@@ -241,21 +265,21 @@
                 <tr><th>Symbol</th><th>Company</th><th>Standard</th><th>Availability</th></tr>
               </thead>
               <tbody>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/NVDAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">NVDAx</span></div></td><td>NVIDIA Corp.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">TSLAx</span></div></td><td>Tesla Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/AAPLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">AAPLx</span></div></td><td>Apple Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">SPYx</span></div></td><td>S&amp;P 500</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/QQQx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">QQQx</span></div></td><td>Nasdaq 100</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/MSFTx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">MSFTx</span></div></td><td>Microsoft Corp.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/GOOGLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">GOOGLx</span></div></td><td>Alphabet Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/AMZNx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">AMZNx</span></div></td><td>Amazon.com Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/METAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">METAx</span></div></td><td>Meta Platforms Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/COINx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">COINx</span></div></td><td>Coinbase Global Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/MSTRx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">MSTRx</span></div></td><td>Strategy (MicroStrategy)</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/HOODx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">HOODx</span></div></td><td>Robinhood Markets Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/CRCLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">CRCLx</span></div></td><td>Circle Internet Group</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/PLTRx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">PLTRx</span></div></td><td>Palantir Technologies</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
-                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/NFLXx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">NFLXx</span></div></td><td>Netflix Inc.</td><td>Token-2022</td><td><span class="status live">Live now</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/NVDAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">NVDAx</span></div></td><td>NVIDIA Corp.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">TSLAx</span></div></td><td>Tesla Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/AAPLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">AAPLx</span></div></td><td>Apple Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">SPYx</span></div></td><td>S&amp;P 500</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/QQQx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">QQQx</span></div></td><td>Nasdaq 100</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/MSFTx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">MSFTx</span></div></td><td>Microsoft Corp.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/GOOGLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">GOOGLx</span></div></td><td>Alphabet Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/AMZNx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">AMZNx</span></div></td><td>Amazon.com Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/METAx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">METAx</span></div></td><td>Meta Platforms Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/COINx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">COINx</span></div></td><td>Coinbase Global Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/MSTRx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">MSTRx</span></div></td><td>Strategy (MicroStrategy)</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/HOODx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">HOODx</span></div></td><td>Robinhood Markets Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/CRCLx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">CRCLx</span></div></td><td>Circle Internet Group</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/PLTRx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">PLTRx</span></div></td><td>Palantir Technologies</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
+                <tr><td><div class="co"><img src="https://xstocks-metadata.backed.fi/logos/tokens/NFLXx.png" alt="" loading="lazy" width="32" height="32" /><span class="sym">NFLXx</span></div></td><td>Netflix Inc.</td><td>Token-2022</td><td><span class="status live">Live</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -270,40 +294,47 @@
           </div>
           <div class="qa">
             <details>
-              <summary>Do I need a crypto wallet to claim?</summary>
-              <p>No. Sign in with your email and Blink creates a secure Solana wallet for you. Rewards are sent there automatically.</p>
+              <summary>Do I need a crypto wallet?</summary>
+              <p>No. Sign in with your email and Blink creates a Solana wallet for you. Rewards and gifts arrive there, and there is no seed phrase to write down.</p>
             </details>
             <details>
-              <summary>Is it really free?</summary>
-              <p>Yes. Claiming costs you nothing — Blink covers the network fees for reward transfers. Creators pay for setting up and funding their own campaigns.</p>
+              <summary>Is claiming free?</summary>
+              <p>Yes. Blink covers the network fee for reward transfers. Creators pay to set up and fund their own drops, and SKR tips and boosts are paid from the sender’s own wallet, with the amount and fee shown before you approve.</p>
             </details>
             <details>
               <summary>Is this real stock?</summary>
               <p>
-                Blink distributes xStocks, issued by Backed Assets (JE) Limited: tokenized tracker certificates that give economic
-                exposure to the underlying stock. They are not registered shares and carry no shareholder voting rights. This
-                Blink runs on Solana mainnet: rewards are real xStocks, and their value moves with the underlying stock.
+                xStocks are issued by Backed Assets (JE) Limited. They are tokenized tracker certificates that give economic exposure to the
+                underlying stock. They are not registered shares and carry no shareholder voting rights. Blink runs on Solana mainnet, so rewards
+                are real xStocks and their value moves with the underlying stock.
               </p>
             </details>
             <details>
               <summary>Who can receive xStocks?</summary>
               <p>
-                xStocks are not available in the United States or to U.S. persons, in the United Kingdom, or in a number of
-                other countries listed by the issuer. Before you receive xStocks, Blink asks for your country and checks the
-                country of your connection. It keeps only the result — never your address, location or ID.
+                xStocks are not available in the United States or to U.S. persons, in the United Kingdom, or in a number of other countries listed by
+                the issuer. Before you receive xStocks, Blink asks for your country and checks the country of your connection. It keeps only the result,
+                never your address, location or ID.
+              </p>
+            </details>
+            <details>
+              <summary>What happens when I deploy on the ORE board?</summary>
+              <p>
+                You approve each deploy in your own wallet. The SOL you deploy is committed to the round, and depending on the outcome you may lose it
+                or get back only part of it. It isn’t a network fee, and Blink doesn’t promise any ORE rewards.
               </p>
             </details>
             <details>
               <summary>How do creators stay in control?</summary>
-              <p>Campaign stock stays in an account the creator owns. They approve an exact amount Blink may distribute, can revoke it at any time, and each campaign has its own distribution key.</p>
+              <p>Stock stays in an account the creator owns. They approve an exact amount Blink may distribute, can close the drop at any time, and each drop has its own distribution key.</p>
             </details>
             <details>
               <summary>How is Tap Rush kept fair?</summary>
-              <p>Rounds are timed by Blink's server and each tap's timing is checked for human patterns. Everyone can earn once per drop, with a limited number of tries.</p>
+              <p>Rounds are timed by Blink’s server, and each tap’s timing is checked for human patterns. Everyone can earn once per drop.</p>
             </details>
             <details>
               <summary>Which phones are supported?</summary>
-              <p>Blink is an Android app, designed with the Solana Seeker in mind. Download the APK from this site and install it on your phone.</p>
+              <p>Blink is an Android app, built with the Solana Seeker in mind. Download the APK from this site and install it.</p>
             </details>
           </div>
         </div>
@@ -315,14 +346,14 @@
         <div class="footer-grid">
           <div>
             <a class="brand" href="/"><img src="/icon.png" alt="" width="36" height="36" />Blink</a>
-            <p style="margin-top: 14px">The social distribution network for tokenized stocks. Built for the Solana Mobile CLOCK IN Hackathon.</p>
+            <p style="margin-top: 14px">Tokenized stocks, made social. Built on Solana.</p>
           </div>
           <div>
             <div class="label">Explore</div>
             <ul>
               <li><a href="#drops">Live drops</a></li>
               <li><a href="#how">How it works</a></li>
-              <li><a href="#creators">For creators</a></li>
+              <li><a href="#features">Features</a></li>
               <li><a href="#faq">FAQ</a></li>
             </ul>
           </div>
@@ -330,16 +361,16 @@
             <div class="label">Elsewhere</div>
             <ul>
               <li><a href="/download/blink-to-stock.apk">Android app</a></li>
+              <li><a href="https://x.com/Blinksols" rel="noopener">X · @Blinksols</a></li>
               <li><a href="https://github.com/Lightlabs-main/Blink" rel="noopener">Source on GitHub</a></li>
             </ul>
           </div>
         </div>
         <p class="small-print">
-          xStocks are tokenized securities issued by a third party, which can freeze or move them in any wallet, as
-          regulated issuers can. Blink-to-Stock is not an issuer or a broker, and nothing on this page is investment advice.
-          Blink runs on Solana mainnet: rewards are real xStocks. This product includes GeoLite2 data
-          created by MaxMind, available from https://www.maxmind.com. Blink determines campaign eligibility; asset settlement
-          is transparent and verifiable on Solana.
+          xStocks are tokenized securities issued by a third party, which can freeze or move them in any wallet, as regulated issuers can. Blink is not
+          an issuer or a broker, and nothing on this page is investment advice. ORE deploys commit real SOL and can be lost. This product includes
+          GeoLite2 data created by MaxMind, available from https://www.maxmind.com. Blink determines campaign eligibility; settlement is transparent and
+          verifiable on Solana.
         </p>
       </div>
     </footer>
