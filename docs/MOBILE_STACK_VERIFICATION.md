@@ -1,5 +1,52 @@
 # Mobile stack verification (Solana Mobile, MWA, Seed Vault)
 
+## Current release (2026-10-11)
+
+| Item | Value |
+|---|---|
+| Build | EAS `918ce913-8fa3-4348-adf6-5a624dfe2c2d`, profile `preview`, FINISHED |
+| Commit | `686ac9e` (later commits are server and docs only) |
+| Version | 1.0.0, versionCode 4 |
+| Package | `com.blinktostock.app` |
+| SHA-256 | `295b8b87c0a89cb6ced9d7094fe864a3a2a4ac8614a230fed275aac992919660` |
+| Signing | v2 certificate `0F:0A:…:D3:6C` (same as every release and `assetlinks.json`) |
+| Hosted at | https://blinksol.site/download/blink-to-stock.apk (hash matches) |
+| Tested device | **None yet.** Record model and Android version here after the first install. |
+
+Checked from the file, not on a device: package, versionCode, not test-only or debuggable, archive integrity,
+arm64 libraries page-aligned, signing certificate, permissions, feature strings present, no server secret in any asset.
+
+### Device results
+
+Nothing is marked PASS without a run on a device.
+
+| Test | Status |
+|---|---|
+| Clean install and launch | NOT TESTED |
+| Sign-in (Privy email) | NOT TESTED on this build (worked on an earlier build, 2026-09-29) |
+| MWA authorize and transaction signing | NOT TESTED on this build (Solflare: PASS on an earlier build, 2026-10-05) |
+| Rejected signature, cancelled flow, disconnect, reconnect, wallet switching | NOT TESTED |
+| Phantom | NOT TESTED (did not open for the owner earlier, likely Testnet Mode) |
+| Seed Vault Wallet | NOT TESTED (no Seeker available) |
+| Camera (QR scan), microphone (voice notes) | NOT TESTED (permissions present in the manifest) |
+| Deep links (`/c/`, `/e/`, `/club/`) | NOT TESTED (assetlinks verified server-side) |
+| Background and foreground, network interruption | NOT TESTED |
+
+### Integrations on the live server (not device-tested)
+
+- **SKR tip:** counts only after the server verifies the confirmed transfer (amount, recipient, mint).
+  Tested: 3 real mainnet transfers verified; the builder simulated on mainnet.
+- **SKR boost:** activates only from a confirmed transfer; the server sets the window. Server tests pass.
+- **SKR hold and stake:** eligibility only (Verified Quests), not a prize integration.
+- **`.skr` identity:** shown only when reverse and forward resolution agree for a verified wallet.
+- **ORE:** the board is read from the ORE program. A deploy is recorded only after its DeployEvent is verified
+  (manual, this wallet, non-zero effect). A qualifying ORE quest clears only after a confirmed deploy to the
+  current round from the authenticated wallet. **ORE quests inside reward drops are off** (`ORE_REWARDS_ENABLED=false`).
+
+---
+
+## 2026-10-07 audit (historical)
+
 Audit 2026-10-07. Statuses: VERIFIED · FAILED · BLOCKED · ASSUMPTION · NEEDS_OWNER_DECISION · NOT TESTED.
 
 ## Hackathon requirements (CLOCK IN)

@@ -1,60 +1,53 @@
-# Demo runbook and one-pass test checklist
+# Submission demo runbook
 
-The owner of this document is the Lead Architect (MASTER_PROMPT §3). The update's demo section hasn't been
-received yet (OQ-10), so this version covers what exists today.
+Status (2026-10-11): **the demo is not yet recorded.** The steps below are what to record. Each step is
+marked with what has been verified so far, so the video shows only what works on the day.
 
-## Before testing
+## Hero flow (record this first)
 
-- **Install** the latest release APK from `https://blinksol.site/download/blink-to-stock.apk` on two
-  Android phones. Phone A is the creator, phone B the participant. They need different accounts;
-  creators can't claim their own drops.
-- **Server:** `https://api.blinksol.site/v1/status` shows `cluster: devnet`, `payouts.enabled:
-  true`, `killSwitch: false`, and a fee payer that isn't `low`.
-- **xStocks eligibility (D-20):** testers must be in an eligible country, or the devnet gate must be
-  switched off for testing (`XSTOCK_COMPLIANCE=off` on devnet only; mainnet refuses that setting).
-- **Creator wallet:** phone A's wallet app is on **devnet** and holds test stock (tNVDAx) plus a
-  little devnet SOL.
+`Open a Drop → qualify or complete the action → verify → xStock settles → receipt`
 
-## Checklist
+1. **Open a Drop.** Scan the Drop QR or tap its link on the phone. The Drop shows the stock, the amount
+   per person and the requirements.
+2. **Qualify or complete the action.** Use Tap Rush, a check-in, or a Verified Quest requirement.
+3. **Verify.** The server checks the requirement before any stock is reserved.
+4. **xStock settles.** The reward is paid from the creator's delegated treasury. Show the amount that arrived.
+5. **Receipt.** Open the receipt and show its Solana transaction signature. Open that signature in the
+   Solana explorer to prove it.
 
-| # | Flow | Expect |
-|---|---|---|
-| 1 | Phone B: open the app, sign in with email | Home loads; Profile shows a Blink wallet |
-| 2 | Phone B: Profile → xStocks eligibility → choose country, tick the U.S.-person box | "You're eligible" (or the reason it isn't) |
-| 3 | Phone A: sign in, Create → connect wallet | Wallet app opens twice (connect + sign) |
-| 4 | Phone A: Create → **Tap Rush**, reward, limits (24 hours), review → Create & fund → approve in wallet | Drop goes **Live**; the live room appears |
-| 5 | Phone B: scan phone A's QR with the **phone camera** | It opens in Blink (App Link), not the browser |
-| 6 | Phone B: Play Tap Rush, reach the goal | "Sending … on Solana" → "Received", with an explorer link |
-| 7 | Phone B: Challenge a friend | Native share sheet with "I completed the … Tap Rush on Blink" and a blinksol.site link |
-| 8 | Both phones: the live room | Joined/qualified counts, leaderboard (phone B shown as "You"), recent activity |
-| 9 | Phone A: Create → **Verified Quest**: Verified Seeker or SKR/ORE (needs real mainnet holdings) + Tap Rush | Requirements listed one per line |
-| 10 | Phone B: open the quest → Check my requirements | Each line shows its state; amounts are shown as "Yours: …"; Claim appears only when every line passes |
-| 11 | Phone A: Create → **Flash Drop** and **Referral** | Claim works; the referral pays both people once |
-| 12 | Phone A: revoke the approval in the wallet, then have someone claim | The drop pauses with a reason, and "Check again & resume" is shown |
-| 13 | blinksol.site on a laptop | Live drops listed, Night edition toggle, download works |
-| 14 | Phone B: **Clubs** tab → NVDA Club → Join | Member count goes up by one (real count); Home shows it under Your clubs |
-| 15 | Both phones in the club: Chat → send, reply, react, delete | Messages appear on the other phone within a few seconds |
-| 16 | Phone A: club → Drops → Post a drop in this club (Tap Rush) | The drop lists under the club's Drops (Live) |
-| 17 | Phone B: open that Tap Rush → Play as a squad → Create; phone C joins with the code | Members and combined taps update; the squad goal = drop goal × 4 |
-| 18 | Phone A: Create → **QR Event** → fund; show the Event check-in QR | Phone B scans it in Blink → confirm → "Checked in ✓"; scanning again says already checked in |
-| 19 | Phone B: You → Stock Passport, and Receipts & Activity → filters | Real stamps only (reward settled, check-in, first club); check-in and club join have receipts |
-| 20 | Club → Leaderboard | Points match the rule shown (10 won / 5 qualified / 5 check-in) |
-| 21 | Phone A: Start a club → turn on "SKR stakes" with a minimum → phone B (no stake) taps Join | Refused; each rule shows phone B's amount; **Stake on Solana Mobile** opens stake.solanamobile.com in the browser |
-| 22 | Phone A: club → Drops → post a Tap Rush with "Club members only"; phone C (not a member) opens it | "For <club> members" card; playing is refused until phone C joins |
-| 23 | Club chat: phone B taps the mic, records ~5 s, sends; phone A plays it | Voice note appears within seconds and plays; deleting it removes the audio |
-| 24 | Phone A (owner): About → Members → make phone B an admin; phone B mutes phone C for 1 hour | Phone C sees "An admin muted you…" and can't post; Unmute restores it |
-| 25 | Phone A: About → Admin settings → Only admins; pin a message | Members can't post; the pinned message shows above the chat |
-| 26 | Phone B (admin): remove phone C; phone C taps Join | "An admin removed you"; Members → Removed → Let back in, then Join works |
-| 27 | Phone A (holding tNVDAx): tap a phone B message → 🎁 Gift → 0.01 → Gift | Wallet signs; "Gift sent ✓"; a gift card appears in the chat; phone B gets a push and a "Gift received" receipt |
-| 28 | Phone with a verified wallet that mined ORE / owns a Seeker / stakes SKR: Passport → Check my OG status | Each mark shows ✓; icons appear before the name in chat and members; all three → gold name |
-| 29 | Phone A: open your own drop → **Close drop** → confirm → approve in wallet | "Drop closed"; the unused stock is back in the creator wallet; the drop shows Closed; claiming it is refused |
+Verified in code and on the live server: steps 1–5 exist on mainnet. Not yet verified on a phone for this
+build: all five steps end to end. Record them on the phone before relying on them.
 
-## Known limits to mention in a demo
+## Sponsor story (only if the steps below work on the day)
 
-- **Devnet:** payouts use a test stock with no value. `MAINNET_PUBLIC_XSTOCK_DISTRIBUTION =
-  BLOCKED` (SECURITY.md).
-- **SKR stake checks** need a dedicated mainnet RPC; with the public one they show "Couldn't check
-  right now", which fails closed.
-- **Chat is polled** (every few seconds), not push; a message can take up to ~4 s to appear.
-- **Squad goals** are achievements; each player still wins the drop's reward individually.
-- **Event and club links** open the app; the website has no page for them yet.
+`SKR boost features the Drop → a user enters → a confirmed ORE deploy clears the quest → xStock settles → the receipt shows the signatures`
+
+- **SKR boost:** the creator pays the owner-approved SKR package from their wallet. The Drop shows
+  "Boosted with SKR" until the stated time. Verified on the server: the boost is activated only from a
+  confirmed transfer. Not yet verified on a phone.
+- **ORE quest:** an ORE mining quest clears only after the server verifies a confirmed deploy to the current
+  round from the user's wallet. **Currently off for reward drops** (`ORE_REWARDS_ENABLED=false`), so this
+  sponsor story is not available for real xStock rewards. Use it only as the non-financial ORE Miner mark.
+
+Do not show the sponsor story as working unless you have recorded it working.
+
+## Optional appendix (only if time allows; not part of the hero flow)
+
+- **Clubs:** open a club, show the chat, roles and a member's profile card.
+- **Chat:** send a message and a voice note.
+- **Passport:** show the verified marks and participation record.
+- **Squad:** join a Tap Rush squad and show the combined goal.
+- **Gifts:** gift a person by username, or gift a drop to a pasted list of names.
+- **Event QR:** check in once at an event QR.
+
+## Before you record
+
+1. Install the final APK (`docs/MOBILE_STACK_VERIFICATION.md` lists its version and hash).
+2. Use a wallet with a little SOL and the test-approved amounts only. Tell me before any real transaction.
+3. Confirm the website and the app show the same live drops.
+4. Keep the phone's Android version and device model for the verification record.
+
+## After you record
+
+- Record each receipt's transaction signature in `docs/MOBILE_STACK_VERIFICATION.md`.
+- Any step that didn't work on the day is marked **not shown** rather than cut silently.

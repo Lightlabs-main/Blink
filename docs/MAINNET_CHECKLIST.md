@@ -1,3 +1,5 @@
+> **HISTORICAL (2026-10-06 to 10-07).** Statuses below predate the mainnet switch and the device tests in `docs/MOBILE_STACK_VERIFICATION.md`. Current status: `docs/MAINNET_GO_NO_GO.md`.
+
 # Mainnet checklist (pre-mainnet verification gate)
 
 Audit 2026-10-07. Summary and evidence for critical gates: MAINNET_GO_NO_GO.md (**NO-GO**). Mobile items:

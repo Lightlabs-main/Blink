@@ -1,5 +1,30 @@
 # MAINNET GO / NO-GO
 
+## Current status (2026-10-11): **NO-GO**
+
+The server runs on mainnet (switched 2026-10-09 by the owner; `/health` → `mainnet-beta`, payouts enabled,
+fee payer funded with 0.03 SOL). The status stays NO-GO because these gates have no device or owner evidence yet:
+
+| Gate | Blocker |
+|---|---|
+| Final APK on a real phone | Not installed or tested on any device. Build `918ce913` (versionCode 4) is checked from its file only. |
+| MWA connect, signing, reject, cancel, disconnect, wallet change | No device run. Solflare authorize + sign was tested earlier on an older build; Phantom and Seed Vault are untested. |
+| Camera and microphone permission | Present in the manifest; not exercised on a device. |
+| Real mainnet payout (smoke test) | Not run. Needs your explicit approval. |
+| Controlled eligible recipient | Not named. |
+| Compliance sufficiency for xStock distribution | Owner decision still open (D-46). Self-declaration plus IP check is enforced in code, legal sufficiency is unverified. |
+
+Verified from code and servers (2026-10-11): mainnet config and kill switch, budget cap (0.02 SOL target, 25 % buffer),
+xStock mints (15 official mints, on-chain checks in `docs/DEPENDENCIES.md`), raw-unit transfers, campaign allowance and
+delegate cap, fee payer balance, and the close/revoke flow (tested on devnet only).
+
+Moving to GO requires a device run of the rows above, your approval of the compliance decision, and a completed,
+recorded controlled payout. Until then, do not describe mainnet distribution as fully verified.
+
+---
+
+## Historical record (earlier audits, kept for reference)
+
 Audit date: 2026-10-07 · auditor: the Lead Architect (Lead Architect + Mobile) · server state during the audit: **devnet** (no mainnet
 write was made; no mainnet SOL, xStock, SKR or ORE was moved).
 
