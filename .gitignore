@@ -30,3 +30,4 @@ docs/private/
 # Server-side only: hosted APKs and database backups
 /downloads/
 /backups/
+demo/

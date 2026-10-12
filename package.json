@@ -33,6 +33,11 @@
   "overrides": {
     "@privy-io/node": {
       "@solana/kit": "8.4.0"
-    }
+    },
+    "mysql2": "3.24.5",
+    "deepmerge-ts": "8.0.2",
+    "ip-address": "10.7.4",
+    "stream-json": "3.7.0",
+    "bn.js": "5.2.3"
   }
 }
